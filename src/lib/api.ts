@@ -57,10 +57,20 @@ export async function generateNote(
  * Extract tasks from clinical note
  */
 export async function extractTasks(session_id: string, note_text: string) {
-  return callEdgeFunction('extract-tasks', {
+  const response = await callEdgeFunction<{ tasks?: any[] }>('extract-tasks', {
     session_id,
     note_text,
   });
+  
+  // Transform the response to match expected format
+  if (response.success && response.data && 'tasks' in response.data) {
+    return {
+      success: true,
+      data: (response.data as any).tasks,
+    };
+  }
+  
+  return response;
 }
 
 /**
@@ -71,11 +81,21 @@ export async function suggestCodes(
   note_text: string,
   region: string = 'US'
 ) {
-  return callEdgeFunction('suggest-codes', {
+  const response = await callEdgeFunction<{ codes?: any[] }>('suggest-codes', {
     session_id,
     note_text,
     region,
   });
+  
+  // Transform the response to match expected format
+  if (response.success && response.data && 'codes' in response.data) {
+    return {
+      success: true,
+      data: (response.data as any).codes,
+    };
+  }
+  
+  return response;
 }
 
 /**

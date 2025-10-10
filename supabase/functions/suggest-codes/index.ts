@@ -96,13 +96,28 @@ OUTPUT REQUIREMENTS:
     }
 
     const aiData = await aiResponse.json();
-    const content = aiData.choices?.[0]?.message?.content || '[]';
+    let content = aiData.choices?.[0]?.message?.content || '[]';
+    
+    // Extract JSON from markdown code blocks if present
+    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+      content = jsonMatch[1];
+    }
+    
+    // Clean up any leading/trailing text
+    const arrayMatch = content.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      content = arrayMatch[0];
+    }
     
     let codes = [];
     try {
       codes = JSON.parse(content);
-    } catch {
-      console.warn('Failed to parse codes, returning empty array');
+      console.log(`Successfully parsed ${codes.length} ICD-10 codes`);
+    } catch (parseError) {
+      console.error('Failed to parse AI response:', parseError);
+      console.error('Raw content:', content.substring(0, 500));
+      codes = [];
     }
 
     const duration = Date.now() - startTime;

@@ -241,15 +241,18 @@ export class WorkflowOrchestrator {
       
       this.updateStep(2, { progress: 80, message: 'Tasks identified...' });
       
-      if (result.error) {
+      if (!result.success) {
+        const errorMsg = 'error' in result && result.error?.message 
+          ? result.error.message 
+          : 'Failed to extract tasks';
         return {
           success: false,
-          error: result.error.message || 'Failed to extract tasks',
+          error: errorMsg,
         };
       }
       
       return {
-        success: result.success,
+        success: true,
         tasks: result.data,
       };
     } catch (error) {
@@ -272,15 +275,18 @@ export class WorkflowOrchestrator {
       
       this.updateStep(3, { progress: 80, message: 'Codes identified...' });
       
-      if (result.error) {
+      if (!result.success) {
+        const errorMsg = 'error' in result && result.error?.message 
+          ? result.error.message 
+          : 'Failed to suggest codes';
         return {
           success: false,
-          error: result.error.message || 'Failed to suggest codes',
+          error: errorMsg,
         };
       }
       
       return {
-        success: result.success,
+        success: true,
         codes: result.data,
       };
     } catch (error) {

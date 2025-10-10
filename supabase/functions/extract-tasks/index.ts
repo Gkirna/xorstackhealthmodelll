@@ -126,16 +126,26 @@ Extract tasks that are:
     }
 
     const aiData = await aiResponse.json();
+    console.log('AI Response structure:', JSON.stringify(aiData, null, 2).substring(0, 500));
+    
     const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
     let extractedTasks = [];
 
     if (toolCall?.function?.arguments) {
       try {
-        const parsed = JSON.parse(toolCall.function.arguments);
+        const argsString = typeof toolCall.function.arguments === 'string' 
+          ? toolCall.function.arguments 
+          : JSON.stringify(toolCall.function.arguments);
+        const parsed = JSON.parse(argsString);
         extractedTasks = parsed.tasks || [];
+        console.log(`Successfully extracted ${extractedTasks.length} tasks`);
       } catch (e) {
         console.error('Failed to parse tool response:', e);
+        console.error('Tool call arguments:', toolCall.function.arguments);
       }
+    } else {
+      console.warn('No tool calls found in AI response');
+      console.warn('Response choices:', aiData.choices?.[0]?.message);
     }
 
     const duration = Date.now() - startTime;
