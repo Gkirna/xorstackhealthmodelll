@@ -12,9 +12,12 @@ import {
 } from "@/components/ui/select";
 import { Activity } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 const OnboardingProfile = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
@@ -26,14 +29,35 @@ const OnboardingProfile = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!user) {
+      toast.error("You must be logged in to complete your profile");
+      navigate("/login");
+      return;
+    }
+
     setLoading(true);
     
-    // Placeholder for Supabase profile update
-    setTimeout(() => {
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          specialty: formData.specialty,
+          organization: formData.organization,
+          license_number: formData.title,
+        })
+        .eq("id", user.id);
+
+      if (error) throw error;
+
       toast.success("Profile setup complete!");
       navigate("/dashboard");
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      toast.error("Failed to update profile. Please try again.");
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
   return (

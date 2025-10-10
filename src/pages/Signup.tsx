@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,9 +6,24 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Activity } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
+import { z } from "zod";
+
+const signupSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  confirmPassword: z.string(),
+  terms: z.boolean().refine(val => val === true, "You must accept the terms"),
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
+});
 
 const Signup = () => {
   const navigate = useNavigate();
+  const { signUp, user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     firstName: "",
@@ -19,27 +34,49 @@ const Signup = () => {
     terms: false,
   });
 
+  useEffect(() => {
+    if (user) {
+      navigate("/dashboard");
+    }
+  }, [user, navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (formData.password !== formData.confirmPassword) {
-      toast.error("Passwords do not match");
-      return;
-    }
-
-    if (!formData.terms) {
-      toast.error("Please accept the terms and conditions");
-      return;
-    }
-
     setLoading(true);
     
-    // Placeholder for Supabase auth integration
-    setTimeout(() => {
-      toast.success("Account created successfully!");
-      navigate("/onboarding/profile");
+    try {
+      // Validate input
+      signupSchema.parse(formData);
+      
+      const { error } = await signUp(
+        formData.email, 
+        formData.password,
+        {
+          full_name: `${formData.firstName} ${formData.lastName}`,
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+        }
+      );
+      
+      if (error) {
+        if (error.message.includes("already registered")) {
+          toast.error("This email is already registered");
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        toast.success("Account created successfully!");
+        navigate("/onboarding/profile");
+      }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+      } else {
+        toast.error("An error occurred during signup");
+      }
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
   return (
