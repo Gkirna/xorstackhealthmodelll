@@ -20,11 +20,12 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
+import { useCreateSession } from "@/hooks/useSessions";
 
 const SessionNew = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
   const [scheduledDate, setScheduledDate] = useState<Date>();
+  const createSession = useCreateSession();
   
   const [formData, setFormData] = useState({
     patientName: "",
@@ -47,15 +48,24 @@ const SessionNew = () => {
       return;
     }
 
-    setLoading(true);
-    
-    // Placeholder for Supabase session creation
-    setTimeout(() => {
-      const newSessionId = "temp-session-id-123";
-      toast.success("Session created successfully!");
-      navigate(`/session/${newSessionId}/record`);
-      setLoading(false);
-    }, 1500);
+    try {
+      const session = await createSession.mutateAsync({
+        patient_name: formData.patientName,
+        patient_id: formData.patientId,
+        patient_dob: formData.dob,
+        chief_complaint: formData.chiefComplaint,
+        appointment_type: formData.appointmentType,
+        visit_mode: formData.visitMode,
+        input_language: formData.inputLanguage,
+        output_language: formData.outputLanguage,
+        scheduled_at: scheduledDate?.toISOString(),
+        template_id: formData.templateId || null,
+      });
+
+      navigate(`/session/${session.id}/record`);
+    } catch (error) {
+      console.error('Failed to create session:', error);
+    }
   };
 
   return (
@@ -267,8 +277,8 @@ const SessionNew = () => {
             >
               Cancel
             </Button>
-            <Button type="submit" className="flex-1" disabled={loading}>
-              {loading ? "Creating session..." : "Start Recording"}
+            <Button type="submit" className="flex-1" disabled={createSession.isPending}>
+              {createSession.isPending ? "Creating session..." : "Start Recording"}
             </Button>
           </div>
         </form>
