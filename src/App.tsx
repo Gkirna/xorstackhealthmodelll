@@ -3,15 +3,33 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { lazy, Suspense } from "react";
 import Index from "./pages/Index";
-import Tasks from "./pages/Tasks";
-import Templates from "./pages/Templates";
-import Team from "./pages/Team";
-import Settings from "./pages/Settings";
-import Help from "./pages/Help";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+// Lazy load heavy components
+const Tasks = lazy(() => import("./pages/Tasks"));
+const Templates = lazy(() => import("./pages/Templates"));
+const Team = lazy(() => import("./pages/Team"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Help = lazy(() => import("./pages/Help"));
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+const LoadingFallback = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+  </div>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -19,24 +37,26 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/signup" element={<Index />} />
-          <Route path="/login" element={<Index />} />
-          <Route path="/onboarding/profile" element={<Index />} />
-          <Route path="/dashboard" element={<Index />} />
-          <Route path="/session/new" element={<Index />} />
-          <Route path="/session/:id/record" element={<Index />} />
-          <Route path="/session/:id/review" element={<Index />} />
-          <Route path="/sessions" element={<Index />} />
-          <Route path="/tasks" element={<Tasks />} />
-          <Route path="/templates" element={<Templates />} />
-          <Route path="/team" element={<Team />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/help" element={<Help />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <Suspense fallback={<LoadingFallback />}>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/signup" element={<Index />} />
+            <Route path="/login" element={<Index />} />
+            <Route path="/onboarding/profile" element={<Index />} />
+            <Route path="/dashboard" element={<Index />} />
+            <Route path="/session/new" element={<Index />} />
+            <Route path="/session/:id/record" element={<Index />} />
+            <Route path="/session/:id/review" element={<Index />} />
+            <Route path="/sessions" element={<Index />} />
+            <Route path="/tasks" element={<Tasks />} />
+            <Route path="/templates" element={<Templates />} />
+            <Route path="/team" element={<Team />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/help" element={<Help />} />
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

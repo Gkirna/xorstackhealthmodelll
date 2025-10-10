@@ -57,14 +57,14 @@ const Dashboard = () => {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 animate-fade-in">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Dashboard</h1>
             <p className="text-muted-foreground">Welcome back! Here's your clinical activity overview.</p>
           </div>
-          <Button onClick={() => navigate("/session/new")} size="lg">
+          <Button onClick={() => navigate("/session/new")} size="lg" className="shadow-md hover:shadow-lg transition-shadow">
             <PlusCircle className="mr-2 h-5 w-5" />
             New Session
           </Button>
@@ -72,7 +72,7 @@ const Dashboard = () => {
 
         {/* Stats Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
+          <Card className="transition-all hover:shadow-lg hover:-translate-y-1 duration-200">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Total Sessions</CardTitle>
               <FolderOpen className="h-4 w-4 text-muted-foreground" />
@@ -83,7 +83,7 @@ const Dashboard = () => {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="transition-all hover:shadow-lg hover:-translate-y-1 duration-200">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Pending Tasks</CardTitle>
               <CheckSquare className="h-4 w-4 text-muted-foreground" />
@@ -94,7 +94,7 @@ const Dashboard = () => {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="transition-all hover:shadow-lg hover:-translate-y-1 duration-200">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Active Templates</CardTitle>
               <FileText className="h-4 w-4 text-muted-foreground" />
@@ -105,7 +105,7 @@ const Dashboard = () => {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="transition-all hover:shadow-lg hover:-translate-y-1 duration-200">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">This Week</CardTitle>
               <Calendar className="h-4 w-4 text-muted-foreground" />
