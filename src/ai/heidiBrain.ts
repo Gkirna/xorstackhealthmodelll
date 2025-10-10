@@ -159,74 +159,36 @@ export async function generateClinicalNote(
   error?: string;
 }> {
   try {
-    const context = await getSessionContext(session_id);
-    if (!context) {
-      throw new Error('Session not found');
+    if (!session_id || !transcript.trim()) {
+      throw new Error('Session ID and transcript are required');
     }
 
-    // Validate transcript length
-    const tokens = estimateTokens(transcript);
-    if (tokens > 30000) {
-      return {
-        success: false,
-        error: 'Transcript too long. Please use summarization first.',
-      };
-    }
-
-    const promptContext: NoteGenerationContext = {
-      transcript,
-      visit_mode: context.visit_mode,
-      detail_level,
-      language: 'en', // TODO: Get from session settings
-      specialty: context.specialty,
-    };
-
-    const { system, user } = buildNoteGenerationPrompt(promptContext);
-
-    const response = await callAI(
-      [
-        { role: 'system', content: system },
-        { role: 'user', content: user }
-      ],
-      {
-        function_name: 'generate-note',
+    const { data, error } = await supabase.functions.invoke('generate-note', {
+      body: {
         session_id,
-        temperature: TEMPERATURE_PRESETS.noteGeneration,
-        maxTokens: MAX_TOKENS.noteGeneration,
+        transcript_text: transcript,
+        detail_level
       }
-    );
+    });
 
-    const content = response.choices?.[0]?.message?.content || '';
-    
-    let noteData;
-    try {
-      noteData = JSON.parse(content);
-    } catch {
-      // If not valid JSON, treat as plaintext
-      noteData = {
-        soap: { subjective: '', objective: '', assessment: '', plan: '' },
-        plaintext: content
-      };
+    if (error) {
+      console.error('Edge function error:', error);
+      throw error;
     }
 
-    // Validate output
-    const validation = validateAIOutput(noteData, 'json');
+    if (!data) {
+      throw new Error('No response from note generation');
+    }
 
-    // Update session
-    await supabase
-      .from('sessions')
-      .update({
-        generated_note: noteData.plaintext,
-        note_json: noteData.soap,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', session_id);
+    if (!data.success) {
+      throw new Error(data.error?.message || 'Note generation failed');
+    }
 
     return {
       success: true,
-      note: noteData.plaintext,
-      note_json: noteData.soap,
-      warnings: validation.warnings,
+      note: data.note,
+      note_json: data.note_json,
+      warnings: data.warnings || []
     };
   } catch (error) {
     console.error('Error in generateClinicalNote:', error);
@@ -250,66 +212,34 @@ export async function extractTasks(
   error?: string;
 }> {
   try {
-    const context = await getSessionContext(session_id);
-
-    const promptContext: TaskExtractionContext = {
-      note_text,
-      specialty: context?.specialty,
-    };
-
-    const { system, user } = buildTaskExtractionPrompt(promptContext);
-
-    const response = await callAI(
-      [
-        { role: 'system', content: system },
-        { role: 'user', content: user }
-      ],
-      {
-        function_name: 'extract-tasks',
-        session_id,
-        temperature: TEMPERATURE_PRESETS.taskExtraction,
-        maxTokens: MAX_TOKENS.taskExtraction,
-        tools: [taskExtractionToolDefinition],
-        tool_choice: { type: 'function', function: { name: 'extract_tasks' } }
-      }
-    );
-
-    const toolCall = response.choices?.[0]?.message?.tool_calls?.[0];
-    let extractedTasks = [];
-
-    if (toolCall?.function?.arguments) {
-      try {
-        const parsed = JSON.parse(toolCall.function.arguments);
-        extractedTasks = parsed.tasks || [];
-      } catch (e) {
-        console.error('Failed to parse tool response:', e);
-      }
+    if (!session_id || !note_text.trim()) {
+      throw new Error('Session ID and note text are required');
     }
 
-    // Insert tasks into database
-    if (extractedTasks.length > 0) {
-      const { data: { session: authSession } } = await supabase.auth.getSession();
-      if (!authSession?.user) {
-        throw new Error('Not authenticated');
-      }
-
-      const tasksToInsert = extractedTasks.map((task: any) => ({
-        user_id: authSession.user.id,
+    const { data, error } = await supabase.functions.invoke('extract-tasks', {
+      body: {
         session_id,
-        title: task.title,
-        description: task.description || '',
-        priority: task.priority || 'medium',
-        category: task.category || 'general',
-        status: 'pending'
-      }));
+        note_text
+      }
+    });
 
-      await supabase.from('tasks').insert(tasksToInsert);
+    if (error) {
+      console.error('Edge function error:', error);
+      throw error;
+    }
+
+    if (!data) {
+      throw new Error('No response from task extraction');
+    }
+
+    if (!data.success) {
+      throw new Error(data.error?.message || 'Task extraction failed');
     }
 
     return {
       success: true,
-      tasks: extractedTasks,
-      warnings: extractedTasks.length === 0 ? ['No tasks extracted'] : [],
+      tasks: data.tasks || [],
+      warnings: []
     };
   } catch (error) {
     console.error('Error in extractTasks:', error);
@@ -334,53 +264,35 @@ export async function suggestCodes(
   error?: string;
 }> {
   try {
-    const context = await getSessionContext(session_id);
-
-    const promptContext: CodeSuggestionContext = {
-      note_text,
-      region,
-      specialty: context?.specialty,
-    };
-
-    const { system, user } = buildCodeSuggestionPrompt(promptContext);
-
-    const response = await callAI(
-      [
-        { role: 'system', content: system },
-        { role: 'user', content: user }
-      ],
-      {
-        function_name: 'suggest-codes',
-        session_id,
-        temperature: TEMPERATURE_PRESETS.codeSuggestion,
-        maxTokens: MAX_TOKENS.codeSuggestion,
-      }
-    );
-
-    const content = response.choices?.[0]?.message?.content || '[]';
-    
-    let codes = [];
-    try {
-      codes = JSON.parse(content);
-      // Filter by confidence threshold
-      codes = codes.filter((c: any) => c.confidence >= 0.5);
-    } catch {
-      console.warn('Failed to parse code suggestions');
+    if (!session_id || !note_text.trim()) {
+      throw new Error('Session ID and note text are required');
     }
 
-    // Update session
-    await supabase
-      .from('sessions')
-      .update({
-        clinical_codes: { suggested: codes, confirmed: [] },
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', session_id);
+    const { data, error } = await supabase.functions.invoke('suggest-codes', {
+      body: {
+        session_id,
+        note_text,
+        region
+      }
+    });
+
+    if (error) {
+      console.error('Edge function error:', error);
+      throw error;
+    }
+
+    if (!data) {
+      throw new Error('No response from code suggestion');
+    }
+
+    if (!data.success) {
+      throw new Error(data.error?.message || 'Code suggestion failed');
+    }
 
     return {
       success: true,
-      codes,
-      warnings: codes.length === 0 ? ['No codes suggested with sufficient confidence'] : [],
+      codes: data.codes || [],
+      warnings: []
     };
   } catch (error) {
     console.error('Error in suggestCodes:', error);
@@ -469,50 +381,36 @@ export async function askHeidiAssistant(
   error?: string;
 }> {
   try {
-    let session_context = '';
-    let patient_context = '';
-    let specialty = '';
-
-    if (session_id) {
-      const context = await getSessionContext(session_id);
-      if (context) {
-        session_context = context.generated_note || context.summary || '';
-        patient_context = `Patient ${context.patient_name}, ${context.visit_mode} visit`;
-        specialty = context.specialty || '';
-      }
+    if (!question || !question.trim()) {
+      throw new Error('Question is required');
     }
 
-    const promptContext: AskHeidContext = {
-      question,
-      session_context: session_context || context_snippet,
-      patient_context,
-      specialty,
-    };
-
-    const { system, user } = buildAskHeidiPrompt(promptContext);
-
-    const response = await callAI(
-      [
-        { role: 'system', content: system },
-        { role: 'user', content: user }
-      ],
-      {
-        function_name: 'ask-heidi',
+    const { data, error } = await supabase.functions.invoke('ask-heidi', {
+      body: {
+        question: question.trim(),
         session_id,
-        temperature: TEMPERATURE_PRESETS.assistant,
-        maxTokens: MAX_TOKENS.assistant,
+        context_snippet
       }
-    );
+    });
 
-    const answer = response.choices?.[0]?.message?.content || 'I apologize, but I could not generate a response.';
-    
-    const validation = validateAIOutput(answer, 'text');
+    if (error) {
+      console.error('Edge function error:', error);
+      throw error;
+    }
+
+    if (!data) {
+      throw new Error('No response from AI assistant');
+    }
+
+    if (!data.success) {
+      throw new Error(data.error?.message || 'AI assistant request failed');
+    }
 
     return {
       success: true,
-      answer,
-      citations: [], // TODO: Implement citation extraction if needed
-      warnings: validation.warnings,
+      answer: data.answer,
+      citations: data.citations || [],
+      warnings: []
     };
   } catch (error) {
     console.error('Error in askHeidiAssistant:', error);

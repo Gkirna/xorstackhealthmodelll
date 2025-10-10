@@ -24,11 +24,21 @@ const Settings = () => {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [betaFeatures, setBetaFeatures] = useState(false);
 
-  const handleSave = (section: string) => {
-    toast({
-      title: "Settings saved",
-      description: `${section} settings updated successfully`,
-    });
+  const handleSave = async (section: string) => {
+    // In production, save to backend
+    try {
+      // TODO: Save settings to user preferences table
+      toast({
+        title: "Settings saved",
+        description: `${section} settings updated successfully`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save settings",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
