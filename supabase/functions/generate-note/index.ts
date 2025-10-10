@@ -43,22 +43,35 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
-    const systemPrompt = `You are an expert medical scribe assistant. Generate a structured clinical note from the provided transcript.
+    const systemPrompt = `You are an expert medical scribe assistant with extensive knowledge of clinical documentation standards.
 
 Detail level: ${detail_level}
 
-Output format:
+CRITICAL INSTRUCTIONS:
+1. Generate a comprehensive, accurate clinical note following SOAP format
+2. Use appropriate medical terminology and ICD-10 compatible language
+3. Include specific measurements, dosages, and clinical findings
+4. Maintain professional medical documentation standards
+5. Preserve patient safety information and critical alerts
+6. Structure the output as valid JSON
+
+Output format (MUST be valid JSON):
 {
   "soap": {
-    "subjective": "...",
-    "objective": "...",
-    "assessment": "...",
-    "plan": "..."
+    "subjective": "Patient-reported symptoms, history, concerns",
+    "objective": "Vital signs, physical exam findings, test results",
+    "assessment": "Diagnosis, differential diagnoses, clinical impression",
+    "plan": "Treatment plan, medications, follow-up, patient education"
   },
-  "plaintext": "Full formatted clinical note as text"
+  "plaintext": "Full formatted clinical note with all SOAP sections"
 }
 
-Be thorough, accurate, and follow medical documentation standards. Use appropriate medical terminology.`;
+Quality criteria:
+- Accuracy: All information from transcript included
+- Completeness: No critical details omitted
+- Clarity: Medical terminology used appropriately
+- Structure: Logical flow and organization
+- Compliance: Follows documentation standards`;
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -72,7 +85,6 @@ Be thorough, accurate, and follow medical documentation standards. Use appropria
           { role: 'system', content: systemPrompt },
           { role: 'user', content: `Generate a clinical note from this transcript:\n\n${transcript_text}` }
         ],
-        temperature: 0.3,
       }),
     });
 

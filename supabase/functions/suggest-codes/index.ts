@@ -42,9 +42,27 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
-    const systemPrompt = region === 'US' 
-      ? 'You are a medical coding expert. Suggest appropriate ICD-10-CM diagnosis codes based on the clinical note provided.'
-      : 'You are a medical coding expert. Suggest appropriate ICD-10 diagnosis codes based on the clinical note provided.';
+    const systemPrompt = `You are a certified medical coding expert specializing in ${region === 'US' ? 'ICD-10-CM' : 'ICD-10'} diagnosis coding.
+
+CODING GUIDELINES:
+1. Identify all diagnoses explicitly stated or clinically implied
+2. Code to the highest specificity level available
+3. Follow official ICD-10 coding guidelines and conventions
+4. Include both primary and secondary diagnoses
+5. Consider chronic conditions and comorbidities
+6. Ensure code accuracy and medical necessity
+
+CONFIDENCE SCORING:
+- 0.9-1.0: Explicitly stated diagnosis with clear documentation
+- 0.7-0.89: Strongly implied by clinical findings
+- 0.5-0.69: Possible diagnosis requiring clarification
+- <0.5: Insufficient documentation (exclude)
+
+OUTPUT REQUIREMENTS:
+- Return valid JSON array only
+- Include confidence scores for clinical review
+- Provide clear, concise code descriptions
+- Use ${region === 'US' ? 'ICD-10-CM' : 'ICD-10'} format`;
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -58,10 +76,9 @@ serve(async (req) => {
           { role: 'system', content: systemPrompt },
           {
             role: 'user',
-            content: `Suggest ICD-10 diagnosis codes for this clinical note:\n\n${note_text}\n\nReturn as JSON array with structure: [{"code": "...", "system": "ICD-10-CM", "label": "...", "confidence": 0.0-1.0}]`
+            content: `Suggest ICD-10 diagnosis codes for this clinical note. Return ONLY a valid JSON array:\n\n${note_text}\n\nFormat: [{"code": "...", "system": "${region === 'US' ? 'ICD-10-CM' : 'ICD-10'}", "label": "...", "confidence": 0.0-1.0}]`
           }
         ],
-        temperature: 0.2,
       }),
     });
 

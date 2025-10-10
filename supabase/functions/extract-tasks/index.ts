@@ -54,7 +54,26 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: 'Extract actionable follow-up tasks from clinical notes. Identify tasks like ordering tests, scheduling follow-ups, patient education, referrals, etc.'
+            content: `Extract actionable follow-up tasks from clinical notes with high precision.
+
+TASK CATEGORIES:
+- diagnostic: Lab work, imaging, tests
+- follow-up: Appointments, check-ins, monitoring
+- referral: Specialist consultations
+- medication: Prescriptions, refills, adjustments
+- patient_education: Instructions, resources, counseling
+- administrative: Paperwork, insurance, documentation
+
+PRIORITY ASSESSMENT:
+- high: Urgent, time-sensitive, safety-critical
+- medium: Important but not urgent
+- low: Routine, non-critical
+
+Extract tasks that are:
+1. Explicitly mentioned in the note
+2. Clinically necessary based on findings
+3. Actionable and specific
+4. Patient-safety relevant`
           },
           {
             role: 'user',
