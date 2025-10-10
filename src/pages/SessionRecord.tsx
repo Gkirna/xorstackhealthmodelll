@@ -19,26 +19,35 @@ import {
   Loader2
 } from "lucide-react";
 import { toast } from "sonner";
-import { useSession, useUpdateSession } from "@/hooks/useSessions";
-import { generateClinicalNote } from "@/ai/heidiBrain";
-import { AudioRecorder } from "@/components/AudioRecorder";
-import { AskHeidiDrawer } from "@/components/AskHeidiDrawer";
-import { AIStatus, useAIStatus } from "@/components/AIStatus";
 
 const SessionRecord = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { data: session, isLoading } = useSession(id);
-  const updateSession = useUpdateSession();
-  const aiStatus = useAIStatus();
   
+  const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [generatedNote, setGeneratedNote] = useState("");
-  const [heidiDrawerOpen, setHeidiDrawerOpen] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  const handleAudioRecordingComplete = async (audioBlob: Blob) => {
-    // Phase 5B will handle upload and transcription
-    console.log('Audio recording complete, size:', audioBlob.size);
+  // Placeholder patient data
+  const sessionData = {
+    patientName: "John Doe",
+    patientId: "MRN-123456",
+    dob: "1980-05-15",
+    chiefComplaint: "Chest pain",
+    appointmentType: "Initial Consultation",
+    scheduledDate: "2025-10-10"
+  };
+
+  const handleToggleRecording = () => {
+    if (isRecording) {
+      setIsRecording(false);
+      toast.success("Recording paused");
+    } else {
+      setIsRecording(true);
+      toast.success("Recording started");
+    }
   };
 
   const handleGenerateNote = async () => {
@@ -47,40 +56,31 @@ const SessionRecord = () => {
       return;
     }
 
-    if (!id || !session) {
-      toast.error("Session not found");
-      return;
-    }
+    setIsGenerating(true);
+    
+    // Placeholder for AI note generation
+    setTimeout(() => {
+      setGeneratedNote(`SUBJECTIVE:
+Patient presents with chief complaint of ${sessionData.chiefComplaint}. 
+Patient reports symptoms began approximately 2 days ago...
 
-    try {
-      aiStatus.startOperation('generating-note', 'Analyzing transcript and generating clinical note...');
+OBJECTIVE:
+Vital signs: BP 120/80, HR 72, Temp 98.6°F, RR 16
+General appearance: Alert and oriented x3, no acute distress...
+
+ASSESSMENT:
+1. ${sessionData.chiefComplaint} - likely [diagnosis]
+2. [Additional findings]
+
+PLAN:
+1. Order EKG and cardiac enzymes
+2. Start aspirin 325mg
+3. Follow up in 48 hours or sooner if symptoms worsen
+4. Patient education provided regarding warning signs`);
       
-      const result = await generateClinicalNote(
-        id,
-        transcript,
-        'medium'
-      );
-
-      if (result.success && result.note) {
-        setGeneratedNote(result.note);
-        
-        await updateSession.mutateAsync({
-          id,
-          updates: {
-            generated_note: result.note,
-            note_json: result.note_json,
-            status: 'review',
-          },
-        });
-
-        aiStatus.completeOperation('Note generated successfully!');
-      } else {
-        aiStatus.failOperation(result.error || 'Failed to generate note');
-      }
-    } catch (error) {
-      console.error('Note generation error:', error);
-      aiStatus.failOperation('An error occurred while generating the note');
-    }
+      setIsGenerating(false);
+      toast.success("Note generated successfully!");
+    }, 2000);
   };
 
   const handleFinishRecording = () => {
@@ -93,29 +93,6 @@ const SessionRecord = () => {
     navigate(`/session/${id}/review`);
   };
 
-  if (isLoading) {
-    return (
-      <AppLayout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
-      </AppLayout>
-    );
-  }
-
-  if (!session) {
-    return (
-      <AppLayout>
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">Session not found</p>
-          <Button onClick={() => navigate('/dashboard')} className="mt-4">
-            Return to Dashboard
-          </Button>
-        </div>
-      </AppLayout>
-    );
-  }
-
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -123,21 +100,18 @@ const SessionRecord = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Recording Session</h1>
-            <p className="text-muted-foreground">Patient: {session.patient_name}</p>
+            <p className="text-muted-foreground">Patient: {sessionData.patientName}</p>
           </div>
-          <Badge variant="secondary" className="text-sm">
-            {session.status}
-          </Badge>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Clock className="h-4 w-4" />
+              <span className="text-sm font-mono">{Math.floor(duration / 60)}:{(duration % 60).toString().padStart(2, '0')}</span>
+            </div>
+            <Badge variant={isRecording ? "destructive" : "secondary"} className="text-sm">
+              {isRecording ? "Recording" : "Paused"}
+            </Badge>
+          </div>
         </div>
-
-        {aiStatus.status !== 'idle' && (
-          <AIStatus 
-            operation={aiStatus.operation}
-            status={aiStatus.status}
-            message={aiStatus.message}
-            progress={aiStatus.progress}
-          />
-        )}
 
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Main Recording Area */}
@@ -150,33 +124,46 @@ const SessionRecord = () => {
               </TabsList>
               
               <TabsContent value="transcript" className="space-y-4">
-                <AudioRecorder 
-                  onTranscriptUpdate={setTranscript}
-                  onRecordingComplete={handleAudioRecordingComplete}
-                />
-                
                 <Card>
                   <CardHeader>
-                    <CardTitle>Transcript</CardTitle>
+                    <CardTitle>Live Transcription</CardTitle>
                     <CardDescription>
-                      Manual entry or transcribed text will appear here
+                      Type or speak to capture the clinical encounter
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Textarea
-                      placeholder="Type or record the clinical encounter..."
-                      className="min-h-[300px] font-mono text-sm"
+                      placeholder="Start typing or recording the clinical encounter..."
+                      className="min-h-[400px] font-mono text-sm"
                       value={transcript}
                       onChange={(e) => setTranscript(e.target.value)}
                     />
                     
                     <div className="flex gap-3 mt-4">
                       <Button
-                        onClick={handleGenerateNote}
-                        disabled={aiStatus.status === 'processing' || !transcript.trim()}
+                        variant={isRecording ? "destructive" : "default"}
+                        onClick={handleToggleRecording}
                         className="flex-1"
                       >
-                        {aiStatus.status === 'processing' ? (
+                        {isRecording ? (
+                          <>
+                            <MicOff className="mr-2 h-4 w-4" />
+                            Pause Recording
+                          </>
+                        ) : (
+                          <>
+                            <Mic className="mr-2 h-4 w-4" />
+                            Start Recording
+                          </>
+                        )}
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        onClick={handleGenerateNote}
+                        disabled={isGenerating || !transcript.trim()}
+                      >
+                        {isGenerating ? (
                           <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                             Generating...
@@ -229,28 +216,28 @@ const SessionRecord = () => {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <p className="text-sm text-muted-foreground">Patient Name</p>
-                        <p className="font-medium">{session.patient_name}</p>
+                        <p className="font-medium">{sessionData.patientName}</p>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Patient ID</p>
-                        <p className="font-medium">{session.patient_id}</p>
+                        <p className="font-medium">{sessionData.patientId}</p>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Date of Birth</p>
-                        <p className="font-medium">{session.patient_dob || 'N/A'}</p>
+                        <p className="font-medium">{sessionData.dob}</p>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Appointment Date</p>
-                        <p className="font-medium">{session.scheduled_at ? new Date(session.scheduled_at).toLocaleDateString() : 'N/A'}</p>
+                        <p className="font-medium">{sessionData.scheduledDate}</p>
                       </div>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Chief Complaint</p>
-                      <p className="font-medium">{session.chief_complaint || 'N/A'}</p>
+                      <p className="font-medium">{sessionData.chiefComplaint}</p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Appointment Type</p>
-                      <Badge variant="secondary">{session.appointment_type || 'N/A'}</Badge>
+                      <Badge variant="secondary">{sessionData.appointmentType}</Badge>
                     </div>
                   </CardContent>
                 </Card>
@@ -270,15 +257,15 @@ const SessionRecord = () => {
               <CardContent className="space-y-3">
                 <div>
                   <p className="text-sm text-muted-foreground">Name</p>
-                  <p className="font-medium">{session.patient_name}</p>
+                  <p className="font-medium">{sessionData.patientName}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">MRN</p>
-                  <p className="font-medium">{session.patient_id}</p>
+                  <p className="font-medium">{sessionData.patientId}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Chief Complaint</p>
-                  <p className="font-medium">{session.chief_complaint || 'N/A'}</p>
+                  <p className="font-medium">{sessionData.chiefComplaint}</p>
                 </div>
               </CardContent>
             </Card>
@@ -292,11 +279,7 @@ const SessionRecord = () => {
                 <CardDescription>AI clinical assistant</CardDescription>
               </CardHeader>
               <CardContent>
-                <Button 
-                  variant="outline" 
-                  className="w-full"
-                  onClick={() => setHeidiDrawerOpen(true)}
-                >
+                <Button variant="outline" className="w-full">
                   <MessageCircle className="mr-2 h-4 w-4" />
                   Open Chat
                 </Button>
@@ -323,12 +306,6 @@ const SessionRecord = () => {
             </div>
           </div>
         </div>
-
-        <AskHeidiDrawer 
-          open={heidiDrawerOpen}
-          onOpenChange={setHeidiDrawerOpen}
-          session_id={id}
-        />
       </div>
     </AppLayout>
   );

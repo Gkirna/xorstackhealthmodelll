@@ -8,7 +8,6 @@ import SessionNew from "./SessionNew";
 import SessionRecord from "./SessionRecord";
 import SessionReview from "./SessionReview";
 import Sessions from "./Sessions";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 const Index = () => {
   const location = useLocation();
@@ -16,20 +15,16 @@ const Index = () => {
   switch (location.pathname) {
     case "/signup": return <Signup />;
     case "/login": return <Login />;
-    case "/onboarding/profile": 
-      return <ProtectedRoute><OnboardingProfile /></ProtectedRoute>;
-    case "/dashboard": 
-      return <ProtectedRoute><Dashboard /></ProtectedRoute>;
-    case "/session/new": 
-      return <ProtectedRoute><SessionNew /></ProtectedRoute>;
-    case "/sessions": 
-      return <ProtectedRoute><Sessions /></ProtectedRoute>;
+    case "/onboarding/profile": return <OnboardingProfile />;
+    case "/dashboard": return <Dashboard />;
+    case "/session/new": return <SessionNew />;
+    case "/sessions": return <Sessions />;
     default:
       if (location.pathname.startsWith("/session/") && location.pathname.endsWith("/record")) {
-        return <ProtectedRoute><SessionRecord /></ProtectedRoute>;
+        return <SessionRecord />;
       }
       if (location.pathname.startsWith("/session/") && location.pathname.endsWith("/review")) {
-        return <ProtectedRoute><SessionReview /></ProtectedRoute>;
+        return <SessionReview />;
       }
       return <Welcome />;
   }
