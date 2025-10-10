@@ -35,20 +35,14 @@ export function useCreateTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (taskData: Partial<Task> & { title: string }) => {
+    mutationFn: async (taskData: Partial<Task>) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase
         .from('tasks')
         .insert({
-          title: taskData.title,
-          description: taskData.description,
-          due_date: taskData.due_date,
-          priority: taskData.priority || 'medium',
-          status: taskData.status || 'pending',
-          category: taskData.category,
-          session_id: taskData.session_id,
+          ...taskData,
           user_id: user.id,
         })
         .select()

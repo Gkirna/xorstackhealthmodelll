@@ -97,11 +97,17 @@ async function callAI(
 
     // Log to ai_logs if enabled
     if (options.logToDatabase !== false && session.user) {
+      const inputText = messages.map(m => m.content).join(' ');
+      const inputHash = await hashText(inputText.substring(0, 1000));
+
       await supabase.from('ai_logs').insert({
         user_id: session.user.id,
         session_id: options.session_id || null,
-        operation_type: options.function_name,
-        model: 'google/gemini-2.5-flash',
+        function_name: options.function_name,
+        input_hash: inputHash,
+        output_preview: JSON.stringify(data).substring(0, 200),
+        duration_ms: duration,
+        status: 'success',
       });
     }
 
@@ -116,9 +122,10 @@ async function callAI(
       await supabase.from('ai_logs').insert({
         user_id: session.user.id,
         session_id: options.session_id || null,
-        operation_type: options.function_name,
-        model: 'google/gemini-2.5-flash',
-        error: errorMessage,
+        function_name: options.function_name,
+        duration_ms: duration,
+        status: 'error',
+        error_message: errorMessage,
       });
     }
 

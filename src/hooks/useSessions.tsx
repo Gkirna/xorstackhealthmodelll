@@ -61,23 +61,14 @@ export function useCreateSession() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (sessionData: Partial<Session> & { patient_name: string }) => {
+    mutationFn: async (sessionData: Partial<Session>) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
       const { data, error } = await supabase
         .from('sessions')
         .insert({
-          patient_name: sessionData.patient_name,
-          patient_id: sessionData.patient_id,
-          patient_dob: sessionData.patient_dob,
-          chief_complaint: sessionData.chief_complaint,
-          appointment_type: sessionData.appointment_type,
-          visit_mode: sessionData.visit_mode,
-          input_language: sessionData.input_language || 'en',
-          output_language: sessionData.output_language || 'en',
-          scheduled_at: sessionData.scheduled_at,
-          template_id: sessionData.template_id,
+          ...sessionData,
           user_id: user.id,
           status: 'draft',
         })

@@ -5,11 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Activity } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@/hooks/useAuth";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { signIn } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
@@ -20,21 +18,12 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
     
-    try {
-      const { error } = await signIn(formData.email, formData.password);
-      
-      if (error) {
-        toast.error(error.message);
-        setLoading(false);
-        return;
-      }
-      
+    // Placeholder for Supabase auth integration
+    setTimeout(() => {
       toast.success("Welcome back!");
       navigate("/dashboard");
-    } catch (error) {
-      toast.error("An unexpected error occurred");
       setLoading(false);
-    }
+    }, 1500);
   };
 
   return (
