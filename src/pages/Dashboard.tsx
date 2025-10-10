@@ -12,29 +12,32 @@ import {
   Calendar
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useSessions } from "@/hooks/useSessions";
+import { useTasks } from "@/hooks/useTasks";
+import { useTemplates } from "@/hooks/useTemplates";
+import { format } from "date-fns";
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { data: sessions = [], isLoading: sessionsLoading } = useSessions();
+  const { data: tasks = [], isLoading: tasksLoading } = useTasks();
+  const { data: templates = [], isLoading: templatesLoading } = useTemplates();
 
-  // Placeholder data
+  const recentSessions = sessions.slice(0, 3);
+  const upcomingTasks = tasks
+    .filter(t => t.status === 'pending')
+    .slice(0, 3);
+
   const stats = {
-    totalSessions: 42,
-    pendingTasks: 7,
-    activeTemplates: 5,
-    thisWeekSessions: 12
+    totalSessions: sessions.length,
+    pendingTasks: tasks.filter(t => t.status === 'pending').length,
+    activeTemplates: templates.length,
+    thisWeekSessions: sessions.filter(s => {
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      return new Date(s.created_at) > weekAgo;
+    }).length,
   };
-
-  const recentSessions = [
-    { id: "1", patientName: "John Doe", date: "2025-10-09", status: "completed", chiefComplaint: "Chest pain" },
-    { id: "2", patientName: "Jane Smith", date: "2025-10-09", status: "draft", chiefComplaint: "Annual checkup" },
-    { id: "3", patientName: "Robert Johnson", date: "2025-10-08", status: "completed", chiefComplaint: "Hypertension follow-up" },
-  ];
-
-  const upcomingTasks = [
-    { id: "1", title: "Follow up with John Doe", dueDate: "2025-10-12", priority: "high" },
-    { id: "2", title: "Review lab results", dueDate: "2025-10-11", priority: "medium" },
-    { id: "3", title: "Schedule consultation", dueDate: "2025-10-13", priority: "low" },
-  ];
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -136,24 +139,30 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {recentSessions.map((session) => (
-                  <div 
-                    key={session.id}
-                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer transition-colors"
-                    onClick={() => navigate(`/session/${session.id}/review`)}
-                  >
-                    <div className="space-y-1">
-                      <p className="font-medium">{session.patientName}</p>
-                      <p className="text-sm text-muted-foreground">{session.chiefComplaint}</p>
+                {sessionsLoading ? (
+                  <div className="text-center py-4 text-muted-foreground">Loading...</div>
+                ) : (
+                  recentSessions.map((session) => (
+                    <div 
+                      key={session.id}
+                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer transition-colors"
+                      onClick={() => navigate(`/session/${session.id}/review`)}
+                    >
+                      <div className="space-y-1">
+                        <p className="font-medium">{session.patient_name}</p>
+                        <p className="text-sm text-muted-foreground">{session.chief_complaint || 'No complaint specified'}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={getStatusColor(session.status) as any}>
+                          {session.status}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {format(new Date(session.created_at), 'MMM d')}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={getStatusColor(session.status) as any}>
-                        {session.status}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">{session.date}</span>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
                 {recentSessions.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     <FileText className="h-12 w-12 mx-auto mb-3 opacity-20" />
@@ -191,23 +200,27 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {upcomingTasks.map((task) => (
-                  <div 
-                    key={task.id}
-                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer transition-colors"
-                  >
-                    <div className="space-y-1">
-                      <p className="font-medium">{task.title}</p>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        {task.dueDate}
+                {tasksLoading ? (
+                  <div className="text-center py-4 text-muted-foreground">Loading...</div>
+                ) : (
+                  upcomingTasks.map((task) => (
+                    <div 
+                      key={task.id}
+                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer transition-colors"
+                    >
+                      <div className="space-y-1">
+                        <p className="font-medium">{task.title}</p>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          {task.due_date ? format(new Date(task.due_date), 'MMM d, yyyy') : 'No due date'}
+                        </div>
                       </div>
+                      <Badge variant={getPriorityColor(task.priority) as any}>
+                        {task.priority}
+                      </Badge>
                     </div>
-                    <Badge variant={getPriorityColor(task.priority) as any}>
-                      {task.priority}
-                    </Badge>
-                  </div>
-                ))}
+                  ))
+                )}
                 {upcomingTasks.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     <CheckSquare className="h-12 w-12 mx-auto mb-3 opacity-20" />
