@@ -1,19 +1,24 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Mic, MicOff, Square, Play, Pause } from 'lucide-react';
+import { Mic, Square, Play, Pause, Upload } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { Progress } from '@/components/ui/progress';
 
 interface AudioRecorderProps {
+  sessionId?: string;
   onTranscriptUpdate?: (transcript: string) => void;
-  onRecordingComplete?: (audioBlob: Blob) => void;
+  onRecordingComplete?: (audioBlob: Blob, audioUrl?: string) => void;
 }
 
-export function AudioRecorder({ onTranscriptUpdate, onRecordingComplete }: AudioRecorderProps) {
+export function AudioRecorder({ sessionId, onTranscriptUpdate, onRecordingComplete }: AudioRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [duration, setDuration] = useState(0);
   const [audioURL, setAudioURL] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -41,16 +46,19 @@ export function AudioRecorder({ onTranscriptUpdate, onRecordingComplete }: Audio
         }
       };
 
-      mediaRecorder.onstop = () => {
+      mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
         const url = URL.createObjectURL(audioBlob);
         setAudioURL(url);
         
-        if (onRecordingComplete) {
+        stream.getTracks().forEach(track => track.stop());
+        
+        // Upload to storage if sessionId is provided
+        if (sessionId) {
+          await uploadAudio(audioBlob);
+        } else if (onRecordingComplete) {
           onRecordingComplete(audioBlob);
         }
-
-        stream.getTracks().forEach(track => track.stop());
       };
 
       mediaRecorder.start();
@@ -105,6 +113,45 @@ export function AudioRecorder({ onTranscriptUpdate, onRecordingComplete }: Audio
     }
   };
 
+  const uploadAudio = async (audioBlob: Blob) => {
+    if (!sessionId) return;
+
+    try {
+      setIsUploading(true);
+      setUploadProgress(0);
+
+      const fileName = `${sessionId}/${Date.now()}.webm`;
+      
+      const { data, error } = await supabase.storage
+        .from('audio-recordings')
+        .upload(fileName, audioBlob, {
+          contentType: 'audio/webm',
+          upsert: false
+        });
+
+      if (error) throw error;
+
+      setUploadProgress(100);
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('audio-recordings')
+        .getPublicUrl(fileName);
+
+      toast.success('Recording uploaded successfully');
+      
+      if (onRecordingComplete) {
+        onRecordingComplete(audioBlob, publicUrl);
+      }
+
+      setIsUploading(false);
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error('Failed to upload recording');
+      setIsUploading(false);
+    }
+  };
+
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -150,7 +197,17 @@ export function AudioRecorder({ onTranscriptUpdate, onRecordingComplete }: Audio
             </div>
           </div>
 
-          {audioURL && (
+          {isUploading && (
+            <div className="pt-4 border-t space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Uploading...</span>
+                <span className="font-medium">{uploadProgress}%</span>
+              </div>
+              <Progress value={uploadProgress} />
+            </div>
+          )}
+
+          {audioURL && !isUploading && (
             <div className="pt-4 border-t">
               <p className="text-sm text-muted-foreground mb-2">Recording preview:</p>
               <audio src={audioURL} controls className="w-full" />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -7,14 +7,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { 
-  Mic, 
-  MicOff, 
   Square, 
   Save,
   MessageCircle,
-  Clock,
   User,
-  Calendar,
   FileText,
   Loader2
 } from "lucide-react";
@@ -24,6 +20,9 @@ import { generateClinicalNote } from "@/ai/heidiBrain";
 import { AudioRecorder } from "@/components/AudioRecorder";
 import { AskHeidiDrawer } from "@/components/AskHeidiDrawer";
 import { AIStatus, useAIStatus } from "@/components/AIStatus";
+import { useTranscription } from "@/hooks/useTranscription";
+import { useTranscriptUpdates } from "@/hooks/useRealtime";
+import { ExportOptions } from "@/components/ExportOptions";
 
 const SessionRecord = () => {
   const { id } = useParams();
@@ -31,14 +30,46 @@ const SessionRecord = () => {
   const { data: session, isLoading } = useSession(id);
   const updateSession = useUpdateSession();
   const aiStatus = useAIStatus();
+  const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript } = useTranscription(id || '');
   
   const [transcript, setTranscript] = useState("");
   const [generatedNote, setGeneratedNote] = useState("");
   const [heidiDrawerOpen, setHeidiDrawerOpen] = useState(false);
 
-  const handleAudioRecordingComplete = async (audioBlob: Blob) => {
-    // Phase 5B will handle upload and transcription
+  // Load existing transcripts
+  useEffect(() => {
+    if (id) {
+      loadTranscripts();
+    }
+  }, [id, loadTranscripts]);
+
+  // Update transcript when chunks change
+  useEffect(() => {
+    const fullTranscript = getFullTranscript();
+    if (fullTranscript) {
+      setTranscript(fullTranscript);
+    }
+  }, [transcriptChunks, getFullTranscript]);
+
+  // Subscribe to realtime transcript updates
+  useTranscriptUpdates(id || '', (newTranscript) => {
+    loadTranscripts();
+  });
+
+  const handleAudioRecordingComplete = async (audioBlob: Blob, audioUrl?: string) => {
     console.log('Audio recording complete, size:', audioBlob.size);
+    
+    if (audioUrl && id) {
+      // Update session with audio URL
+      await updateSession.mutateAsync({
+        id,
+        updates: {
+          // Note: You may need to add an audio_url column to sessions table
+        }
+      });
+      
+      toast.success('Recording saved');
+    }
   };
 
   const handleGenerateNote = async () => {
@@ -151,6 +182,7 @@ const SessionRecord = () => {
               
               <TabsContent value="transcript" className="space-y-4">
                 <AudioRecorder 
+                  sessionId={id}
                   onTranscriptUpdate={setTranscript}
                   onRecordingComplete={handleAudioRecordingComplete}
                 />
@@ -282,6 +314,13 @@ const SessionRecord = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {generatedNote && (
+              <ExportOptions 
+                sessionId={id || ''}
+                noteContent={generatedNote}
+              />
+            )}
 
             <Card>
               <CardHeader>
