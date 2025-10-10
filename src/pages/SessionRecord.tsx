@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -12,29 +12,46 @@ import {
   MessageCircle,
   User,
   FileText,
-  Loader2
+  Loader2,
+  Zap
 } from "lucide-react";
 import { toast } from "sonner";
 import { useSession, useUpdateSession } from "@/hooks/useSessions";
-import { generateClinicalNote } from "@/ai/heidiBrain";
-import { AudioRecorder } from "@/components/AudioRecorder";
+import { AudioRecorderWithTranscription } from "@/components/AudioRecorderWithTranscription";
 import { AskHeidiDrawer } from "@/components/AskHeidiDrawer";
-import { AIStatus, useAIStatus } from "@/components/AIStatus";
 import { useTranscription } from "@/hooks/useTranscription";
 import { useTranscriptUpdates } from "@/hooks/useRealtime";
 import { ExportOptions } from "@/components/ExportOptions";
+import { WorkflowOrchestrator } from "@/utils/WorkflowOrchestrator";
+import { WorkflowProgress } from "@/components/WorkflowProgress";
+import type { WorkflowState } from "@/utils/WorkflowOrchestrator";
 
 const SessionRecord = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: session, isLoading } = useSession(id);
   const updateSession = useUpdateSession();
-  const aiStatus = useAIStatus();
   const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript } = useTranscription(id || '');
   
   const [transcript, setTranscript] = useState("");
   const [generatedNote, setGeneratedNote] = useState("");
   const [heidiDrawerOpen, setHeidiDrawerOpen] = useState(false);
+  const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null);
+  const [isAutoPipelineRunning, setIsAutoPipelineRunning] = useState(false);
+  
+  const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
+
+  // Initialize workflow orchestrator
+  useEffect(() => {
+    orchestratorRef.current = new WorkflowOrchestrator((state) => {
+      setWorkflowState(state);
+      setIsAutoPipelineRunning(state.isRunning);
+    });
+    
+    return () => {
+      orchestratorRef.current = null;
+    };
+  }, []);
 
   // Load existing transcripts
   useEffect(() => {
@@ -55,6 +72,17 @@ const SessionRecord = () => {
   useTranscriptUpdates(id || '', (newTranscript) => {
     loadTranscripts();
   });
+
+  // Handle real-time transcript chunks from audio recorder
+  const handleTranscriptChunk = async (text: string) => {
+    if (!text.trim() || !id) return;
+    
+    // Save to database
+    await addTranscriptChunk(text, 'provider');
+    
+    // Update local transcript
+    setTranscript(prev => prev ? `${prev}\n\n${text}` : text);
+  };
 
   const handleAudioRecordingComplete = async (audioBlob: Blob, audioUrl?: string) => {
     console.log('Audio recording complete, size:', audioBlob.size);
@@ -83,34 +111,42 @@ const SessionRecord = () => {
       return;
     }
 
-    try {
-      aiStatus.startOperation('generating-note', 'Analyzing transcript and generating clinical note...');
-      
-      const result = await generateClinicalNote(
-        id,
-        transcript,
-        'medium'
-      );
+    if (!orchestratorRef.current) {
+      toast.error("Workflow system not initialized");
+      return;
+    }
 
+    try {
+      setIsAutoPipelineRunning(true);
+      
+      // Run the complete auto-pipeline
+      const result = await orchestratorRef.current.runCompletePipeline(id, transcript);
+      
       if (result.success && result.note) {
         setGeneratedNote(result.note);
         
+        // Update session with all results
         await updateSession.mutateAsync({
           id,
           updates: {
             generated_note: result.note,
-            note_json: result.note_json,
             status: 'review',
           },
         });
 
-        aiStatus.completeOperation('Note generated successfully!');
+        toast.success('Clinical documentation complete!');
+        
+        if (result.errors && result.errors.length > 0) {
+          toast.warning(`Note completed with ${result.errors.length} optional step(s) failed`);
+        }
       } else {
-        aiStatus.failOperation(result.error || 'Failed to generate note');
+        toast.error(result.errors?.[0] || 'Failed to generate note');
       }
     } catch (error) {
-      console.error('Note generation error:', error);
-      aiStatus.failOperation('An error occurred while generating the note');
+      console.error('Workflow error:', error);
+      toast.error('An error occurred during the workflow');
+    } finally {
+      setIsAutoPipelineRunning(false);
     }
   };
 
@@ -161,14 +197,7 @@ const SessionRecord = () => {
           </Badge>
         </div>
 
-        {aiStatus.status !== 'idle' && (
-          <AIStatus 
-            operation={aiStatus.operation}
-            status={aiStatus.status}
-            message={aiStatus.message}
-            progress={aiStatus.progress}
-          />
-        )}
+        {workflowState && <WorkflowProgress state={workflowState} />}
 
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Main Recording Area */}
@@ -181,9 +210,15 @@ const SessionRecord = () => {
               </TabsList>
               
               <TabsContent value="transcript" className="space-y-4">
-                <AudioRecorder 
+                <AudioRecorderWithTranscription 
                   sessionId={id}
-                  onTranscriptUpdate={setTranscript}
+                  onTranscriptUpdate={(text, isFinal) => {
+                    // Update display with interim results
+                    if (!isFinal) {
+                      // Could show interim in a different color/style
+                    }
+                  }}
+                  onFinalTranscriptChunk={handleTranscriptChunk}
                   onRecordingComplete={handleAudioRecordingComplete}
                 />
                 
@@ -205,18 +240,18 @@ const SessionRecord = () => {
                     <div className="flex gap-3 mt-4">
                       <Button
                         onClick={handleGenerateNote}
-                        disabled={aiStatus.status === 'processing' || !transcript.trim()}
+                        disabled={isAutoPipelineRunning || !transcript.trim()}
                         className="flex-1"
                       >
-                        {aiStatus.status === 'processing' ? (
+                        {isAutoPipelineRunning ? (
                           <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Generating...
+                            Processing...
                           </>
                         ) : (
                           <>
-                            <FileText className="mr-2 h-4 w-4" />
-                            Generate Note
+                            <Zap className="mr-2 h-4 w-4" />
+                            Generate Note & Extract Tasks
                           </>
                         )}
                       </Button>
