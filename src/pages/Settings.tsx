@@ -1,7 +1,5 @@
-import { useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +14,8 @@ import {
 } from "@/components/ui/select";
 import { useUserPreferences, useUpdateUserPreferences } from "@/hooks/useUserPreferences";
 import { useTemplates } from "@/hooks/useTemplates";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 const Settings = () => {
   const { data: preferences, isLoading } = useUserPreferences();
@@ -27,24 +26,47 @@ const Settings = () => {
     return (
       <AppLayout>
         <div className="flex items-center justify-center h-96">
-          <p className="text-muted-foreground">Loading settings...</p>
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       </AppLayout>
     );
   }
 
-  if (!preferences) return null;
+  if (!preferences) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-96">
+          <p className="text-muted-foreground">Unable to load preferences. Please try again.</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   const handleSwitchChange = async (key: string, value: boolean) => {
-    await updatePreferences.mutateAsync({ [key]: value });
+    try {
+      await updatePreferences.mutateAsync({ [key]: value });
+    } catch (error) {
+      toast.error(`Failed to update ${key.replace(/_/g, ' ')}`);
+      console.error('Settings update error:', error);
+    }
   };
 
   const handleSelectChange = async (key: string, value: string) => {
-    await updatePreferences.mutateAsync({ [key]: value });
+    try {
+      await updatePreferences.mutateAsync({ [key]: value });
+    } catch (error) {
+      toast.error(`Failed to update ${key.replace(/_/g, ' ')}`);
+      console.error('Settings update error:', error);
+    }
   };
 
   const handleNumberChange = async (key: string, value: number) => {
-    await updatePreferences.mutateAsync({ [key]: value });
+    try {
+      await updatePreferences.mutateAsync({ [key]: value });
+    } catch (error) {
+      toast.error('Failed to update setting');
+      console.error('Settings update error:', error);
+    }
   };
 
   return (
@@ -82,7 +104,8 @@ const Settings = () => {
                   </div>
                   <Switch 
                     checked={preferences.dark_mode} 
-                    onCheckedChange={(checked) => handleSwitchChange('dark_mode', checked)} 
+                    onCheckedChange={(checked) => handleSwitchChange('dark_mode', checked)}
+                    disabled={updatePreferences.isPending}
                   />
                 </div>
                 <Separator />
@@ -93,7 +116,8 @@ const Settings = () => {
                   </div>
                   <Switch 
                     checked={preferences.compact_sidebar} 
-                    onCheckedChange={(checked) => handleSwitchChange('compact_sidebar', checked)} 
+                    onCheckedChange={(checked) => handleSwitchChange('compact_sidebar', checked)}
+                    disabled={updatePreferences.isPending}
                   />
                 </div>
               </CardContent>
@@ -114,6 +138,7 @@ const Settings = () => {
                     <Select 
                       value={preferences.default_input_language} 
                       onValueChange={(value) => handleSelectChange('default_input_language', value)}
+                      disabled={updatePreferences.isPending}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -130,6 +155,7 @@ const Settings = () => {
                     <Select 
                       value={preferences.default_output_language}
                       onValueChange={(value) => handleSelectChange('default_output_language', value)}
+                      disabled={updatePreferences.isPending}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -147,6 +173,7 @@ const Settings = () => {
                   <Select 
                     value={preferences.default_template_id || "none"}
                     onValueChange={(value) => handleSelectChange('default_template_id', value === "none" ? "" : value)}
+                    disabled={updatePreferences.isPending}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="No default template" />
@@ -169,7 +196,8 @@ const Settings = () => {
                   </div>
                   <Switch 
                     checked={preferences.auto_create_tasks} 
-                    onCheckedChange={(checked) => handleSwitchChange('auto_create_tasks', checked)} 
+                    onCheckedChange={(checked) => handleSwitchChange('auto_create_tasks', checked)}
+                    disabled={updatePreferences.isPending}
                   />
                 </div>
               </CardContent>
@@ -191,7 +219,8 @@ const Settings = () => {
                   </div>
                   <Switch 
                     checked={preferences.email_notifications} 
-                    onCheckedChange={(checked) => handleSwitchChange('email_notifications', checked)} 
+                    onCheckedChange={(checked) => handleSwitchChange('email_notifications', checked)}
+                    disabled={updatePreferences.isPending}
                   />
                 </div>
                 <Separator />
@@ -202,7 +231,8 @@ const Settings = () => {
                   </div>
                   <Switch 
                     checked={preferences.task_reminders} 
-                    onCheckedChange={(checked) => handleSwitchChange('task_reminders', checked)} 
+                    onCheckedChange={(checked) => handleSwitchChange('task_reminders', checked)}
+                    disabled={updatePreferences.isPending}
                   />
                 </div>
                 <Separator />
@@ -213,7 +243,8 @@ const Settings = () => {
                   </div>
                   <Switch 
                     checked={preferences.session_summaries} 
-                    onCheckedChange={(checked) => handleSwitchChange('session_summaries', checked)} 
+                    onCheckedChange={(checked) => handleSwitchChange('session_summaries', checked)}
+                    disabled={updatePreferences.isPending}
                   />
                 </div>
               </CardContent>
@@ -235,7 +266,8 @@ const Settings = () => {
                   </div>
                   <Switch 
                     checked={preferences.beta_features_enabled} 
-                    onCheckedChange={(checked) => handleSwitchChange('beta_features_enabled', checked)} 
+                    onCheckedChange={(checked) => handleSwitchChange('beta_features_enabled', checked)}
+                    disabled={updatePreferences.isPending}
                   />
                 </div>
                 {preferences.beta_features_enabled && (
@@ -247,21 +279,24 @@ const Settings = () => {
                         <li className="flex items-center gap-2">
                           <Switch 
                             checked={preferences.advanced_ai_reasoning} 
-                            onCheckedChange={(checked) => handleSwitchChange('advanced_ai_reasoning', checked)} 
+                            onCheckedChange={(checked) => handleSwitchChange('advanced_ai_reasoning', checked)}
+                            disabled={updatePreferences.isPending}
                           />
                           <span>Advanced AI Reasoning</span>
                         </li>
                         <li className="flex items-center gap-2">
                           <Switch 
                             checked={preferences.multi_language_transcription} 
-                            onCheckedChange={(checked) => handleSwitchChange('multi_language_transcription', checked)} 
+                            onCheckedChange={(checked) => handleSwitchChange('multi_language_transcription', checked)}
+                            disabled={updatePreferences.isPending}
                           />
                           <span>Multi-language Transcription</span>
                         </li>
                         <li className="flex items-center gap-2">
                           <Switch 
                             checked={preferences.voice_commands} 
-                            onCheckedChange={(checked) => handleSwitchChange('voice_commands', checked)} 
+                            onCheckedChange={(checked) => handleSwitchChange('voice_commands', checked)}
+                            disabled={updatePreferences.isPending}
                           />
                           <span>Voice Commands</span>
                         </li>
@@ -286,6 +321,7 @@ const Settings = () => {
                   <Select 
                     value={preferences.preferred_coding_system}
                     onValueChange={(value) => handleSelectChange('preferred_coding_system', value)}
+                    disabled={updatePreferences.isPending}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -305,7 +341,8 @@ const Settings = () => {
                   </div>
                   <Switch 
                     checked={preferences.auto_suggest_codes} 
-                    onCheckedChange={(checked) => handleSwitchChange('auto_suggest_codes', checked)} 
+                    onCheckedChange={(checked) => handleSwitchChange('auto_suggest_codes', checked)}
+                    disabled={updatePreferences.isPending}
                   />
                 </div>
               </CardContent>
@@ -325,6 +362,7 @@ const Settings = () => {
                   <Select 
                     value={String(preferences.auto_delete_days)}
                     onValueChange={(value) => handleNumberChange('auto_delete_days', parseInt(value))}
+                    disabled={updatePreferences.isPending}
                   >
                     <SelectTrigger>
                       <SelectValue />
