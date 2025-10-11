@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, FileText, Eye, Star } from "lucide-react";
+import { Search, Plus, FileText, Eye, Star, Edit, Trash2, Copy } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,17 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -24,21 +35,25 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
 import { useTemplates, useCommunityTemplates } from "@/hooks/useTemplates";
-import { supabase } from "@/integrations/supabase/client";
-import { toast as sonnerToast } from 'sonner';
+import { useCreateTemplate } from "@/hooks/useCreateTemplate";
+import { useUpdateTemplate } from "@/hooks/useUpdateTemplate";
+import { useDeleteTemplate } from "@/hooks/useDeleteTemplate";
+import { toast } from 'sonner';
 
 const Templates = () => {
-  const { toast } = useToast();
   const { data: personalTemplates = [], isLoading: loadingPersonal } = useTemplates();
   const { data: communityTemplates = [], isLoading: loadingCommunity } = useCommunityTemplates();
+  const createTemplate = useCreateTemplate();
+  const updateTemplate = useUpdateTemplate();
+  const deleteTemplate = useDeleteTemplate();
   
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [isNewTemplateOpen, setIsNewTemplateOpen] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("personal");
+  const [editingTemplate, setEditingTemplate] = useState<any>(null);
 
   // Persist tab and filter state
   useEffect(() => {
@@ -53,44 +68,91 @@ const Templates = () => {
     localStorage.setItem('templatesCategory', filterCategory);
   }, [activeTab, filterCategory]);
 
-  // Removed hardcoded data - using real database data now via useTemplates hooks
+  // Filtered templates with debounced search
+  const filteredPersonalTemplates = useMemo(() => {
+    return personalTemplates.filter(template => {
+      const matchesSearch = template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          template.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = filterCategory === "all" || template.category === filterCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [personalTemplates, searchQuery, filterCategory]);
+
+  const filteredCommunityTemplates = useMemo(() => {
+    return communityTemplates.filter(template => {
+      const matchesSearch = template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          template.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = filterCategory === "all" || template.category === filterCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [communityTemplates, searchQuery, filterCategory]);
 
   const handleCreateTemplate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
+    let structure = {};
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      let structure = {};
-      try {
-        structure = JSON.parse(formData.get("content") as string || "{}");
-      } catch {
-        sonnerToast.error('Invalid JSON format for template structure');
-        return;
-      }
-
-      const { error } = await supabase
-        .from('templates')
-        .insert({
-          user_id: user.id,
-          name: formData.get("name") as string,
-          category: formData.get("category") as string,
-          description: formData.get("specialty") as string,
-          content: formData.get("content") as string || "",
-          structure,
-          is_active: true,
-          is_community: false,
-        });
-
-      if (error) throw error;
-
-      setIsNewTemplateOpen(false);
-      sonnerToast.success('Template created successfully');
-    } catch (error: any) {
-      sonnerToast.error('Failed to create template: ' + error.message);
+      const contentStr = formData.get("content") as string || "{}";
+      structure = JSON.parse(contentStr);
+    } catch {
+      toast.error('Invalid JSON format for template structure');
+      return;
     }
+
+    await createTemplate.mutateAsync({
+      name: formData.get("name") as string,
+      category: formData.get("category") as string,
+      description: formData.get("specialty") as string,
+      structure,
+      is_active: true,
+      is_community: false,
+    });
+
+    setIsNewTemplateOpen(false);
+  };
+
+  const handleUpdateTemplate = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingTemplate) return;
+
+    const formData = new FormData(e.currentTarget);
+    
+    let structure = {};
+    try {
+      const contentStr = formData.get("content") as string || "{}";
+      structure = JSON.parse(contentStr);
+    } catch {
+      toast.error('Invalid JSON format for template structure');
+      return;
+    }
+    
+    await updateTemplate.mutateAsync({
+      id: editingTemplate.id,
+      updates: {
+        name: formData.get("name") as string,
+        category: formData.get("category") as string,
+        description: formData.get("specialty") as string,
+        structure,
+      }
+    });
+    
+    setEditingTemplate(null);
+  };
+
+  const handleDeleteTemplate = async (id: string) => {
+    await deleteTemplate.mutateAsync(id);
+  };
+
+  const handleDuplicateTemplate = async (template: any) => {
+    await createTemplate.mutateAsync({
+      name: `${template.name} (Copy)`,
+      description: template.description,
+      category: template.category,
+      structure: template.structure,
+      is_community: false,
+      is_active: true,
+    });
   };
 
   return (
@@ -215,20 +277,24 @@ const Templates = () => {
           <TabsContent value="personal" className="space-y-4 mt-6">
             {loadingPersonal ? (
               <div className="text-center py-8 text-muted-foreground">Loading templates...</div>
-            ) : personalTemplates.length === 0 ? (
+            ) : filteredPersonalTemplates.length === 0 ? (
               <Card>
                 <CardContent className="py-12 text-center">
                   <FileText className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                  <p className="text-muted-foreground mb-4">No templates yet</p>
-                  <Button onClick={() => setIsNewTemplateOpen(true)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Your First Template
-                  </Button>
+                  <p className="text-muted-foreground mb-4">
+                    {searchQuery || filterCategory !== "all" ? "No templates match your search" : "No templates yet"}
+                  </p>
+                  {!searchQuery && filterCategory === "all" && (
+                    <Button onClick={() => setIsNewTemplateOpen(true)}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create Your First Template
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {personalTemplates.map((template) => (
+              {filteredPersonalTemplates.map((template) => (
                 <Card key={template.id} className="hover:shadow-md transition-shadow">
                   <CardHeader>
                     <div className="flex items-start justify-between">
@@ -253,9 +319,47 @@ const Templates = () => {
                           <Eye className="mr-2 h-4 w-4" />
                           Preview
                         </Button>
-                        <Button variant="ghost" size="sm">
-                          Edit
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => setEditingTemplate(template)}
+                        >
+                          <Edit className="h-4 w-4" />
                         </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => handleDuplicateTemplate(template)}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Template?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will permanently delete "{template.name}". This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction 
+                                onClick={() => handleDeleteTemplate(template.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </div>
                   </CardContent>

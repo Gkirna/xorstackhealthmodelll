@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { useSessions } from "@/hooks/useSessions";
 import { useTasks } from "@/hooks/useTasks";
 import { useTemplates } from "@/hooks/useTemplates";
+import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { format } from "date-fns";
 
 const Dashboard = () => {
@@ -22,6 +24,23 @@ const Dashboard = () => {
   const { data: sessions = [], isLoading: sessionsLoading } = useSessions();
   const { data: tasks = [], isLoading: tasksLoading } = useTasks();
   const { data: templates = [], isLoading: templatesLoading } = useTemplates();
+  const { data: preferences } = useUserPreferences();
+
+  const [dashboardLayout, setDashboardLayout] = useState<any>({});
+
+  // Persist dashboard layout
+  useEffect(() => {
+    const savedLayout = localStorage.getItem('dashboardLayout');
+    if (savedLayout) {
+      setDashboardLayout(JSON.parse(savedLayout));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (Object.keys(dashboardLayout).length > 0) {
+      localStorage.setItem('dashboardLayout', JSON.stringify(dashboardLayout));
+    }
+  }, [dashboardLayout]);
 
   const recentSessions = sessions.slice(0, 3);
   const upcomingTasks = tasks

@@ -76,11 +76,67 @@ export function useUpdateTask() {
       if (error) throw error;
       return data as Task;
     },
+    onMutate: async ({ id, updates }) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks'] });
+      const previousTasks = queryClient.getQueryData<Task[]>(['tasks']);
+
+      if (previousTasks) {
+        queryClient.setQueryData<Task[]>(
+          ['tasks'],
+          previousTasks.map(t => t.id === id ? { ...t, ...updates } : t)
+        );
+      }
+
+      return { previousTasks };
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success('Task updated successfully');
     },
-    onError: (error) => {
+    onError: (error, variables, context) => {
+      if (context?.previousTasks) {
+        queryClient.setQueryData(['tasks'], context.previousTasks);
+      }
       toast.error('Failed to update task: ' + error.message);
+    },
+  });
+}
+
+export function useDeleteTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      return id;
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks'] });
+      const previousTasks = queryClient.getQueryData<Task[]>(['tasks']);
+      
+      if (previousTasks) {
+        queryClient.setQueryData<Task[]>(
+          ['tasks'],
+          previousTasks.filter(t => t.id !== id)
+        );
+      }
+      
+      return { previousTasks };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success('Task deleted successfully');
+    },
+    onError: (error, id, context) => {
+      if (context?.previousTasks) {
+        queryClient.setQueryData(['tasks'], context.previousTasks);
+      }
+      toast.error('Failed to delete task: ' + error.message);
     },
   });
 }

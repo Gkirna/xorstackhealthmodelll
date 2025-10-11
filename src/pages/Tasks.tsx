@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useTasks, useCreateTask, useUpdateTask } from "@/hooks/useTasks";
+import { useTasks, useCreateTask, useUpdateTask, useDeleteTask } from "@/hooks/useTasks";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 
 const Tasks = () => {
@@ -32,6 +32,7 @@ const Tasks = () => {
   const { data: preferences } = useUserPreferences();
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
+  const deleteTask = useDeleteTask();
   
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -78,13 +79,16 @@ const Tasks = () => {
     if (!task) return;
     
     const newStatus = task.status === "pending" ? "completed" : "pending";
-    const updates: any = { status: newStatus };
-    
-    if (newStatus === "completed") {
-      updates.completed_at = new Date().toISOString();
-    }
+    const updates: any = { 
+      status: newStatus,
+      updated_at: new Date().toISOString()
+    };
 
     await updateTask.mutateAsync({ id: taskId, updates });
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    await deleteTask.mutateAsync(taskId);
   };
 
   const handleAddTask = async (e: React.FormEvent<HTMLFormElement>) => {

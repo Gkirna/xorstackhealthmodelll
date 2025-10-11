@@ -103,12 +103,81 @@ export function useUpdateSession() {
       if (error) throw error;
       return data as Session;
     },
+    onMutate: async ({ id, updates }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['sessions'] });
+      await queryClient.cancelQueries({ queryKey: ['session', id] });
+
+      // Snapshot previous value
+      const previousSessions = queryClient.getQueryData<Session[]>(['sessions']);
+      const previousSession = queryClient.getQueryData<Session>(['session', id]);
+
+      // Optimistically update
+      if (previousSessions) {
+        queryClient.setQueryData<Session[]>(
+          ['sessions'],
+          previousSessions.map(s => s.id === id ? { ...s, ...updates } : s)
+        );
+      }
+      if (previousSession) {
+        queryClient.setQueryData<Session>(['session', id], { ...previousSession, ...updates });
+      }
+
+      return { previousSessions, previousSession };
+    },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
       queryClient.invalidateQueries({ queryKey: ['session', data.id] });
+      toast.success('Session updated successfully');
     },
-    onError: (error) => {
+    onError: (error, variables, context) => {
+      // Rollback on error
+      if (context?.previousSessions) {
+        queryClient.setQueryData(['sessions'], context.previousSessions);
+      }
+      if (context?.previousSession) {
+        queryClient.setQueryData(['session', variables.id], context.previousSession);
+      }
       toast.error('Failed to update session: ' + error.message);
+    },
+  });
+}
+
+export function useDeleteSession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('sessions')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      return id;
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['sessions'] });
+      const previousSessions = queryClient.getQueryData<Session[]>(['sessions']);
+      
+      if (previousSessions) {
+        queryClient.setQueryData<Session[]>(
+          ['sessions'],
+          previousSessions.filter(s => s.id !== id)
+        );
+      }
+      
+      return { previousSessions };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      toast.success('Session deleted successfully');
+    },
+    onError: (error, id, context) => {
+      if (context?.previousSessions) {
+        queryClient.setQueryData(['sessions'], context.previousSessions);
+      }
+      toast.error('Failed to delete session: ' + error.message);
     },
   });
 }
