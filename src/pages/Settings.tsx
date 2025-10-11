@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,31 +14,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
+import { useUserPreferences, useUpdateUserPreferences } from "@/hooks/useUserPreferences";
+import { useTemplates } from "@/hooks/useTemplates";
 import { AlertTriangle } from "lucide-react";
 
 const Settings = () => {
-  const { toast } = useToast();
-  const [darkMode, setDarkMode] = useState(false);
-  const [autoTaskCreation, setAutoTaskCreation] = useState(true);
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [betaFeatures, setBetaFeatures] = useState(false);
+  const { data: preferences, isLoading } = useUserPreferences();
+  const { data: templates = [] } = useTemplates();
+  const updatePreferences = useUpdateUserPreferences();
 
-  const handleSave = async (section: string) => {
-    // In production, save to backend
-    try {
-      // TODO: Save settings to user preferences table
-      toast({
-        title: "Settings saved",
-        description: `${section} settings updated successfully`,
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to save settings",
-        variant: "destructive",
-      });
-    }
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-96">
+          <p className="text-muted-foreground">Loading settings...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!preferences) return null;
+
+  const handleSwitchChange = async (key: string, value: boolean) => {
+    await updatePreferences.mutateAsync({ [key]: value });
+  };
+
+  const handleSelectChange = async (key: string, value: string) => {
+    await updatePreferences.mutateAsync({ [key]: value });
+  };
+
+  const handleNumberChange = async (key: string, value: number) => {
+    await updatePreferences.mutateAsync({ [key]: value });
   };
 
   return (
@@ -51,125 +57,15 @@ const Settings = () => {
         </div>
 
         {/* Settings Tabs */}
-        <Tabs defaultValue="account" className="w-full">
+        <Tabs defaultValue="display" className="w-full">
           <TabsList className="w-full justify-start overflow-x-auto flex-wrap h-auto">
-            <TabsTrigger value="account">Account</TabsTrigger>
-            <TabsTrigger value="billing">Billing</TabsTrigger>
-            <TabsTrigger value="memory">Memory</TabsTrigger>
             <TabsTrigger value="display">Display</TabsTrigger>
-            <TabsTrigger value="data">Data Management</TabsTrigger>
             <TabsTrigger value="defaults">Defaults</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="beta">Beta Features</TabsTrigger>
-            <TabsTrigger value="integrations">Integrations</TabsTrigger>
             <TabsTrigger value="coding">Coding</TabsTrigger>
+            <TabsTrigger value="data">Data Management</TabsTrigger>
           </TabsList>
-
-          {/* Account Tab */}
-          <TabsContent value="account" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Personal Information</CardTitle>
-                <CardDescription>Update your account details</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name</Label>
-                    <Input id="firstName" defaultValue="John" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name</Label>
-                    <Input id="lastName" defaultValue="Doe" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" defaultValue="john.doe@hospital.com" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input id="phone" type="tel" defaultValue="+1 (555) 123-4567" />
-                </div>
-                <Button onClick={() => handleSave("Account")}>Save Changes</Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Security</CardTitle>
-                <CardDescription>Manage password and authentication</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="currentPassword">Current Password</Label>
-                  <Input id="currentPassword" type="password" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="newPassword">New Password</Label>
-                  <Input id="newPassword" type="password" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                  <Input id="confirmPassword" type="password" />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Two-Factor Authentication</Label>
-                    <p className="text-sm text-muted-foreground">Add an extra layer of security</p>
-                  </div>
-                  <Button variant="outline">Enable 2FA</Button>
-                </div>
-                <Button onClick={() => handleSave("Security")}>Update Password</Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Billing Tab */}
-          <TabsContent value="billing" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Current Plan</CardTitle>
-                <CardDescription>Manage your subscription</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div>
-                    <h3 className="font-semibold">Professional Plan</h3>
-                    <p className="text-sm text-muted-foreground">$99/month • Billed monthly</p>
-                  </div>
-                  <Button variant="outline">Upgrade</Button>
-                </div>
-                <div className="space-y-2">
-                  <Label>Payment Method</Label>
-                  <div className="flex items-center gap-3 p-3 border rounded-lg">
-                    <div className="flex-1">
-                      <p className="font-medium">•••• •••• •••• 4242</p>
-                      <p className="text-sm text-muted-foreground">Expires 12/25</p>
-                    </div>
-                    <Button variant="ghost" size="sm">Edit</Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Memory Tab */}
-          <TabsContent value="memory" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Snippets & Shortcuts</CardTitle>
-                <CardDescription>Custom text snippets and keyboard shortcuts</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Create reusable text snippets and shortcuts to speed up documentation
-                </p>
-                <Button variant="outline">Manage Snippets</Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           {/* Display Tab */}
           <TabsContent value="display" className="space-y-6 mt-6">
@@ -184,7 +80,10 @@ const Settings = () => {
                     <Label>Dark Mode</Label>
                     <p className="text-sm text-muted-foreground">Toggle dark theme</p>
                   </div>
-                  <Switch checked={darkMode} onCheckedChange={setDarkMode} />
+                  <Switch 
+                    checked={preferences.dark_mode} 
+                    onCheckedChange={(checked) => handleSwitchChange('dark_mode', checked)} 
+                  />
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between">
@@ -192,61 +91,11 @@ const Settings = () => {
                     <Label>Compact Sidebar</Label>
                     <p className="text-sm text-muted-foreground">Minimize sidebar by default</p>
                   </div>
-                  <Switch />
+                  <Switch 
+                    checked={preferences.compact_sidebar} 
+                    onCheckedChange={(checked) => handleSwitchChange('compact_sidebar', checked)} 
+                  />
                 </div>
-                <Button onClick={() => handleSave("Display")}>Save Changes</Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Data Management Tab */}
-          <TabsContent value="data" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Data Retention</CardTitle>
-                <CardDescription>Manage your data storage</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Auto-delete completed sessions after</Label>
-                  <Select defaultValue="90">
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="30">30 days</SelectItem>
-                      <SelectItem value="60">60 days</SelectItem>
-                      <SelectItem value="90">90 days</SelectItem>
-                      <SelectItem value="never">Never</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button onClick={() => handleSave("Data Management")}>Save Changes</Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Export & Backup</CardTitle>
-                <CardDescription>Download your data</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Button variant="outline">Export All Sessions</Button>
-                <Button variant="outline">Download Audit Log</Button>
-              </CardContent>
-            </Card>
-
-            <Card className="border-destructive">
-              <CardHeader>
-                <CardTitle className="text-destructive flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5" />
-                  Danger Zone
-                </CardTitle>
-                <CardDescription>Irreversible actions</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Button variant="destructive" disabled>Delete All Data</Button>
-                <Button variant="destructive" disabled>Close Account</Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -262,7 +111,10 @@ const Settings = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Default Input Language</Label>
-                    <Select defaultValue="en">
+                    <Select 
+                      value={preferences.default_input_language} 
+                      onValueChange={(value) => handleSelectChange('default_input_language', value)}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -275,7 +127,10 @@ const Settings = () => {
                   </div>
                   <div className="space-y-2">
                     <Label>Default Output Language</Label>
-                    <Select defaultValue="en">
+                    <Select 
+                      value={preferences.default_output_language}
+                      onValueChange={(value) => handleSelectChange('default_output_language', value)}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -287,15 +142,36 @@ const Settings = () => {
                     </Select>
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <Label>Default Note Template</Label>
+                  <Select 
+                    value={preferences.default_template_id || "none"}
+                    onValueChange={(value) => handleSelectChange('default_template_id', value === "none" ? "" : value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="No default template" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No default template</SelectItem>
+                      {templates.map(template => (
+                        <SelectItem key={template.id} value={template.id}>
+                          {template.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label>Auto-create Tasks</Label>
                     <p className="text-sm text-muted-foreground">Automatically extract follow-up tasks from notes</p>
                   </div>
-                  <Switch checked={autoTaskCreation} onCheckedChange={setAutoTaskCreation} />
+                  <Switch 
+                    checked={preferences.auto_create_tasks} 
+                    onCheckedChange={(checked) => handleSwitchChange('auto_create_tasks', checked)} 
+                  />
                 </div>
-                <Button onClick={() => handleSave("Defaults")}>Save Changes</Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -313,7 +189,10 @@ const Settings = () => {
                     <Label>Email Notifications</Label>
                     <p className="text-sm text-muted-foreground">Receive updates via email</p>
                   </div>
-                  <Switch checked={emailNotifications} onCheckedChange={setEmailNotifications} />
+                  <Switch 
+                    checked={preferences.email_notifications} 
+                    onCheckedChange={(checked) => handleSwitchChange('email_notifications', checked)} 
+                  />
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between">
@@ -321,7 +200,10 @@ const Settings = () => {
                     <Label>Task Reminders</Label>
                     <p className="text-sm text-muted-foreground">Get notified about upcoming tasks</p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch 
+                    checked={preferences.task_reminders} 
+                    onCheckedChange={(checked) => handleSwitchChange('task_reminders', checked)} 
+                  />
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between">
@@ -329,9 +211,11 @@ const Settings = () => {
                     <Label>Session Summaries</Label>
                     <p className="text-sm text-muted-foreground">Weekly summary of your activity</p>
                   </div>
-                  <Switch />
+                  <Switch 
+                    checked={preferences.session_summaries} 
+                    onCheckedChange={(checked) => handleSwitchChange('session_summaries', checked)} 
+                  />
                 </div>
-                <Button onClick={() => handleSave("Notifications")}>Save Changes</Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -349,66 +233,42 @@ const Settings = () => {
                     <Label>Enable Beta Features</Label>
                     <p className="text-sm text-muted-foreground">Access experimental functionality</p>
                   </div>
-                  <Switch checked={betaFeatures} onCheckedChange={setBetaFeatures} />
+                  <Switch 
+                    checked={preferences.beta_features_enabled} 
+                    onCheckedChange={(checked) => handleSwitchChange('beta_features_enabled', checked)} 
+                  />
                 </div>
-                {betaFeatures && (
+                {preferences.beta_features_enabled && (
                   <>
                     <Separator />
                     <div className="space-y-3 p-4 bg-muted rounded-lg">
                       <h4 className="font-medium">Available Beta Features:</h4>
                       <ul className="space-y-2 text-sm">
                         <li className="flex items-center gap-2">
-                          <Switch defaultChecked />
+                          <Switch 
+                            checked={preferences.advanced_ai_reasoning} 
+                            onCheckedChange={(checked) => handleSwitchChange('advanced_ai_reasoning', checked)} 
+                          />
                           <span>Advanced AI Reasoning</span>
                         </li>
                         <li className="flex items-center gap-2">
-                          <Switch />
+                          <Switch 
+                            checked={preferences.multi_language_transcription} 
+                            onCheckedChange={(checked) => handleSwitchChange('multi_language_transcription', checked)} 
+                          />
                           <span>Multi-language Transcription</span>
                         </li>
                         <li className="flex items-center gap-2">
-                          <Switch />
+                          <Switch 
+                            checked={preferences.voice_commands} 
+                            onCheckedChange={(checked) => handleSwitchChange('voice_commands', checked)} 
+                          />
                           <span>Voice Commands</span>
                         </li>
                       </ul>
                     </div>
                   </>
                 )}
-                <Button onClick={() => handleSave("Beta Features")}>Save Changes</Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Integrations Tab */}
-          <TabsContent value="integrations" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>EMR Integrations</CardTitle>
-                <CardDescription>Connect to your Electronic Medical Records system</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4">
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <h4 className="font-medium">Epic</h4>
-                      <p className="text-sm text-muted-foreground">Not connected</p>
-                    </div>
-                    <Button variant="outline">Connect</Button>
-                  </div>
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <h4 className="font-medium">Athena Health</h4>
-                      <p className="text-sm text-muted-foreground">Not connected</p>
-                    </div>
-                    <Button variant="outline">Connect</Button>
-                  </div>
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <h4 className="font-medium">Cerner</h4>
-                      <p className="text-sm text-muted-foreground">Not connected</p>
-                    </div>
-                    <Button variant="outline">Connect</Button>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -422,35 +282,77 @@ const Settings = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Coding System Region</Label>
-                  <Select defaultValue="us">
+                  <Label>Coding System</Label>
+                  <Select 
+                    value={preferences.preferred_coding_system}
+                    onValueChange={(value) => handleSelectChange('preferred_coding_system', value)}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="us">United States (ICD-10-CM)</SelectItem>
-                      <SelectItem value="uk">United Kingdom (ICD-10-UK)</SelectItem>
-                      <SelectItem value="eu">Europe (ICD-10-EU)</SelectItem>
+                      <SelectItem value="icd10">ICD-10</SelectItem>
+                      <SelectItem value="snomed">SNOMED CT</SelectItem>
+                      <SelectItem value="both">Both (ICD-10 + SNOMED)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label>ICD-10 Suggestions</Label>
-                    <p className="text-sm text-muted-foreground">Auto-suggest diagnosis codes</p>
+                    <Label>Auto-suggest Codes</Label>
+                    <p className="text-sm text-muted-foreground">Automatically suggest diagnosis codes</p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch 
+                    checked={preferences.auto_suggest_codes} 
+                    onCheckedChange={(checked) => handleSwitchChange('auto_suggest_codes', checked)} 
+                  />
                 </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>SNOMED CT Mapping</Label>
-                    <p className="text-sm text-muted-foreground">Include SNOMED clinical terms</p>
-                  </div>
-                  <Switch />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Data Management Tab */}
+          <TabsContent value="data" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Data Retention</CardTitle>
+                <CardDescription>Manage your data storage</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Auto-delete completed sessions after</Label>
+                  <Select 
+                    value={String(preferences.auto_delete_days)}
+                    onValueChange={(value) => handleNumberChange('auto_delete_days', parseInt(value))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="30">30 days</SelectItem>
+                      <SelectItem value="60">60 days</SelectItem>
+                      <SelectItem value="90">90 days</SelectItem>
+                      <SelectItem value="180">180 days</SelectItem>
+                      <SelectItem value="365">1 year</SelectItem>
+                      <SelectItem value="0">Never</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Button onClick={() => handleSave("Coding")}>Save Changes</Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border-destructive">
+              <CardHeader>
+                <CardTitle className="text-destructive flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5" />
+                  Danger Zone
+                </CardTitle>
+                <CardDescription>Irreversible actions</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button variant="destructive" disabled>Delete All Data</Button>
+                <Button variant="destructive" disabled>Close Account</Button>
               </CardContent>
             </Card>
           </TabsContent>

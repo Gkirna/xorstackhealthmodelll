@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,44 +24,36 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
+import { useTasks, useCreateTask, useUpdateTask } from "@/hooks/useTasks";
+import { useUserPreferences } from "@/hooks/useUserPreferences";
 
 const Tasks = () => {
-  const { toast } = useToast();
+  const { data: tasks = [], isLoading } = useTasks();
+  const { data: preferences } = useUserPreferences();
+  const createTask = useCreateTask();
+  const updateTask = useUpdateTask();
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
 
-  const [tasks, setTasks] = useState([
-    {
-      id: "1",
-      title: "Follow-up with Sarah Williams",
-      description: "Schedule diabetes management follow-up in 2 weeks",
-      priority: "high",
-      dueDate: "2025-10-25",
-      status: "pending",
-      category: "Follow-up",
-    },
-    {
-      id: "2",
-      title: "Review lab results for Michael Chen",
-      description: "Annual checkup lab work ready for review",
-      priority: "medium",
-      dueDate: "2025-10-20",
-      status: "pending",
-      category: "Lab Review",
-    },
-    {
-      id: "3",
-      title: "Complete documentation for John Doe",
-      description: "Finalize chest pain visit notes",
-      priority: "high",
-      dueDate: "2025-10-12",
-      status: "completed",
-      category: "Documentation",
-    },
-  ]);
+  // Persist filter state
+  useEffect(() => {
+    const savedFilters = localStorage.getItem('taskFilters');
+    if (savedFilters) {
+      const { status, priority } = JSON.parse(savedFilters);
+      setFilterStatus(status || "all");
+      setFilterPriority(priority || "all");
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('taskFilters', JSON.stringify({
+      status: filterStatus,
+      priority: filterPriority
+    }));
+  }, [filterStatus, filterPriority]);
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -81,36 +73,33 @@ const Tasks = () => {
     }
   };
 
-  const toggleTaskStatus = (taskId: string) => {
-    setTasks(tasks.map(task => 
-      task.id === taskId 
-        ? { ...task, status: task.status === "pending" ? "completed" : "pending" }
-        : task
-    ));
-    toast({
-      title: "Task updated",
-      description: "Task status changed successfully",
-    });
+  const toggleTaskStatus = async (taskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
+    const newStatus = task.status === "pending" ? "completed" : "pending";
+    const updates: any = { status: newStatus };
+    
+    if (newStatus === "completed") {
+      updates.completed_at = new Date().toISOString();
+    }
+
+    await updateTask.mutateAsync({ id: taskId, updates });
   };
 
-  const handleAddTask = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddTask = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const newTask = {
-      id: String(tasks.length + 1),
+    
+    await createTask.mutateAsync({
       title: formData.get("title") as string,
-      description: formData.get("description") as string,
-      priority: formData.get("priority") as string,
-      dueDate: formData.get("dueDate") as string,
-      status: "pending",
+      description: formData.get("description") as string || undefined,
+      priority: formData.get("priority") as 'low' | 'medium' | 'high',
+      due_date: formData.get("dueDate") as string || undefined,
       category: "General",
-    };
-    setTasks([...tasks, newTask]);
-    setIsAddTaskOpen(false);
-    toast({
-      title: "Task created",
-      description: "New task added successfully",
     });
+    
+    setIsAddTaskOpen(false);
   };
 
   const filteredTasks = tasks.filter(task => {
@@ -237,7 +226,13 @@ const Tasks = () => {
 
         {/* Tasks List */}
         <div className="space-y-3">
-          {filteredTasks.length === 0 ? (
+          {isLoading ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <p className="text-muted-foreground">Loading tasks...</p>
+              </CardContent>
+            </Card>
+          ) : filteredTasks.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <CheckCircle2 className="h-12 w-12 mx-auto mb-3 opacity-20" />
@@ -274,9 +269,9 @@ const Tasks = () => {
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4" />
-                      <span>Due: {task.dueDate}</span>
+                      <span>Due: {task.due_date || 'No due date'}</span>
                     </div>
-                    <Badge variant="outline">{task.category}</Badge>
+                    {task.category && <Badge variant="outline">{task.category}</Badge>}
                   </div>
                 </CardContent>
               </Card>

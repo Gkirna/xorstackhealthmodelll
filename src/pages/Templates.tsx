@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,72 +25,72 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useTemplates, useCommunityTemplates } from "@/hooks/useTemplates";
+import { supabase } from "@/integrations/supabase/client";
+import { toast as sonnerToast } from 'sonner';
 
 const Templates = () => {
   const { toast } = useToast();
+  const { data: personalTemplates = [], isLoading: loadingPersonal } = useTemplates();
+  const { data: communityTemplates = [], isLoading: loadingCommunity } = useCommunityTemplates();
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [isNewTemplateOpen, setIsNewTemplateOpen] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState("personal");
 
-  const personalTemplates = [
-    {
-      id: "1",
-      name: "SOAP Note - General",
-      category: "SOAP",
-      specialty: "Family Medicine",
-      usageCount: 45,
-      isDefault: true,
-      content: {
-        subjective: "Chief complaint, HPI, ROS",
-        objective: "Vitals, Physical Exam",
-        assessment: "Diagnosis, DDx",
-        plan: "Treatment plan, follow-up"
-      }
-    },
-    {
-      id: "2",
-      name: "H&P - Cardiology",
-      category: "H&P",
-      specialty: "Cardiology",
-      usageCount: 23,
-      isDefault: false,
-      content: {
-        history: "Cardiac history, risk factors",
-        examination: "Cardiovascular exam",
-        plan: "Diagnostic workup, treatment"
-      }
-    },
-  ];
+  // Persist tab and filter state
+  useEffect(() => {
+    const savedTab = localStorage.getItem('templatesTab');
+    const savedCategory = localStorage.getItem('templatesCategory');
+    if (savedTab) setActiveTab(savedTab);
+    if (savedCategory) setFilterCategory(savedCategory);
+  }, []);
 
-  const communityTemplates = [
-    {
-      id: "3",
-      name: "Diabetes Follow-up",
-      category: "Follow-up",
-      specialty: "Endocrinology",
-      usageCount: 156,
-      author: "Dr. Smith",
-      rating: 4.8,
-    },
-    {
-      id: "4",
-      name: "Mental Health Intake",
-      category: "Initial",
-      specialty: "Psychiatry",
-      usageCount: 89,
-      author: "Dr. Johnson",
-      rating: 4.6,
-    },
-  ];
+  useEffect(() => {
+    localStorage.setItem('templatesTab', activeTab);
+    localStorage.setItem('templatesCategory', filterCategory);
+  }, [activeTab, filterCategory]);
 
-  const handleCreateTemplate = (e: React.FormEvent<HTMLFormElement>) => {
+  // Removed hardcoded data - using real database data now via useTemplates hooks
+
+  const handleCreateTemplate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsNewTemplateOpen(false);
-    toast({
-      title: "Template created",
-      description: "Your new template has been saved successfully",
-    });
+    const formData = new FormData(e.currentTarget);
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      let structure = {};
+      try {
+        structure = JSON.parse(formData.get("content") as string || "{}");
+      } catch {
+        sonnerToast.error('Invalid JSON format for template structure');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('templates')
+        .insert({
+          user_id: user.id,
+          name: formData.get("name") as string,
+          category: formData.get("category") as string,
+          description: formData.get("specialty") as string,
+          content: formData.get("content") as string || "",
+          structure,
+          is_active: true,
+          is_community: false,
+        });
+
+      if (error) throw error;
+
+      setIsNewTemplateOpen(false);
+      sonnerToast.success('Template created successfully');
+    } catch (error: any) {
+      sonnerToast.error('Failed to create template: ' + error.message);
+    }
   };
 
   return (
@@ -206,14 +206,28 @@ const Templates = () => {
         </div>
 
         {/* Templates Tabs */}
-        <Tabs defaultValue="personal" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="personal">Personal</TabsTrigger>
             <TabsTrigger value="community">Community</TabsTrigger>
           </TabsList>
 
           <TabsContent value="personal" className="space-y-4 mt-6">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {loadingPersonal ? (
+              <div className="text-center py-8 text-muted-foreground">Loading templates...</div>
+            ) : personalTemplates.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <FileText className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                  <p className="text-muted-foreground mb-4">No templates yet</p>
+                  <Button onClick={() => setIsNewTemplateOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Your First Template
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {personalTemplates.map((template) => (
                 <Card key={template.id} className="hover:shadow-md transition-shadow">
                   <CardHeader>
@@ -221,20 +235,14 @@ const Templates = () => {
                       <div className="space-y-1">
                         <CardTitle className="text-lg flex items-center gap-2">
                           {template.name}
-                          {template.isDefault && (
-                            <Star className="h-4 w-4 fill-primary text-primary" />
-                          )}
                         </CardTitle>
-                        <CardDescription>{template.specialty}</CardDescription>
+                        <CardDescription>{template.description}</CardDescription>
                       </div>
                       <Badge variant="secondary">{template.category}</Badge>
                     </div>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      <div className="text-sm text-muted-foreground">
-                        Used {template.usageCount} times
-                      </div>
                       <div className="flex gap-2">
                         <Button
                           variant="outline"
@@ -253,34 +261,28 @@ const Templates = () => {
                   </CardContent>
                 </Card>
               ))}
-            </div>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="community" className="space-y-4 mt-6">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {loadingCommunity ? (
+              <div className="text-center py-8 text-muted-foreground">Loading community templates...</div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {communityTemplates.map((template) => (
                 <Card key={template.id} className="hover:shadow-md transition-shadow">
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div className="space-y-1">
                         <CardTitle className="text-lg">{template.name}</CardTitle>
-                        <CardDescription>by {template.author}</CardDescription>
+                        <CardDescription>{template.description}</CardDescription>
                       </div>
                       <Badge variant="secondary">{template.category}</Badge>
                     </div>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">{template.specialty}</span>
-                        <div className="flex items-center gap-1">
-                          <Star className="h-4 w-4 fill-primary text-primary" />
-                          <span>{template.rating}</span>
-                        </div>
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {template.usageCount} uses
-                      </div>
                       <Button variant="outline" size="sm" className="w-full">
                         <Plus className="mr-2 h-4 w-4" />
                         Add to My Templates
@@ -289,7 +291,8 @@ const Templates = () => {
                   </CardContent>
                 </Card>
               ))}
-            </div>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
 
@@ -299,12 +302,12 @@ const Templates = () => {
             <DialogHeader>
               <DialogTitle>{previewTemplate?.name}</DialogTitle>
               <DialogDescription>
-                {previewTemplate?.specialty} - {previewTemplate?.category}
+                {previewTemplate?.description} - {previewTemplate?.category}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <pre className="bg-muted p-4 rounded-lg overflow-auto text-sm">
-                {JSON.stringify(previewTemplate?.content, null, 2)}
+                {JSON.stringify(previewTemplate?.structure || {}, null, 2)}
               </pre>
             </div>
             <DialogFooter>

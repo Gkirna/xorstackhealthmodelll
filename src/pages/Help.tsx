@@ -7,12 +7,51 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { BookOpen, Keyboard, MessageCircle, ExternalLink, Video, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useSubmitFeedback } from "@/hooks/useFeedback";
+import { useState, useEffect } from "react";
 
 const Help = () => {
   const { toast } = useToast();
+  const submitFeedback = useSubmitFeedback();
+  const [draftFeedback, setDraftFeedback] = useState({
+    name: '',
+    email: '',
+    subject: '',
+    message: ''
+  });
 
-  const handleContactSupport = (e: React.FormEvent<HTMLFormElement>) => {
+  // Persist draft feedback in localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('draftFeedback');
+    if (saved) {
+      setDraftFeedback(JSON.parse(saved));
+    }
+  }, []);
+
+  const handleInputChange = (field: string, value: string) => {
+    const updated = { ...draftFeedback, [field]: value };
+    setDraftFeedback(updated);
+    localStorage.setItem('draftFeedback', JSON.stringify(updated));
+  };
+
+  const handleContactSupport = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    
+    await submitFeedback.mutateAsync({
+      title: formData.get("subject") as string,
+      description: formData.get("message") as string,
+      feedback_type: 'support',
+      metadata: {
+        name: formData.get("name") as string,
+        email: formData.get("email") as string,
+      }
+    });
+
+    // Clear draft
+    setDraftFeedback({ name: '', email: '', subject: '', message: '' });
+    localStorage.removeItem('draftFeedback');
+    
     toast({
       title: "Message sent",
       description: "Our support team will get back to you soon",
@@ -183,20 +222,42 @@ const Help = () => {
             <CardDescription>Can't find what you're looking for? Send us a message</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleContactSupport} className="space-y-4">
+              <form onSubmit={handleContactSupport} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Name</Label>
-                  <Input id="name" name="name" placeholder="Your name" required />
+                  <Input 
+                    id="name" 
+                    name="name" 
+                    placeholder="Your name" 
+                    value={draftFeedback.name}
+                    onChange={(e) => handleInputChange('name', e.target.value)}
+                    required 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" name="email" type="email" placeholder="your@email.com" required />
+                  <Input 
+                    id="email" 
+                    name="email" 
+                    type="email" 
+                    placeholder="your@email.com"
+                    value={draftFeedback.email}
+                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    required 
+                  />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="subject">Subject</Label>
-                <Input id="subject" name="subject" placeholder="How can we help?" required />
+                <Input 
+                  id="subject" 
+                  name="subject" 
+                  placeholder="How can we help?"
+                  value={draftFeedback.subject}
+                  onChange={(e) => handleInputChange('subject', e.target.value)}
+                  required 
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="message">Message</Label>
@@ -205,10 +266,14 @@ const Help = () => {
                   name="message"
                   placeholder="Describe your issue or question"
                   rows={5}
+                  value={draftFeedback.message}
+                  onChange={(e) => handleInputChange('message', e.target.value)}
                   required
                 />
               </div>
-              <Button type="submit">Send Message</Button>
+              <Button type="submit" disabled={submitFeedback.isPending}>
+                {submitFeedback.isPending ? 'Sending...' : 'Send Message'}
+              </Button>
             </form>
           </CardContent>
         </Card>

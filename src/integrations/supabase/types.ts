@@ -76,6 +76,48 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          action_url: string | null
+          category: string | null
+          created_at: string
+          id: string
+          is_read: boolean
+          message: string
+          metadata: Json | null
+          read_at: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          action_url?: string | null
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message: string
+          metadata?: Json | null
+          read_at?: string | null
+          title: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          action_url?: string | null
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message?: string
+          metadata?: Json | null
+          read_at?: string | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -292,6 +334,83 @@ export type Database = {
           },
         ]
       }
+      team_members: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          invited_at: string | null
+          invited_by: string | null
+          joined_at: string | null
+          role: string
+          status: string
+          team_id: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          invited_at?: string | null
+          invited_by?: string | null
+          joined_at?: string | null
+          role?: string
+          status?: string
+          team_id: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          invited_at?: string | null
+          invited_by?: string | null
+          joined_at?: string | null
+          role?: string
+          status?: string
+          team_id?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_members_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      teams: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       templates: {
         Row: {
           category: string | null
@@ -375,6 +494,92 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      user_preferences: {
+        Row: {
+          advanced_ai_reasoning: boolean | null
+          auto_create_tasks: boolean | null
+          auto_delete_days: number | null
+          auto_suggest_codes: boolean | null
+          beta_features_enabled: boolean | null
+          compact_sidebar: boolean | null
+          created_at: string
+          dark_mode: boolean | null
+          dashboard_filters: Json | null
+          dashboard_layout: Json | null
+          default_input_language: string | null
+          default_output_language: string | null
+          default_template_id: string | null
+          email_notifications: boolean | null
+          id: string
+          multi_language_transcription: boolean | null
+          preferred_coding_system: string | null
+          search_history: Json | null
+          session_summaries: boolean | null
+          task_reminders: boolean | null
+          updated_at: string
+          user_id: string
+          voice_commands: boolean | null
+        }
+        Insert: {
+          advanced_ai_reasoning?: boolean | null
+          auto_create_tasks?: boolean | null
+          auto_delete_days?: number | null
+          auto_suggest_codes?: boolean | null
+          beta_features_enabled?: boolean | null
+          compact_sidebar?: boolean | null
+          created_at?: string
+          dark_mode?: boolean | null
+          dashboard_filters?: Json | null
+          dashboard_layout?: Json | null
+          default_input_language?: string | null
+          default_output_language?: string | null
+          default_template_id?: string | null
+          email_notifications?: boolean | null
+          id?: string
+          multi_language_transcription?: boolean | null
+          preferred_coding_system?: string | null
+          search_history?: Json | null
+          session_summaries?: boolean | null
+          task_reminders?: boolean | null
+          updated_at?: string
+          user_id: string
+          voice_commands?: boolean | null
+        }
+        Update: {
+          advanced_ai_reasoning?: boolean | null
+          auto_create_tasks?: boolean | null
+          auto_delete_days?: number | null
+          auto_suggest_codes?: boolean | null
+          beta_features_enabled?: boolean | null
+          compact_sidebar?: boolean | null
+          created_at?: string
+          dark_mode?: boolean | null
+          dashboard_filters?: Json | null
+          dashboard_layout?: Json | null
+          default_input_language?: string | null
+          default_output_language?: string | null
+          default_template_id?: string | null
+          email_notifications?: boolean | null
+          id?: string
+          multi_language_transcription?: boolean | null
+          preferred_coding_system?: string | null
+          search_history?: Json | null
+          session_summaries?: boolean | null
+          task_reminders?: boolean | null
+          updated_at?: string
+          user_id?: string
+          voice_commands?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_preferences_default_template_id_fkey"
+            columns: ["default_template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
