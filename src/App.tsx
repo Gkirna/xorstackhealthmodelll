@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
@@ -35,34 +36,36 @@ const LoadingFallback = () => (
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <FeedbackWidget />
-        <Suspense fallback={<LoadingFallback />}>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/signup" element={<Index />} />
-            <Route path="/login" element={<Index />} />
-            <Route path="/onboarding/profile" element={<Index />} />
-            <Route path="/dashboard" element={<Index />} />
-            <Route path="/session/new" element={<Index />} />
-            <Route path="/session/:id/record" element={<Index />} />
-            <Route path="/session/:id/review" element={<Index />} />
-            <Route path="/sessions" element={<Index />} />
-            <Route path="/tasks" element={<Tasks />} />
-            <Route path="/templates" element={<Templates />} />
-            <Route path="/team" element={<Team />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/help" element={<Help />} />
-            <Route path="/admin" element={<Admin />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Suspense>
-      </BrowserRouter>
-    </TooltipProvider>
+    <ThemeProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <FeedbackWidget />
+          <Suspense fallback={<LoadingFallback />}>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/signup" element={<Index />} />
+              <Route path="/login" element={<Index />} />
+              <Route path="/onboarding/profile" element={<Index />} />
+              <Route path="/dashboard" element={<Index />} />
+              <Route path="/session/new" element={<Index />} />
+              <Route path="/session/:id/record" element={<Index />} />
+              <Route path="/session/:id/review" element={<Index />} />
+              <Route path="/sessions" element={<Index />} />
+              <Route path="/tasks" element={<Tasks />} />
+              <Route path="/templates" element={<Templates />} />
+              <Route path="/team" element={<Team />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/help" element={<Help />} />
+              <Route path="/admin" element={<Admin />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </TooltipProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 

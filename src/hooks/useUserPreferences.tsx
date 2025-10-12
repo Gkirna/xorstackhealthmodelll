@@ -67,22 +67,53 @@ export function useUpdateUserPreferences() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      console.log('🔄 Updating preferences:', updates);
+
       const { data, error } = await supabase
         .from('user_preferences')
-        .update(updates)
+        .update({ ...updates, updated_at: new Date().toISOString() })
         .eq('user_id', user.id)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Update failed:', error);
+        throw error;
+      }
+      
+      console.log('✅ Update successful:', data);
       return data as UserPreferences;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-preferences'] });
+    onMutate: async (updates) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['user-preferences'] });
+
+      // Snapshot previous value
+      const previousPreferences = queryClient.getQueryData<UserPreferences>(['user-preferences']);
+
+      // Optimistically update cache
+      if (previousPreferences) {
+        queryClient.setQueryData<UserPreferences>(['user-preferences'], {
+          ...previousPreferences,
+          ...updates,
+        });
+      }
+
+      return { previousPreferences };
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(['user-preferences'], data);
       toast.success('Settings saved successfully');
     },
-    onError: (error) => {
+    onError: (error, _updates, context) => {
+      // Rollback on error
+      if (context?.previousPreferences) {
+        queryClient.setQueryData(['user-preferences'], context.previousPreferences);
+      }
       toast.error('Failed to save settings: ' + error.message);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-preferences'] });
     },
   });
 }

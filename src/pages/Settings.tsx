@@ -45,6 +45,7 @@ const Settings = () => {
   const handleSwitchChange = async (key: string, value: boolean) => {
     try {
       await updatePreferences.mutateAsync({ [key]: value });
+      console.log(`✅ Successfully updated ${key} to:`, value);
     } catch (error) {
       toast.error(`Failed to update ${key.replace(/_/g, ' ')}`);
       console.error('Settings update error:', error);
@@ -54,6 +55,7 @@ const Settings = () => {
   const handleSelectChange = async (key: string, value: string) => {
     try {
       await updatePreferences.mutateAsync({ [key]: value });
+      console.log(`✅ Successfully updated ${key} to:`, value);
     } catch (error) {
       toast.error(`Failed to update ${key.replace(/_/g, ' ')}`);
       console.error('Settings update error:', error);
@@ -63,6 +65,7 @@ const Settings = () => {
   const handleNumberChange = async (key: string, value: number) => {
     try {
       await updatePreferences.mutateAsync({ [key]: value });
+      console.log(`✅ Successfully updated setting to:`, value);
     } catch (error) {
       toast.error('Failed to update setting');
       console.error('Settings update error:', error);

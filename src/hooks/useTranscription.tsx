@@ -19,19 +19,25 @@ export function useTranscription(sessionId: string) {
     if (!sessionId || !text.trim()) return;
 
     try {
+      console.log('💾 Saving transcript chunk:', { sessionId, text: text.substring(0, 50) + '...', speaker });
+      
       const { data, error } = await supabase
         .from('session_transcripts')
         .insert({
           session_id: sessionId,
-          text,
+          text: text.trim(),
           speaker,
           timestamp_offset: Date.now()
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Failed to save transcript:', error);
+        throw error;
+      }
 
+      console.log('✅ Transcript saved successfully');
       setTranscriptChunks(prev => [...prev, data]);
       return data;
     } catch (error) {

@@ -41,20 +41,28 @@ export function AudioRecorderWithTranscription({
 
   useEffect(() => {
     // Initialize transcription engine
+    console.log('🎙️ Initializing real-time transcription engine...');
+    
     transcriptionRef.current = new RealTimeTranscription({
       continuous: true,
       interimResults: true,
       lang: 'en-US',
       onResult: (transcript, isFinal) => {
-        console.log('Transcription result:', { transcript, isFinal });
+        console.log('📝 Transcription result:', { 
+          text: transcript.substring(0, 50) + '...', 
+          isFinal,
+          length: transcript.length 
+        });
         
         if (isFinal) {
+          console.log('✅ Final transcript chunk received');
           // Send final transcript to parent
           if (onFinalTranscriptChunk) {
             onFinalTranscriptChunk(transcript);
           }
           setInterimTranscript('');
         } else {
+          console.log('⏳ Interim transcript update');
           // Update interim transcript for display
           setInterimTranscript(transcript);
         }
@@ -65,22 +73,31 @@ export function AudioRecorderWithTranscription({
         }
       },
       onError: (error) => {
-        console.error('Transcription error:', error);
+        console.error('❌ Transcription error:', error);
         toast.error(error);
       },
       onStart: () => {
-        console.log('Transcription started');
+        console.log('✅ Transcription started successfully');
         setIsTranscribing(true);
+        toast.success('Real-time transcription active', { duration: 2000 });
       },
       onEnd: () => {
-        console.log('Transcription ended');
+        console.log('🛑 Transcription ended');
         setIsTranscribing(false);
       },
     });
 
-    setTranscriptSupported(transcriptionRef.current.isBrowserSupported());
+    const isSupported = transcriptionRef.current.isBrowserSupported();
+    setTranscriptSupported(isSupported);
+    
+    if (!isSupported) {
+      console.warn('⚠️ Real-time transcription not supported in this browser');
+    } else {
+      console.log('✅ Real-time transcription is supported');
+    }
 
     return () => {
+      console.log('🧹 Cleaning up audio recorder...');
       if (timerRef.current) clearInterval(timerRef.current);
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
@@ -89,31 +106,54 @@ export function AudioRecorderWithTranscription({
         transcriptionRef.current.destroy();
       }
     };
-  }, []);
+  }, [onFinalTranscriptChunk, onTranscriptUpdate]);
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      console.log('🎤 Starting audio recording...');
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
+      });
+      
+      console.log('✅ Microphone access granted');
+      
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm',
+      });
+      
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           chunksRef.current.push(event.data);
+          console.log(`📦 Audio chunk received: ${event.data.size} bytes`);
         }
       };
 
       mediaRecorder.onstop = async () => {
+        console.log('🛑 Recording stopped, processing audio...');
+        
         const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
         const url = URL.createObjectURL(audioBlob);
         setAudioURL(url);
         
-        stream.getTracks().forEach(track => track.stop());
+        console.log(`✅ Audio blob created: ${audioBlob.size} bytes`);
+        
+        stream.getTracks().forEach(track => {
+          track.stop();
+          console.log('🔇 Audio track stopped');
+        });
         
         // Stop transcription
         if (transcriptionRef.current) {
-          transcriptionRef.current.stop();
+          const finalTranscript = transcriptionRef.current.stop();
+          console.log('📝 Final transcript:', finalTranscript);
         }
         
         // Upload to storage if sessionId is provided
@@ -124,17 +164,22 @@ export function AudioRecorderWithTranscription({
         }
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(1000); // Collect data every second
       setIsRecording(true);
       setIsPaused(false);
       
+      console.log('🎙️ MediaRecorder started');
+      
       // Start transcription
       if (transcriptionRef.current && transcriptSupported) {
+        console.log('🚀 Starting real-time transcription...');
         const started = transcriptionRef.current.start();
         if (!started) {
+          console.warn('⚠️ Transcription failed to start');
           toast.warning('Real-time transcription not available. You can still record and transcribe later.');
         }
       } else {
+        console.warn('⚠️ Transcription not supported');
         toast.warning('Real-time transcription not supported in this browser. Using Chrome is recommended.');
       }
       
@@ -144,8 +189,8 @@ export function AudioRecorderWithTranscription({
 
       toast.success('Recording started');
     } catch (error) {
+      console.error('❌ Microphone access error:', error);
       toast.error('Failed to access microphone. Please grant permission.');
-      console.error('Microphone access error:', error);
     }
   };
 
