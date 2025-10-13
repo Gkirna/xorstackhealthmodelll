@@ -29,21 +29,22 @@ export function ExportOptions({ sessionId, noteContent }: ExportOptionsProps) {
   const handleDownloadPDF = async () => {
     try {
       setIsExporting(true);
+      console.log('Starting PDF export for session:', sessionId);
       const result = await exportNote(sessionId, 'pdf');
+      console.log('Export result:', result);
       
       if (result.success && result.data?.url) {
-        // Trigger download
-        const link = document.createElement('a');
-        link.href = result.data.url;
-        link.download = `clinical-note-${sessionId}.pdf`;
-        link.click();
-        
+        // Open in new tab for download
+        window.open(result.data.url, '_blank');
         toast.success('Note exported as PDF');
       } else {
-        toast.error(result.error?.message || 'Export failed');
+        const errorMsg = result.error?.message || 'Export failed';
+        console.error('Export error:', errorMsg);
+        toast.error(errorMsg);
       }
     } catch (error) {
-      toast.error('Failed to export PDF');
+      console.error('PDF export exception:', error);
+      toast.error('Failed to export PDF: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsExporting(false);
     }
@@ -57,16 +58,21 @@ export function ExportOptions({ sessionId, noteContent }: ExportOptionsProps) {
 
     try {
       setIsExporting(true);
+      console.log('Starting email export to:', email);
       const result = await exportNote(sessionId, 'pdf', email);
+      console.log('Email export result:', result);
       
       if (result.success) {
         toast.success(`Note sent to ${email}`);
         setEmail('');
       } else {
-        toast.error(result.error?.message || 'Email failed');
+        const errorMsg = result.error?.message || 'Email failed';
+        console.error('Email export error:', errorMsg);
+        toast.error(errorMsg);
       }
     } catch (error) {
-      toast.error('Failed to send email');
+      console.error('Email export exception:', error);
+      toast.error('Failed to send email: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsExporting(false);
     }
