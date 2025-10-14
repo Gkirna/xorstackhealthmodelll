@@ -64,6 +64,8 @@ OUTPUT REQUIREMENTS:
 - Provide clear, concise code descriptions
 - Use ${region === 'US' ? 'ICD-10-CM' : 'ICD-10'} format`;
 
+    console.log('🤖 Calling Lovable AI for ICD-10 code suggestions...');
+    
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -81,6 +83,8 @@ OUTPUT REQUIREMENTS:
         ],
       }),
     });
+    
+    console.log('📡 AI response status:', aiResponse.status);
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();

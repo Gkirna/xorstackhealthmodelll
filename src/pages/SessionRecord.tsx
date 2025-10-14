@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import { useSession, useUpdateSession } from "@/hooks/useSessions";
 import { AudioRecorderWithTranscription } from "@/components/AudioRecorderWithTranscription";
+import { AudioUploadTranscription } from "@/components/AudioUploadTranscription";
 import { AskHeidiDrawer } from "@/components/AskHeidiDrawer";
 import { useTranscription } from "@/hooks/useTranscription";
 import { useTranscriptUpdates } from "@/hooks/useRealtime";
@@ -210,17 +211,34 @@ const SessionRecord = () => {
               </TabsList>
               
               <TabsContent value="transcript" className="space-y-4">
-                <AudioRecorderWithTranscription 
-                  sessionId={id}
-                  onTranscriptUpdate={(text, isFinal) => {
-                    // Update display with interim results
-                    if (!isFinal) {
-                      // Could show interim in a different color/style
-                    }
-                  }}
-                  onFinalTranscriptChunk={handleTranscriptChunk}
-                  onRecordingComplete={handleAudioRecordingComplete}
-                />
+                <Tabs defaultValue="record" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="record">Record Live</TabsTrigger>
+                    <TabsTrigger value="upload">Upload Audio</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="record" className="mt-4">
+                    <AudioRecorderWithTranscription 
+                      sessionId={id}
+                      onTranscriptUpdate={(text, isFinal) => {
+                        // Update display with interim results
+                        if (!isFinal) {
+                          // Could show interim in a different color/style
+                        }
+                      }}
+                      onFinalTranscriptChunk={handleTranscriptChunk}
+                      onRecordingComplete={handleAudioRecordingComplete}
+                    />
+                  </TabsContent>
+                  
+                  <TabsContent value="upload" className="mt-4">
+                    <AudioUploadTranscription 
+                      sessionId={id}
+                      onTranscriptGenerated={handleTranscriptChunk}
+                      onAudioUploaded={(url) => console.log('Audio uploaded:', url)}
+                    />
+                  </TabsContent>
+                </Tabs>
                 
                 <Card>
                   <CardHeader>

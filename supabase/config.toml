@@ -18,3 +18,6 @@ verify_jwt = true
 
 [functions.log-event]
 verify_jwt = true
+
+[functions.transcribe-audio]
+verify_jwt = true

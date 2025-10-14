@@ -43,6 +43,8 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
+    console.log('🤖 Calling Lovable AI for task extraction...');
+    
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -111,6 +113,8 @@ Extract tasks that are:
         tool_choice: { type: 'function', function: { name: 'extract_tasks' } }
       }),
     });
+    
+    console.log('📡 AI response status:', aiResponse.status);
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
