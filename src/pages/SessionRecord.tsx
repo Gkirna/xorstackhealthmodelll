@@ -7,21 +7,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { 
   Square, 
   Save,
   MessageCircle,
   User,
   FileText,
   Loader2,
-  Zap,
-  Mic
+  Zap
 } from "lucide-react";
 import { toast } from "sonner";
 import { useSession, useUpdateSession } from "@/hooks/useSessions";
@@ -33,10 +25,6 @@ import { useTranscriptUpdates } from "@/hooks/useRealtime";
 import { ExportOptions } from "@/components/ExportOptions";
 import { WorkflowOrchestrator } from "@/utils/WorkflowOrchestrator";
 import { WorkflowProgress } from "@/components/WorkflowProgress";
-import { SessionTimeline } from "@/components/session/SessionTimeline";
-import { PatientContextCard } from "@/components/session/PatientContextCard";
-import { SessionEditor } from "@/components/session/SessionEditor";
-import { TutorialCard } from "@/components/session/TutorialCard";
 import type { WorkflowState } from "@/utils/WorkflowOrchestrator";
 
 const SessionRecord = () => {
@@ -198,126 +186,242 @@ const SessionRecord = () => {
 
   return (
     <AppLayout>
-      <div className="flex gap-8 min-h-screen">
-        {/* Left Column: Timeline & Context */}
-        <div className="w-[280px] flex-shrink-0 space-y-6">
-          <SessionTimeline />
-          <PatientContextCard
-            patientName={session.patient_name}
-            patientId={session.patient_id}
-            chiefComplaint={session.chief_complaint || ''}
-          />
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Recording Session</h1>
+            <p className="text-muted-foreground">Patient: {session.patient_name}</p>
+          </div>
+          <Badge variant="secondary" className="text-sm">
+            {session.status}
+          </Badge>
         </div>
 
-        {/* Center Column: Main Editor */}
-        <div className="flex-1 min-w-0 space-y-6">
-          {workflowState && <WorkflowProgress state={workflowState} />}
+        {workflowState && <WorkflowProgress state={workflowState} />}
 
-          {/* Recording Controls */}
-          <Card className="p-6 rounded-2xl border-border">
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <Select defaultValue="default">
-                  <SelectTrigger className="w-[220px] h-12 rounded-xl border-input focus:border-primary">
-                    <SelectValue placeholder="Select microphone..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="default">Default Microphone</SelectItem>
-                  </SelectContent>
-                </Select>
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Main Recording Area */}
+          <div className="lg:col-span-2 space-y-6">
+            <Tabs defaultValue="transcript" className="w-full">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="transcript">Transcript</TabsTrigger>
+                <TabsTrigger value="note">AI Note</TabsTrigger>
+                <TabsTrigger value="context">Context</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="transcript" className="space-y-4">
+                <Tabs defaultValue="record" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="record">Record Live</TabsTrigger>
+                    <TabsTrigger value="upload">Upload Audio</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="record" className="mt-4">
+                    <AudioRecorderWithTranscription 
+                      sessionId={id}
+                      onTranscriptUpdate={(text, isFinal) => {
+                        // Update display with interim results
+                        if (!isFinal) {
+                          // Could show interim in a different color/style
+                        }
+                      }}
+                      onFinalTranscriptChunk={handleTranscriptChunk}
+                      onRecordingComplete={handleAudioRecordingComplete}
+                    />
+                  </TabsContent>
+                  
+                  <TabsContent value="upload" className="mt-4">
+                    <AudioUploadTranscription 
+                      sessionId={id}
+                      onTranscriptGenerated={handleTranscriptChunk}
+                      onAudioUploaded={(url) => console.log('Audio uploaded:', url)}
+                    />
+                  </TabsContent>
+                </Tabs>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Transcript</CardTitle>
+                    <CardDescription>
+                      Manual entry or transcribed text will appear here
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Textarea
+                      placeholder="Type or record the clinical encounter..."
+                      className="min-h-[300px] font-mono text-sm"
+                      value={transcript}
+                      onChange={(e) => setTranscript(e.target.value)}
+                    />
+                    
+                    <div className="flex gap-3 mt-4">
+                      <Button
+                        onClick={handleGenerateNote}
+                        disabled={isAutoPipelineRunning || !transcript.trim()}
+                        className="flex-1"
+                      >
+                        {isAutoPipelineRunning ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="mr-2 h-4 w-4" />
+                            Generate Note & Extract Tasks
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="note" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>AI-Generated Note</CardTitle>
+                    <CardDescription>
+                      Structured clinical note based on the transcript
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {generatedNote ? (
+                      <div className="min-h-[400px] p-4 bg-muted rounded-lg whitespace-pre-wrap font-mono text-sm">
+                        {generatedNote}
+                      </div>
+                    ) : (
+                      <div className="min-h-[400px] flex items-center justify-center text-muted-foreground">
+                        <div className="text-center space-y-3">
+                          <FileText className="h-12 w-12 mx-auto opacity-20" />
+                          <p>No note generated yet</p>
+                          <p className="text-sm">Add transcript content and click "Generate Note"</p>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="context" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Session Context</CardTitle>
+                    <CardDescription>Patient and appointment details</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Patient Name</p>
+                        <p className="font-medium">{session.patient_name}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Patient ID</p>
+                        <p className="font-medium">{session.patient_id}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Date of Birth</p>
+                        <p className="font-medium">{session.patient_dob || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Appointment Date</p>
+                        <p className="font-medium">{session.scheduled_at ? new Date(session.scheduled_at).toLocaleDateString() : 'N/A'}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Chief Complaint</p>
+                      <p className="font-medium">{session.chief_complaint || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Appointment Type</p>
+                      <Badge variant="secondary">{session.appointment_type || 'N/A'}</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
 
+          {/* Sidebar */}
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="h-5 w-5" />
+                  Patient Info
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <p className="text-sm text-muted-foreground">Name</p>
+                  <p className="font-medium">{session.patient_name}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">MRN</p>
+                  <p className="font-medium">{session.patient_id}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Chief Complaint</p>
+                  <p className="font-medium">{session.chief_complaint || 'N/A'}</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {generatedNote && (
+              <ExportOptions 
+                sessionId={id || ''}
+                noteContent={generatedNote}
+              />
+            )}
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageCircle className="h-5 w-5" />
+                  Ask Heidi
+                </CardTitle>
+                <CardDescription>AI clinical assistant</CardDescription>
+              </CardHeader>
+              <CardContent>
                 <Button 
-                  size="lg"
-                  className="flex-1 h-12 rounded-3xl bg-primary hover:bg-primary-hover shadow-button transition-all hover:scale-105 active:scale-98"
-                  onClick={() => {/* Start recording */}}
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => setHeidiDrawerOpen(true)}
                 >
-                  <Mic className="h-5 w-5 mr-2" />
-                  Start Transcribing
+                  <MessageCircle className="mr-2 h-4 w-4" />
+                  Open Chat
                 </Button>
-              </div>
+              </CardContent>
+            </Card>
 
-              <Tabs defaultValue="record" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 h-11 bg-muted/50 rounded-xl">
-                  <TabsTrigger value="record" className="rounded-lg">
-                    Record Live
-                  </TabsTrigger>
-                  <TabsTrigger value="upload" className="rounded-lg">
-                    Upload Audio
-                  </TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="record" className="mt-4">
-                  <AudioRecorderWithTranscription 
-                    sessionId={id}
-                    onTranscriptUpdate={(text, isFinal) => {
-                      if (!isFinal) {
-                        // Show interim results
-                      }
-                    }}
-                    onFinalTranscriptChunk={handleTranscriptChunk}
-                    onRecordingComplete={handleAudioRecordingComplete}
-                  />
-                </TabsContent>
-                
-                <TabsContent value="upload" className="mt-4">
-                  <AudioUploadTranscription 
-                    sessionId={id}
-                    onTranscriptGenerated={handleTranscriptChunk}
-                    onAudioUploaded={(url) => console.log('Audio uploaded:', url)}
-                  />
-                </TabsContent>
-              </Tabs>
+            <div className="space-y-3">
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={() => navigate("/dashboard")}
+              >
+                <Save className="mr-2 h-4 w-4" />
+                Save Draft
+              </Button>
+              <Button 
+                className="w-full"
+                onClick={handleFinishRecording}
+                disabled={!generatedNote}
+              >
+                <Square className="mr-2 h-4 w-4" />
+                Finish & Review
+              </Button>
             </div>
-          </Card>
-
-          {/* Session Editor */}
-          <SessionEditor
-            transcript={transcript}
-            generatedNote={generatedNote}
-            onTranscriptChange={setTranscript}
-          />
-
-          {/* Action Buttons */}
-          <div className="flex gap-3">
-            <Button 
-              variant="outline" 
-              size="lg"
-              className="flex-1 h-12 rounded-xl"
-              onClick={() => navigate("/dashboard")}
-            >
-              <Save className="mr-2 h-4 w-4" />
-              Save Draft
-            </Button>
-            <Button 
-              size="lg"
-              className="flex-1 h-12 rounded-xl bg-primary hover:bg-primary-hover"
-              onClick={handleFinishRecording}
-              disabled={!generatedNote}
-            >
-              <Square className="mr-2 h-4 w-4" />
-              Finish & Review
-            </Button>
           </div>
         </div>
 
-        {/* Right Column: Tutorials & Export */}
-        <div className="w-[260px] flex-shrink-0 space-y-6">
-          <TutorialCard />
-          
-          {generatedNote && (
-            <ExportOptions 
-              sessionId={id || ''}
-              noteContent={generatedNote}
-            />
-          )}
-        </div>
+        <AskHeidiDrawer 
+          open={heidiDrawerOpen}
+          onOpenChange={setHeidiDrawerOpen}
+          session_id={id}
+        />
       </div>
-
-      <AskHeidiDrawer 
-        open={heidiDrawerOpen}
-        onOpenChange={setHeidiDrawerOpen}
-        session_id={id}
-      />
     </AppLayout>
   );
 };

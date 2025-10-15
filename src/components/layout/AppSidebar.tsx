@@ -42,25 +42,19 @@ export function AppSidebar() {
   const { isAdmin } = useUserRole();
 
   return (
-    <Sidebar 
-      collapsible="icon" 
-      className="border-r border-sidebar-border"
-      style={{ width: isCollapsed ? '64px' : '240px' }}
-    >
-      <SidebarHeader className="border-b border-sidebar-border p-4 h-14">
+    <Sidebar collapsible="icon">
+      <SidebarHeader className="border-b border-sidebar-border p-4">
         <div className="flex items-center gap-2">
-          <Activity className="h-5 w-5 text-primary" />
+          <Activity className="h-6 w-6 text-primary" />
           {!isCollapsed && (
-            <span className="font-semibold text-base">Heidi Scribe</span>
+            <span className="font-semibold text-lg">Xorstack Health</span>
           )}
         </div>
       </SidebarHeader>
       
-      <SidebarContent className="pt-4">
+      <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Main
-          </SidebarGroupLabel>
+          <SidebarGroupLabel>Main Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navigationItems.map((item) => (
@@ -70,12 +64,12 @@ export function AppSidebar() {
                       to={item.url}
                       className={({ isActive }) =>
                         isActive
-                          ? "relative bg-transparent text-primary font-medium border-l-4 border-primary pl-4"
-                          : "hover:bg-sidebar-accent/50 pl-5"
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                          : "hover:bg-sidebar-accent/50"
                       }
                     >
                       <item.icon className="h-4 w-4" />
-                      {!isCollapsed && <span>{item.title}</span>}
+                      <span>{item.title}</span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -87,12 +81,12 @@ export function AppSidebar() {
                       to="/admin"
                       className={({ isActive }) =>
                         isActive
-                          ? "relative bg-transparent text-primary font-medium border-l-4 border-primary pl-4"
-                          : "hover:bg-sidebar-accent/50 pl-5"
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                          : "hover:bg-sidebar-accent/50"
                       }
                     >
                       <Shield className="h-4 w-4" />
-                      {!isCollapsed && <span>Admin</span>}
+                      <span>Admin</span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -100,24 +94,6 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        {/* Secondary Actions */}
-        {!isCollapsed && (
-          <SidebarGroup className="mt-auto pb-4">
-            <SidebarGroupLabel className="px-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Resources
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton className="bg-warning/30 text-warning-foreground hover:bg-warning/40">
-                    <span className="text-sm">Feature Request</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
       </SidebarContent>
     </Sidebar>
   );
