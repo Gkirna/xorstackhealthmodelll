@@ -8,33 +8,34 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* Healthcare Design System - Light Mode */
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+    /* Heidi Health Design System - Light Mode */
+    --background: 230 30% 94%; /* #E6EAF2 */
+    --foreground: 210 40% 10%; /* #182029 */
 
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 210 40% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 210 40% 10%;
 
-    /* Medical Blue Primary */
-    --primary: 217 91% 60%;
+    /* Heidi Blue Primary */
+    --primary: 216 100% 53%; /* #0F5AFF */
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 217 91% 50%;
+    --primary-hover: 216 100% 45%;
 
-    /* Lavender Secondary */
-    --secondary: 250 60% 85%;
-    --secondary-foreground: 250 60% 30%;
-    --secondary-hover: 250 60% 75%;
+    /* Violet Accent */
+    --secondary: 258 90% 60%; /* #6B36FB */
+    --secondary-foreground: 0 0% 100%;
+    --secondary-hover: 258 90% 50%;
 
     /* Muted backgrounds */
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 230 30% 94%;
+    --muted-foreground: 210 16% 47%;
 
-    /* Accent - Teal for AI features */
-    --accent: 173 80% 40%;
-    --accent-foreground: 0 0% 100%;
+    /* Gold Accent */
+    --accent: 45 100% 50%; /* #FFD700 */
+    --accent-foreground: 210 40% 10%;
+    --accent-light: 46 100% 72%; /* #FEDA6A */
 
     /* Destructive */
     --destructive: 0 84% 60%;
@@ -49,9 +50,10 @@ All colors MUST be HSL.
     --warning-foreground: 0 0% 100%;
 
     /* Borders and inputs */
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 217 91% 60%;
+    --border: 0 0% 76%; /* #C3C3C3 */
+    --input: 0 0% 76%;
+    --ring: 216 100% 53%;
+    --divider: 0 0% 92%; /* #EAEAEA */
 
     --radius: 0.5rem;
 
@@ -77,28 +79,29 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 222 47% 11%;
+    --background: 210 40% 10%;
     --foreground: 210 40% 98%;
 
-    --card: 222 47% 15%;
+    --card: 210 35% 15%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 222 47% 15%;
+    --popover: 210 35% 15%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 217 91% 60%;
+    --primary: 216 100% 53%;
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 217 91% 70%;
+    --primary-hover: 216 100% 60%;
 
-    --secondary: 250 60% 30%;
-    --secondary-foreground: 250 60% 90%;
-    --secondary-hover: 250 60% 40%;
+    --secondary: 258 90% 60%;
+    --secondary-foreground: 0 0% 100%;
+    --secondary-hover: 258 90% 70%;
 
-    --muted: 217 33% 17%;
+    --muted: 210 30% 20%;
     --muted-foreground: 215 20% 65%;
 
-    --accent: 173 80% 40%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 45 100% 50%;
+    --accent-foreground: 210 40% 10%;
+    --accent-light: 46 100% 72%;
 
     --destructive: 0 63% 31%;
     --destructive-foreground: 0 0% 100%;
@@ -109,9 +112,10 @@ All colors MUST be HSL.
     --warning: 38 92% 40%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
-    --ring: 217 91% 60%;
+    --border: 0 0% 30%;
+    --input: 0 0% 30%;
+    --ring: 216 100% 53%;
+    --divider: 0 0% 25%;
 
     --sidebar-background: 222 47% 11%;
     --sidebar-foreground: 210 40% 98%;
