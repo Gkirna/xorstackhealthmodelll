@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AudioLines, ListPlus, PencilLine } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useSession, useUpdateSession } from "@/hooks/useSessions";
@@ -36,6 +37,7 @@ const SessionRecord = () => {
   const [language, setLanguage] = useState("en");
   const [microphone, setMicrophone] = useState("default");
   const [elapsedTime, setElapsedTime] = useState("00:00:00");
+  const [recordingMode, setRecordingMode] = useState("transcribing");
   
   const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -242,6 +244,16 @@ const SessionRecord = () => {
           microphone={microphone}
           onMicrophoneChange={setMicrophone}
           elapsedTime={elapsedTime}
+          recordingMode={recordingMode}
+          onRecordingModeChange={setRecordingMode}
+          sessionId={id}
+          onTranscriptUpdate={(transcript, isFinal) => {
+            if (!isFinal) {
+              // Preview interim results
+            }
+          }}
+          onFinalTranscriptChunk={handleTranscriptChunk}
+          onRecordingComplete={handleAudioRecordingComplete}
         />
 
         {/* Workflow Progress */}
@@ -254,36 +266,43 @@ const SessionRecord = () => {
         {/* Main Content */}
         <div className="flex-1 px-6 py-4">
           <Tabs defaultValue="transcript" className="w-full">
-            {/* Tab Navigation */}
-            <TabsList className="grid w-full grid-cols-3 mb-6 h-12 bg-transparent border-b border-divider rounded-none">
+            {/* Tab Navigation - compact tablist with separators */}
+            <TabsList className="items-center p-1 text-text-secondary px-4 flex h-10 shrink-0 flex-row justify-start gap-1 overflow-x-auto rounded-none border-0 bg-transparent w-full tabs-list-scrollbar mb-6">
               <TabsTrigger
                 value="transcript"
-                className="text-[18px] font-bold data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
+                className="justify-center whitespace-nowrap text-sm font-medium ring-offset-surface transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-selected focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-surface data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-outline data-[state=active]:text-text-primary hover:border hover:border-outline group flex items-center gap-x-1 rounded-sm border border-transparent px-2 py-1 text-text-secondary"
+                data-testid="session-tab-transcript"
               >
-                Transcript
+                <AudioLines className="size-4 text-text-secondary group-hover:text-rose-500 group-data-[state=active]:text-rose-500" />
+                <p className="text-sm font-normal leading-normal tracking-normal">Transcript</p>
               </TabsTrigger>
+              <div role="none" className="shrink-0 bg-border w-px h-6" />
               <TabsTrigger
                 value="context"
-                className="text-[18px] font-bold data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
+                className="justify-center whitespace-nowrap text-sm font-medium ring-offset-surface transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-selected focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-surface data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-outline data-[state=active]:text-text-primary hover:border hover:border-outline group flex items-center gap-x-1 rounded-sm border border-transparent px-2 py-1 text-text-secondary"
+                data-testid="session-tab-context"
               >
-                Context
+                <ListPlus className="size-4 text-text-secondary group-hover:text-pink-500 group-data-[state=active]:text-pink-500" />
+                <p className="text-sm font-normal leading-normal tracking-normal">Context</p>
               </TabsTrigger>
+              <div role="none" className="shrink-0 bg-border w-px h-6" />
               <TabsTrigger
                 value="note"
-                className="text-[18px] font-bold data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
+                className="justify-center whitespace-nowrap text-sm font-medium ring-offset-surface transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-selected focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-surface data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-outline data-[state=active]:text-text-primary hover:border hover:border-outline group flex items-center gap-x-1 rounded-sm border border-transparent px-2 py-1 text-text-secondary"
+                data-testid="session-tab-note"
               >
-                Note
+                <PencilLine className="size-4 text-text-secondary group-hover:text-text-active group-data-[state=active]:text-text-active" />
+                <div className="group flex items-center gap-x-1">
+                  <p className="text-sm font-normal leading-normal tracking-normal">Note</p>
+                </div>
               </TabsTrigger>
             </TabsList>
 
             {/* Tab Content */}
             <TabsContent value="transcript" className="mt-0">
               <HeidiTranscriptPanel
-                sessionId={id}
                 transcript={transcript}
                 onTranscriptChange={setTranscript}
-                onTranscriptChunk={handleTranscriptChunk}
-                onRecordingComplete={handleAudioRecordingComplete}
               />
             </TabsContent>
 
