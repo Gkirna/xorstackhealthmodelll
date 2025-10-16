@@ -25,7 +25,8 @@ const SessionNew = () => {
     };
 
     createNewSession();
-  }, [createSession, navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <AppLayout>
