@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Copy, Download, Mail, Send, Mic, Sparkles } from "lucide-react";
+import { Copy, Download, Mail, Send, Mic, Sparkles, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { AskHeidiDrawer } from "@/components/AskHeidiDrawer";
 
 interface HeidiNotePanelProps {
   note: string;
@@ -40,6 +41,7 @@ export function HeidiNotePanel({
   const [selectedTemplate, setSelectedTemplate] = useState("goldilocks");
   const [detailLevel, setDetailLevel] = useState([50]);
   const [askAiQuery, setAskAiQuery] = useState("");
+  const [isAskHeidiOpen, setIsAskHeidiOpen] = useState(false);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(note);
@@ -172,6 +174,15 @@ export function HeidiNotePanel({
           >
             <Send className="h-4 w-4" />
           </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setIsAskHeidiOpen(true)}
+            className="shrink-0 rounded-full"
+            title="Open AI Assistant"
+          >
+            <MessageSquare className="h-4 w-4" />
+          </Button>
         </div>
       </Card>
 
@@ -196,6 +207,12 @@ export function HeidiNotePanel({
           )}
         </Button>
       )}
+
+      <AskHeidiDrawer
+        open={isAskHeidiOpen}
+        onOpenChange={setIsAskHeidiOpen}
+        session_id={sessionId}
+      />
     </div>
   );
 }

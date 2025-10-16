@@ -288,7 +288,7 @@ const SessionRecord = () => {
             </TabsContent>
 
             <TabsContent value="context" className="mt-0">
-              <HeidiContextPanel context={context} onContextChange={setContext} />
+              <HeidiContextPanel context={context} onContextChange={setContext} sessionId={id} />
             </TabsContent>
 
             <TabsContent value="note" className="mt-0">

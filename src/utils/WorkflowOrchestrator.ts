@@ -1,11 +1,10 @@
 /**
  * Workflow Orchestrator
  * Manages the complete clinical documentation workflow:
- * Recording → Transcription → Note Generation → Task Extraction → ICD-10 Coding
+ * Recording → Transcription → Note Generation
  */
 
 import { generateClinicalNote } from '@/ai/heidiBrain';
-import { extractTasks, suggestCodes } from '@/lib/api';
 
 export interface WorkflowStep {
   name: string;
@@ -23,9 +22,7 @@ export interface WorkflowState {
 
 export type WorkflowStepName = 
   | 'transcription' 
-  | 'note-generation' 
-  | 'task-extraction' 
-  | 'code-suggestion';
+  | 'note-generation';
 
 export class WorkflowOrchestrator {
   private state: WorkflowState;
@@ -39,8 +36,6 @@ export class WorkflowOrchestrator {
       steps: [
         { name: 'Transcription Complete', status: 'pending', progress: 0, message: 'Waiting...' },
         { name: 'Generate Clinical Note', status: 'pending', progress: 0, message: 'Waiting...' },
-        { name: 'Extract Tasks', status: 'pending', progress: 0, message: 'Waiting...' },
-        { name: 'Suggest ICD-10 Codes', status: 'pending', progress: 0, message: 'Waiting...' },
       ]
     };
   }
@@ -65,8 +60,6 @@ export class WorkflowOrchestrator {
   ): Promise<{
     success: boolean;
     note?: string;
-    tasks?: any[];
-    codes?: any[];
     errors?: string[];
   }> {
     this.state.isRunning = true;
@@ -107,74 +100,8 @@ export class WorkflowOrchestrator {
       this.updateStep(1, {
         status: 'completed',
         progress: 100,
-        message: 'Clinical note generated',
+        message: 'Clinical note generated successfully',
       });
-
-      // Step 3: Extract Tasks (optional - continues even if fails)
-      this.state.currentStep = 2;
-      this.updateStep(2, {
-        status: 'in-progress',
-        progress: 20,
-        message: 'Identifying actionable items...',
-      });
-
-      let extractedTasks: any[] = [];
-      try {
-        const tasksResult = await this.extractTasksFromNote(sessionId, noteResult.note);
-        
-        if (tasksResult.success && tasksResult.tasks) {
-          extractedTasks = tasksResult.tasks;
-          this.updateStep(2, {
-            status: 'completed',
-            progress: 100,
-            message: `${tasksResult.tasks.length} tasks identified`,
-          });
-        } else {
-          throw new Error(tasksResult.error || 'Failed to extract tasks');
-        }
-      } catch (error) {
-        this.updateStep(2, {
-          status: 'failed',
-          progress: 0,
-          message: 'Task extraction failed (optional)',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-        errors.push(`Task extraction failed: ${error}`);
-        // Continue with workflow
-      }
-
-      // Step 4: Suggest ICD-10 Codes (optional - continues even if fails)
-      this.state.currentStep = 3;
-      this.updateStep(3, {
-        status: 'in-progress',
-        progress: 20,
-        message: 'Analyzing for diagnostic codes...',
-      });
-
-      let suggestedCodes: any[] = [];
-      try {
-        const codesResult = await this.suggestDiagnosticCodes(sessionId, noteResult.note);
-        
-        if (codesResult.success && codesResult.codes) {
-          suggestedCodes = codesResult.codes;
-          this.updateStep(3, {
-            status: 'completed',
-            progress: 100,
-            message: `${codesResult.codes.length} codes suggested`,
-          });
-        } else {
-          throw new Error(codesResult.error || 'Failed to suggest codes');
-        }
-      } catch (error) {
-        this.updateStep(3, {
-          status: 'failed',
-          progress: 0,
-          message: 'Code suggestion failed (optional)',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-        errors.push(`Code suggestion failed: ${error}`);
-        // Continue - this is optional
-      }
 
       this.state.isRunning = false;
       this.notifyStateChange();
@@ -182,9 +109,6 @@ export class WorkflowOrchestrator {
       return {
         success: true,
         note: noteResult.note,
-        tasks: extractedTasks,
-        codes: suggestedCodes,
-        errors: errors.length > 0 ? errors : undefined,
       };
 
     } catch (error) {
@@ -231,74 +155,6 @@ export class WorkflowOrchestrator {
   }
 
   /**
-   * Extract tasks from clinical note
-   */
-  private async extractTasksFromNote(sessionId: string, noteText: string) {
-    try {
-      this.updateStep(2, { progress: 50, message: 'Analyzing for tasks...' });
-      
-      const result = await extractTasks(sessionId, noteText);
-      
-      this.updateStep(2, { progress: 80, message: 'Tasks identified...' });
-      
-      if (!result.success) {
-        const errorMsg = 'error' in result && result.error?.message 
-          ? result.error.message 
-          : 'Failed to extract tasks';
-        return {
-          success: false,
-          error: errorMsg,
-        };
-      }
-      
-      return {
-        success: true,
-        tasks: result.data,
-      };
-    } catch (error) {
-      console.error('Task extraction error:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to extract tasks',
-      };
-    }
-  }
-
-  /**
-   * Suggest ICD-10 diagnostic codes
-   */
-  private async suggestDiagnosticCodes(sessionId: string, noteText: string) {
-    try {
-      this.updateStep(3, { progress: 50, message: 'Analyzing diagnoses...' });
-      
-      const result = await suggestCodes(sessionId, noteText, 'US');
-      
-      this.updateStep(3, { progress: 80, message: 'Codes identified...' });
-      
-      if (!result.success) {
-        const errorMsg = 'error' in result && result.error?.message 
-          ? result.error.message 
-          : 'Failed to suggest codes';
-        return {
-          success: false,
-          error: errorMsg,
-        };
-      }
-      
-      return {
-        success: true,
-        codes: result.data,
-      };
-    } catch (error) {
-      console.error('Code suggestion error:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to suggest codes',
-      };
-    }
-  }
-
-  /**
    * Run a single step manually
    */
   public async runStep(
@@ -320,16 +176,6 @@ export class WorkflowOrchestrator {
         result = await this.generateNote(sessionId, data.transcript);
         break;
         
-      case 'task-extraction':
-        if (!data.note) return { success: false, error: 'Note required' };
-        result = await this.extractTasksFromNote(sessionId, data.note);
-        break;
-        
-      case 'code-suggestion':
-        if (!data.note) return { success: false, error: 'Note required' };
-        result = await this.suggestDiagnosticCodes(sessionId, data.note);
-        break;
-        
       default:
         result = { success: false, error: 'Invalid step' };
     }
@@ -344,8 +190,6 @@ export class WorkflowOrchestrator {
     const stepMap: Record<WorkflowStepName, number> = {
       'transcription': 0,
       'note-generation': 1,
-      'task-extraction': 2,
-      'code-suggestion': 3,
     };
     return stepMap[step] ?? -1;
   }
