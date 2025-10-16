@@ -44,12 +44,28 @@ const SessionRecord = () => {
   // Initialize session data
   useEffect(() => {
     if (session) {
-      setPatientName(session.patient_name || "");
+      setPatientName(session.patient_name || "New Patient");
       if (session.scheduled_at) {
         setSessionDate(new Date(session.scheduled_at));
       }
     }
   }, [session]);
+
+  // Auto-save patient name on change
+  useEffect(() => {
+    if (!session || !id) return;
+    
+    const timeoutId = setTimeout(async () => {
+      if (patientName !== session.patient_name) {
+        await updateSession.mutateAsync({
+          id,
+          updates: { patient_name: patientName },
+        });
+      }
+    }, 1000); // Debounce by 1 second
+
+    return () => clearTimeout(timeoutId);
+  }, [patientName, session, id, updateSession]);
 
   // Initialize workflow orchestrator
   useEffect(() => {
@@ -183,14 +199,6 @@ const SessionRecord = () => {
     if (!generatedNote) {
       toast.error("Please generate a note before finishing");
       return;
-    }
-    
-    // Update patient name if changed
-    if (patientName !== session?.patient_name) {
-      await updateSession.mutateAsync({
-        id: id!,
-        updates: { patient_name: patientName },
-      });
     }
     
     toast.success("Session saved!");
