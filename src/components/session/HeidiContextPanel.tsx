@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { FileText, Loader2, Mic, ChevronDown, Undo, Redo } from "lucide-react";
+import { FileText, Loader2, Mic, ChevronDown, Undo, Redo, Paperclip, ArrowRight } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -110,7 +110,7 @@ export function HeidiContextPanel({
   return (
     <div className="h-full flex flex-col">
       {/* Toolbar */}
-      <div className="flex justify-end mb-4 gap-2">
+      <div className="hidden sm:flex justify-end mb-4 gap-2">
         <Button variant="ghost" size="icon" className="h-8 w-8">
           <Mic className="h-4 w-4" />
         </Button>
@@ -143,7 +143,7 @@ export function HeidiContextPanel({
 
       {/* Context Text Area */}
       <div 
-        className={`flex-1 rounded-lg p-4 transition-colors bg-white border ${
+        className={`flex-1 rounded-xl p-4 transition-colors bg-white border shadow-sm ${
           isDragging ? 'border-primary' : 'border-border'
         }`}
         onDragOver={(e) => {
@@ -162,8 +162,8 @@ export function HeidiContextPanel({
         <Textarea
           value={context}
           onChange={(e) => onContextChange(e.target.value)}
-          placeholder="Add any additional context about the patient or paste files here"
-          className="h-full min-h-[400px] text-sm leading-relaxed resize-none border bg-white focus-visible:ring-0 focus-visible:ring-offset-0"
+          placeholder="Add patient details"
+          className="h-full min-h-[400px] text-base sm:text-lg leading-relaxed resize-none border-0 bg-white focus-visible:ring-0 focus-visible:ring-offset-0"
         />
         <input
           ref={fileInputRef}
@@ -177,32 +177,57 @@ export function HeidiContextPanel({
       </div>
 
       {/* Bottom Section */}
-      <div className="flex items-center justify-between mt-4 pt-4 border-t">
-        <div className="flex gap-6 text-sm">
-          <button className="text-muted-foreground hover:text-foreground">
-            Past sessions
-          </button>
-          <span className="text-muted-foreground">
-            {uploadedFiles.length > 0 ? `${uploadedFiles.length} attachment${uploadedFiles.length > 1 ? 's' : ''}` : 'No attachments'}
-          </span>
+      <div className="flex h-fit w-full bg-surface p-4">
+        <div className="grid flex-1 grid-cols-[auto_1fr_auto] grid-rows-[auto_1fr] gap-x-1.5 gap-y-2">
+          <div className="flex items-center gap-1.5">
+            <p className="text-xs font-medium leading-snug tracking-normal whitespace-nowrap">Past sessions</p>
+            <div role="none" className="bg-border h-px w-full flex-1" />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <p className="text-xs font-medium leading-snug tracking-normal min-w-fit">
+              {uploadedFiles.length > 0 ? `${uploadedFiles.length} attachment${uploadedFiles.length > 1 ? 's' : ''}` : 'No attachments'}
+            </p>
+            <div role="none" className="bg-border h-px w-full flex-1" />
+          </div>
+          <div className="flex items-center gap-1.5 justify-end">
+            <Button
+              variant="ghost"
+              data-testid="create-note-from-context-button"
+              className="h-8 min-w-8 gap-x-1 rounded-md text-xs font-medium leading-snug"
+              disabled
+            >
+              Create note from context
+              <ArrowRight className="h-3 w-3" />
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="min-w-9 size-9 p-1"
+              onClick={() => fileInputRef.current?.click()}
+              aria-label="Upload files"
+              data-testid="upload-file-button"
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
+
+            <Button variant="outline" className="h-9 rounded-md px-3 py-2.5 text-sm min-w-fit text-muted-foreground">
+              Not linked to a profile
+            </Button>
+          </div>
         </div>
-        <Button variant="ghost" className="text-sm text-muted-foreground">
-          Create note from context →
-        </Button>
       </div>
 
       {isUploading && (
-        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Uploading file...
         </div>
       )}
 
-      {/* Profile Link */}
-      <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-        <FileText className="h-4 w-4" />
-        <span>Not linked to a profile</span>
-      </div>
     </div>
   );
 }

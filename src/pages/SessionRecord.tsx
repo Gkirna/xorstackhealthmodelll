@@ -336,7 +336,7 @@ const SessionRecord = () => {
             <TabsList className="w-fit mb-2 bg-transparent rounded-none h-auto p-0 gap-1">
               <TabsTrigger
                 value="transcript"
-                className="data-[state=active]:bg-transparent rounded-none flex items-center gap-2"
+                className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:border data-[state=active]:border-primary"
               >
                 <AudioLines className="h-4 w-4" />
                 Transcript
@@ -344,7 +344,7 @@ const SessionRecord = () => {
               <div className="w-px h-6 bg-border self-center" />
               <TabsTrigger
                 value="context"
-                className="data-[state=active]:bg-transparent rounded-none flex items-center gap-2"
+                className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:border data-[state=active]:border-primary"
               >
                 <ListPlus className="h-4 w-4" />
                 Context
@@ -352,7 +352,7 @@ const SessionRecord = () => {
               <div className="w-px h-6 bg-border self-center" />
               <TabsTrigger
                 value="note"
-                className="data-[state=active]:bg-transparent rounded-none flex items-center gap-2"
+                className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:border data-[state=active]:border-primary"
               >
                 <PencilLine className="h-4 w-4" />
                 Note

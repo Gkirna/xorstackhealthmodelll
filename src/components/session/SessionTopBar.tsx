@@ -73,7 +73,7 @@ export function SessionTopBar({
               onChange={(e) => setTempName(e.target.value)}
               onBlur={handleNameSubmit}
               onKeyDown={(e) => e.key === "Enter" && handleNameSubmit()}
-              className="h-8 w-64 text-sm font-medium"
+              className="h-9 w-72 text-xl sm:text-2xl font-semibold"
               autoFocus
             />
           ) : (
@@ -82,7 +82,7 @@ export function SessionTopBar({
                 setTempName(patientName);
                 setIsEditingName(true);
               }}
-              className="flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
+              className="flex items-center gap-2 text-xl sm:text-2xl font-semibold text-foreground hover:text-primary transition-colors"
             >
               <span>{patientName || "Add patient details"}</span>
             </button>

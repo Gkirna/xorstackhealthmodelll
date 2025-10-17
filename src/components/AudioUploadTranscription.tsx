@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Upload, FileAudio, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -160,18 +160,9 @@ export function AudioUploadTranscription({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Upload className="h-5 w-5" />
-          Upload Audio Recording
-        </CardTitle>
-        <CardDescription>
-          Upload an existing audio file to transcribe
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="p-2 space-y-2">
         {!selectedFile ? (
-          <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
+          <div className="border border-dashed border-muted-foreground/30 rounded-md p-3 text-center hover:border-primary/50 transition-colors">
             <input
               type="file"
               accept="audio/*"
@@ -180,21 +171,21 @@ export function AudioUploadTranscription({
               id="audio-upload"
             />
             <label htmlFor="audio-upload" className="cursor-pointer">
-              <FileAudio className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-sm font-medium mb-1">Click to upload audio file</p>
-              <p className="text-xs text-muted-foreground">
+              <FileAudio className="h-6 w-6 mx-auto mb-1.5 text-muted-foreground" />
+              <p className="text-[11px] font-medium mb-0.5">Click to upload audio file</p>
+              <p className="text-[10px] text-muted-foreground">
                 Supports MP3, WAV, M4A, and other audio formats (max 50MB)
               </p>
             </label>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-              <div className="flex items-center gap-3">
-                <FileAudio className="h-5 w-5 text-primary" />
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between p-1.5 bg-muted rounded">
+              <div className="flex items-center gap-1.5">
+                <FileAudio className="h-3.5 w-3.5 text-primary" />
                 <div>
-                  <p className="text-sm font-medium">{selectedFile.name}</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[11px] font-medium">{selectedFile.name}</p>
+                  <p className="text-[10px] text-muted-foreground">
                     {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
                   </p>
                 </div>
@@ -205,52 +196,52 @@ export function AudioUploadTranscription({
                 onClick={handleRemoveFile}
                 disabled={isUploading || isTranscribing}
               >
-                <X className="h-4 w-4" />
+                <X className="h-3 w-3" />
               </Button>
             </div>
 
             <Button
               onClick={handleUploadAndTranscribe}
               disabled={isUploading || isTranscribing}
-              className="w-full"
+              className="w-full h-7 text-xs"
             >
               {isUploading || isTranscribing ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
                   {isUploading ? 'Uploading...' : 'Transcribing...'}
                 </>
               ) : (
                 <>
-                  <Upload className="mr-2 h-4 w-4" />
+                  <Upload className="mr-1.5 h-3 w-3" />
                   Upload & Transcribe
                 </>
               )}
             </Button>
 
             {(isUploading || isTranscribing) && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[11px]">
                   <span className="text-muted-foreground">
                     {isUploading ? 'Uploading...' : 'Transcribing...'}
                   </span>
                   <span className="font-medium">{uploadProgress}%</span>
                 </div>
-                <Progress value={uploadProgress} />
+                <Progress value={uploadProgress} className="h-0.5" />
               </div>
             )}
 
             {audioUrl && !isTranscribing && (
-              <div className="pt-4 border-t">
-                <p className="text-sm text-muted-foreground mb-2">Audio preview:</p>
+              <div className="pt-1.5 border-t">
+                <p className="text-[11px] text-muted-foreground mb-1">Audio preview</p>
                 <audio src={audioUrl} controls className="w-full" />
               </div>
             )}
 
             {transcript && (
-              <div className="pt-4 border-t">
-                <p className="text-sm text-muted-foreground mb-2">Transcript:</p>
-                <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-sm whitespace-pre-wrap">{transcript}</p>
+              <div className="pt-1.5 border-t">
+                <p className="text-[11px] text-muted-foreground mb-1">Transcript</p>
+                <div className="p-1.5 bg-muted rounded">
+                  <p className="text-[11px] whitespace-pre-wrap">{transcript}</p>
                 </div>
               </div>
             )}

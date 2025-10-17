@@ -48,24 +48,7 @@ export function DictatingPanel({
 
   return (
     <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Mic className="h-5 w-5" />
-            Dictating Mode
-          </CardTitle>
-          {isTranscribing && (
-            <Badge variant="secondary" className="gap-1.5">
-              <Zap className="h-3 w-3" />
-              Live Transcription
-            </Badge>
-          )}
-        </div>
-        <CardDescription>
-          Dictate your notes with real-time speech-to-text transcription
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="p-2 space-y-2">
         {!transcriptSupported && (
           <Alert>
             <AlertDescription>
@@ -83,34 +66,39 @@ export function DictatingPanel({
         )}
         
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {isRecording && (
-              <div className="h-3 w-3 rounded-full bg-destructive animate-pulse" />
+          <div className="flex items-center gap-1.5">
+            <Mic className="h-4 w-4 text-muted-foreground" />
+            {isRecording && <div className="h-2.5 w-2.5 rounded-full bg-destructive animate-pulse" />}
+            <span className="font-mono text-xs">{formatDuration(duration)}</span>
+            {isTranscribing && (
+              <Badge variant="secondary" className="h-5 px-1 py-0 text-[10px] gap-1">
+                <Zap className="h-3 w-3" />
+                Live
+              </Badge>
             )}
-            <span className="font-mono text-lg">{formatDuration(duration)}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             {!isRecording ? (
-              <Button onClick={startRecording} disabled={!transcriptSupported}>
-                <Mic className="mr-2 h-4 w-4" />
-                Start Dictating
+              <Button onClick={startRecording} size="icon" className="h-7 w-7" disabled={!transcriptSupported}>
+                <Mic className="h-3.5 w-3.5" />
+                <span className="sr-only">Start dictating</span>
               </Button>
             ) : (
               <>
                 {isPaused ? (
-                  <Button onClick={resumeRecording} variant="secondary">
-                    <Play className="mr-2 h-4 w-4" />
-                    Resume
+                  <Button onClick={resumeRecording} variant="secondary" size="icon" className="h-7 w-7">
+                    <Play className="h-3.5 w-3.5" />
+                    <span className="sr-only">Resume</span>
                   </Button>
                 ) : (
-                  <Button onClick={pauseRecording} variant="secondary">
-                    <Pause className="mr-2 h-4 w-4" />
-                    Pause
+                  <Button onClick={pauseRecording} variant="secondary" size="icon" className="h-7 w-7">
+                    <Pause className="h-3.5 w-3.5" />
+                    <span className="sr-only">Pause</span>
                   </Button>
                 )}
-                <Button onClick={stopRecording} variant="destructive">
-                  <Square className="mr-2 h-4 w-4" />
-                  Stop
+                <Button onClick={stopRecording} variant="destructive" size="icon" className="h-7 w-7">
+                  <Square className="h-3.5 w-3.5" />
+                  <span className="sr-only">Stop</span>
                 </Button>
               </>
             )}
@@ -119,15 +107,15 @@ export function DictatingPanel({
 
         {/* Show interim transcript while recording */}
         {interimTranscript && isRecording && (
-          <div className="p-3 bg-muted/50 rounded-lg border-2 border-dashed border-primary/20">
-            <p className="text-xs text-muted-foreground mb-1">Live dictation (interim):</p>
-            <p className="text-sm italic text-muted-foreground">{interimTranscript}</p>
+          <div className="p-2 bg-muted/40 rounded border border-dashed border-primary/20">
+            <p className="text-[10px] text-muted-foreground mb-0.5">Live dictation</p>
+            <p className="text-xs italic text-muted-foreground">{interimTranscript}</p>
           </div>
         )}
 
         {audioURL && (
-          <div className="pt-4 border-t">
-            <p className="text-sm text-muted-foreground mb-2">Recording preview:</p>
+          <div className="pt-2 border-t">
+            <p className="text-xs text-muted-foreground mb-1">Recording preview</p>
             <audio src={audioURL} controls className="w-full" />
           </div>
         )}
