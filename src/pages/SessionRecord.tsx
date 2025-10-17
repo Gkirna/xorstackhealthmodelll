@@ -313,7 +313,7 @@ const SessionRecord = () => {
         </div>
 
         {/* Ask Heidi Bar */}
-        <AskHeidiBar onSendMessage={(msg) => toast.info(`Message sent: ${msg}`)} />
+        <AskHeidiBar sessionId={id} transcript={transcript} context={context} />
 
         {/* Bottom Warning */}
         <div className="border-t px-6 py-3 bg-background">

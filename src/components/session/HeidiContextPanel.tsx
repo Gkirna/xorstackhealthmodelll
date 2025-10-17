@@ -1,10 +1,15 @@
 import { useState, useRef } from "react";
-import { Upload, FileText, X } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { FileText, Loader2, Mic, ChevronDown, Undo, Redo } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface HeidiContextPanelProps {
   context: string;
@@ -96,98 +101,108 @@ export function HeidiContextPanel({
     e.preventDefault();
   };
 
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const [isDragging, setIsDragging] = useState(false);
+
   return (
-    <div className="space-y-4">
-      {/* Context Input */}
-      <Card className="p-6 rounded-3xl">
-        <div className="space-y-3">
-          <h3 className="text-[16px] font-semibold">Additional Context</h3>
-          <p className="text-[14px] text-muted-foreground">
-            Add notes, medical history, or relevant patient information (max 500
-            characters)
-          </p>
-          <Textarea
-            value={context}
-            onChange={(e) => {
-              if (e.target.value.length <= 500) {
-                onContextChange(e.target.value);
-              }
-            }}
-            placeholder="Enter additional clinical context, patient history, medications, allergies, or any relevant information..."
-            className="min-h-[200px] text-[16px] leading-relaxed resize-none"
-            maxLength={500}
-          />
-          <div className="text-right">
-            <span className="text-[12px] text-muted-foreground">
-              {context.length}/500 characters
-            </span>
-          </div>
-        </div>
-      </Card>
+    <div className="h-full flex flex-col">
+      {/* Toolbar */}
+      <div className="flex justify-end mb-4 gap-2">
+        <Button variant="ghost" size="icon" className="h-8 w-8">
+          <Mic className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8">
+          <ChevronDown className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8">
+          <Undo className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8">
+          <Redo className="h-4 w-4" />
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="h-8">
+              Copy
+              <ChevronDown className="ml-1 h-3 w-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => {
+              navigator.clipboard.writeText(context);
+              toast.success("Context copied");
+            }}>
+              Copy
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
-      {/* File Drop Zone */}
-      <Card
-        className="p-8 rounded-3xl border-2 border-dashed border-accent-light hover:border-accent transition-colors cursor-pointer"
-        onDrop={handleFileDrop}
-        onDragOver={handleDragOver}
-        onClick={() => fileInputRef.current?.click()}
+      {/* Context Text Area */}
+      <div 
+        className={`flex-1 border-2 border-dashed rounded-lg p-4 transition-colors ${
+          isDragging ? 'border-primary bg-primary/5' : 'border-border'
+        }`}
+        onDragOver={(e) => {
+          handleDragOver(e);
+          setIsDragging(true);
+        }}
+        onDragLeave={(e) => {
+          handleDragLeave(e);
+          setIsDragging(false);
+        }}
+        onDrop={(e) => {
+          handleFileDrop(e);
+          setIsDragging(false);
+        }}
       >
-        <div className="flex flex-col items-center justify-center gap-3 text-center">
-          <div className="p-4 bg-accent/10 rounded-full">
-            <Upload className="h-8 w-8 text-accent" />
-          </div>
-          <div>
-            <p className="text-[16px] font-medium">
-              {isUploading ? "Uploading..." : "Drop files here or click to upload"}
-            </p>
-            <p className="text-[14px] text-muted-foreground">
-              Upload lab results, imaging reports, or other documents
-            </p>
-          </div>
-          <p className="text-[12px] text-muted-foreground">
-            PDF, DOCX, JPG, PNG (max 10MB)
-          </p>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={handleFileSelect}
-            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-          />
-        </div>
-      </Card>
+        <Textarea
+          value={context}
+          onChange={(e) => onContextChange(e.target.value)}
+          placeholder="Add any additional context about the patient or paste files here"
+          className="h-full min-h-[400px] text-sm leading-relaxed resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent"
+        />
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={handleFileSelect}
+          disabled={isUploading}
+          accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+        />
+      </div>
 
-      {/* Uploaded Files */}
-      {uploadedFiles.length > 0 && (
-        <Card className="p-4 rounded-3xl">
-          <h4 className="text-[14px] font-semibold mb-3">Uploaded Files</h4>
-          <div className="space-y-2">
-            {uploadedFiles.map((file, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between p-3 bg-muted/50 rounded-xl"
-              >
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <FileText className="h-4 w-4 text-primary flex-shrink-0" />
-                  <span className="text-sm truncate">{file.name}</span>
-                  <span className="text-xs text-muted-foreground flex-shrink-0">
-                    ({(file.size / 1024).toFixed(1)} KB)
-                  </span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 flex-shrink-0"
-                  onClick={() => removeFile(index)}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        </Card>
+      {/* Bottom Section */}
+      <div className="flex items-center justify-between mt-4 pt-4 border-t">
+        <div className="flex gap-6 text-sm">
+          <button className="text-muted-foreground hover:text-foreground">
+            Past sessions
+          </button>
+          <span className="text-muted-foreground">
+            {uploadedFiles.length > 0 ? `${uploadedFiles.length} attachment${uploadedFiles.length > 1 ? 's' : ''}` : 'No attachments'}
+          </span>
+        </div>
+        <Button variant="ghost" className="text-sm text-muted-foreground">
+          Create note from context →
+        </Button>
+      </div>
+
+      {isUploading && (
+        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Uploading file...
+        </div>
       )}
+
+      {/* Profile Link */}
+      <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+        <FileText className="h-4 w-4" />
+        <span>Not linked to a profile</span>
+      </div>
     </div>
   );
 }

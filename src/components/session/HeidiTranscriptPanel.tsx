@@ -1,5 +1,7 @@
-import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Copy } from "lucide-react";
+import { toast } from "sonner";
 
 interface HeidiTranscriptPanelProps {
   transcript: string;
@@ -10,28 +12,31 @@ export function HeidiTranscriptPanel({
   transcript,
   onTranscriptChange,
 }: HeidiTranscriptPanelProps) {
+  const handleCopy = () => {
+    if (transcript) {
+      navigator.clipboard.writeText(transcript);
+      toast.success("Transcript copied to clipboard");
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Transcript Display Only */}
-      <Card className="p-6 rounded-3xl">
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-[16px] font-semibold">Live Transcript</h3>
-            {transcript && (
-              <span className="text-[12px] text-muted-foreground">
-                {transcript.split(" ").length} words
-              </span>
-            )}
-          </div>
-          <Textarea
-            value={transcript}
-            onChange={(e) => onTranscriptChange(e.target.value)}
-            placeholder="Start recording or type manually..."
-            className="min-h-[300px] text-[16px] leading-relaxed resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-          />
-        </div>
-      </Card>
+    <div className="h-full flex flex-col">
+      <div className="flex justify-end mb-4">
+        <Button 
+          variant="ghost" 
+          onClick={handleCopy}
+          disabled={!transcript}
+          className="text-sm"
+        >
+          Copy
+        </Button>
+      </div>
+      <Textarea
+        value={transcript}
+        onChange={(e) => onTranscriptChange(e.target.value)}
+        placeholder="Start recording or type manually..."
+        className="flex-1 min-h-[500px] text-sm leading-relaxed resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+      />
     </div>
   );
 }

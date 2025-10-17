@@ -162,11 +162,6 @@ export function SessionTopBar({
               <SelectItem value="de">German</SelectItem>
             </SelectContent>
           </Select>
-
-          {/* Badge */}
-          <Badge variant="secondary" className="bg-purple-100 text-purple-700 hover:bg-purple-200">
-            + 7 days
-          </Badge>
         </div>
 
         <div className="flex items-center gap-4">
