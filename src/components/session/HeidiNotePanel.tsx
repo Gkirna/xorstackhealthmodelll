@@ -1,19 +1,21 @@
-import { useState } from "react";
-import { Copy, Download, Mail, Send, Mic, Sparkles, MessageSquare } from "lucide-react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Slider } from "@/components/ui/slider";
-import { Badge } from "@/components/ui/badge";
+import { Copy, Download, Mic, Undo, Redo, ChevronDown, MoreHorizontal, Check } from "lucide-react";
 import { toast } from "sonner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { AskHeidiDrawer } from "@/components/AskHeidiDrawer";
 
 interface HeidiNotePanelProps {
   note: string;
@@ -23,196 +25,145 @@ interface HeidiNotePanelProps {
   sessionId?: string;
 }
 
-const templates = [
-  { id: "hp", label: "H&P", color: "bg-primary" },
-  { id: "goldilocks", label: "Goldilocks", color: "bg-accent" },
-  { id: "brief", label: "Brief", color: "bg-secondary" },
-  { id: "soap", label: "SOAP", color: "bg-success" },
-  { id: "progress", label: "Progress", color: "bg-muted-foreground" },
-];
-
-export function HeidiNotePanel({
-  note,
-  onNoteChange,
-  onGenerate,
-  isGenerating,
-  sessionId,
-}: HeidiNotePanelProps) {
+export function HeidiNotePanel({ note, onNoteChange, onGenerate, isGenerating, sessionId }: HeidiNotePanelProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [selectedTemplate, setSelectedTemplate] = useState("goldilocks");
-  const [detailLevel, setDetailLevel] = useState([50]);
-  const [askAiQuery, setAskAiQuery] = useState("");
-  const [isAskHeidiOpen, setIsAskHeidiOpen] = useState(false);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(note);
     toast.success("Note copied to clipboard");
   };
 
-  const handleExport = (format: string) => {
-    toast.info(`Exporting as ${format}...`);
+  const handleExport = () => {
+    toast.info("Exporting note...");
   };
 
   return (
-    <div className="space-y-4">
-      {/* Template Selection */}
-      <Card className="p-6 rounded-3xl">
-        <div className="space-y-4">
-          <h3 className="text-[16px] font-semibold">Note Template</h3>
-          <div className="flex flex-wrap gap-2">
-            {templates.map((template) => (
-              <Button
-                key={template.id}
-                variant={selectedTemplate === template.id ? "default" : "outline"}
-                size="sm"
-                className={`rounded-full px-4 ${
-                  selectedTemplate === template.id ? template.color : ""
-                }`}
-                onClick={() => setSelectedTemplate(template.id)}
-              >
-                {template.label}
-              </Button>
-            ))}
-          </div>
-
-          {/* Goldilocks Slider */}
-          <div className="space-y-2 pt-2">
-            <div className="flex items-center justify-between">
-              <label className="text-[14px] font-medium">Detail Level</label>
-              <Badge
-                variant="secondary"
-                className="bg-gradient-to-r from-accent to-primary text-background"
-              >
-                {detailLevel[0]}%
-              </Badge>
-            </div>
-            <Slider
-              value={detailLevel}
-              onValueChange={setDetailLevel}
-              max={100}
-              step={1}
-              className="[&>span]:bg-gradient-to-r [&>span]:from-accent [&>span]:to-primary"
-            />
-            <div className="flex justify-between text-[12px] text-muted-foreground">
-              <span>Brief</span>
-              <span>Comprehensive</span>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Note Editor */}
-      <Card className="p-6 rounded-3xl">
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-[16px] font-semibold">Generated Note</h3>
-            <div className="flex gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={handleCopy}
-                disabled={!note}
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" disabled={!note}>
-                    Export
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="bg-popover">
-                  <DropdownMenuItem onClick={() => handleExport("PDF")}>
-                    <Download className="h-4 w-4 mr-2" />
-                    Download PDF
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport("Email")}>
-                    <Mail className="h-4 w-4 mr-2" />
-                    Email
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-
-          <div className="min-h-[260px] max-h-[400px] overflow-y-auto">
-            {note ? (
-              <Textarea
-                value={note}
-                onChange={(e) => onNoteChange(e.target.value)}
-                className="min-h-[260px] text-[16px] leading-relaxed resize-none border-0 focus-visible:ring-0"
-              />
-            ) : (
-              <div className="min-h-[260px] flex items-center justify-center text-center text-muted-foreground">
-                <div className="space-y-2">
-                  <Sparkles className="h-12 w-12 mx-auto opacity-20" />
-                  <p className="text-[14px]">No note generated yet</p>
-                  <p className="text-[12px]">Add transcript and click Generate</p>
-                </div>
+    <div className="flex flex-col h-full">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between mb-4 pb-4 border-b">
+        <div className="flex items-center gap-3">
+          {/* Template Selector */}
+          <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+            <SelectTrigger className="w-48 h-9">
+              <div className="flex items-center gap-2">
+                <span className="text-sm">📋</span>
+                <SelectValue placeholder="Select a template" />
               </div>
-            )}
-          </div>
-        </div>
-      </Card>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="goldilocks">Goldilocks</SelectItem>
+              <SelectItem value="soap">SOAP Note</SelectItem>
+              <SelectItem value="progress">Progress Note</SelectItem>
+              <SelectItem value="discharge">Discharge Summary</SelectItem>
+            </SelectContent>
+          </Select>
 
-      {/* Ask AI Bar */}
-      <Card className="p-4 rounded-3xl border-2 border-primary/20">
-        <div className="flex gap-2">
-          <Button variant="ghost" size="icon" className="shrink-0">
+          {/* Template Name Display */}
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md">
+            <span className="text-sm font-medium">{selectedTemplate.charAt(0).toUpperCase() + selectedTemplate.slice(1)}</span>
+          </div>
+
+          <Button variant="ghost" size="icon" className="h-8 w-8">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" className="h-8 w-8">
             <Mic className="h-4 w-4" />
           </Button>
-          <Input
-            value={askAiQuery}
-            onChange={(e) => setAskAiQuery(e.target.value)}
-            placeholder="Ask AI to summarize, expand, or modify this note..."
-            className="border-0 focus-visible:ring-0 text-[14px] bg-transparent"
-          />
-          <Button
-            size="icon"
-            className="shrink-0 rounded-full bg-primary hover:bg-primary-hover"
-            disabled={!askAiQuery.trim()}
-          >
-            <Send className="h-4 w-4" />
+          <div className="w-px h-4 bg-border" />
+          <Button variant="ghost" size="icon" className="h-8 w-8">
+            <Undo className="h-4 w-4" />
           </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setIsAskHeidiOpen(true)}
-            className="shrink-0 rounded-full"
-            title="Open AI Assistant"
-          >
-            <MessageSquare className="h-4 w-4" />
+          <Button variant="ghost" size="icon" className="h-8 w-8">
+            <Redo className="h-4 w-4" />
           </Button>
+          <div className="w-px h-4 bg-border" />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 gap-1">
+                <span className="text-sm">Copy</span>
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleCopy}>
+                <Copy className="mr-2 h-4 w-4" />
+                Copy to Clipboard
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExport}>
+                <Download className="mr-2 h-4 w-4" />
+                Export as PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-      </Card>
+      </div>
 
-      {/* Generate Button */}
-      {!note && (
-        <Button
-          onClick={onGenerate}
-          disabled={isGenerating}
-          className="w-full h-12 rounded-full text-[16px] font-semibold"
-          size="lg"
-        >
-          {isGenerating ? (
-            <>
-              <Sparkles className="mr-2 h-5 w-5 animate-spin" />
-              Generating...
-            </>
-          ) : (
-            <>
-              <Sparkles className="mr-2 h-5 w-5" />
-              Generate Clinical Note
-            </>
-          )}
-        </Button>
+      {/* Note Editor or Empty State */}
+      {!note ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-center py-20">
+          <div className="mb-8">
+            <svg
+              width="120"
+              height="120"
+              viewBox="0 0 120 120"
+              fill="none"
+              className="mx-auto mb-4"
+            >
+              <path
+                d="M40 80 Q50 50, 70 40 T100 20"
+                stroke="currentColor"
+                strokeWidth="2"
+                fill="none"
+                className="text-muted-foreground"
+                strokeLinecap="round"
+              />
+              <circle cx="105" cy="15" r="3" fill="currentColor" className="text-muted-foreground" />
+            </svg>
+          </div>
+          
+          <h3 className="text-lg font-semibold mb-2">Start this session using the header</h3>
+          <p className="text-sm text-muted-foreground mb-8 max-w-md">
+            Your note will appear here once your session is complete
+          </p>
+
+          <div className="bg-muted/30 rounded-lg p-6 max-w-sm">
+            <div className="mb-4">
+              <Button className="bg-green-600 hover:bg-green-700 text-white mb-3 w-full">
+                <Mic className="mr-2 h-4 w-4" />
+                Start transcribing
+                <ChevronDown className="ml-2 h-4 w-4" />
+              </Button>
+              <div className="bg-background rounded-md border p-2 space-y-1">
+                <div className="flex items-center justify-between px-2 py-1 hover:bg-accent rounded text-sm">
+                  <span>Transcribing</span>
+                  <Check className="h-4 w-4 text-green-600" />
+                </div>
+                <div className="px-2 py-1 hover:bg-accent rounded text-sm text-muted-foreground">
+                  Dictating
+                </div>
+                <div className="px-2 py-1 hover:bg-accent rounded text-sm text-muted-foreground">
+                  Upload session audio
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Select your visit mode in the dropdown
+            </p>
+          </div>
+        </div>
+      ) : (
+        <Textarea
+          ref={textareaRef}
+          value={note}
+          onChange={(e) => onNoteChange(e.target.value)}
+          placeholder="Your clinical note will appear here after generation..."
+          className="flex-1 min-h-[400px] font-mono text-sm resize-none border-0 focus-visible:ring-0"
+        />
       )}
-
-      <AskHeidiDrawer
-        open={isAskHeidiOpen}
-        onOpenChange={setIsAskHeidiOpen}
-        session_id={sessionId}
-      />
     </div>
   );
 }

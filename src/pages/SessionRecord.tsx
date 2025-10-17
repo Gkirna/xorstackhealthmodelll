@@ -12,10 +12,13 @@ import { useTranscriptUpdates } from "@/hooks/useRealtime";
 import { WorkflowOrchestrator } from "@/utils/WorkflowOrchestrator";
 import { WorkflowProgress } from "@/components/WorkflowProgress";
 import type { WorkflowState } from "@/utils/WorkflowOrchestrator";
-import { HeidiInfoBar } from "@/components/session/HeidiInfoBar";
+import { SessionTopBar } from "@/components/session/SessionTopBar";
 import { HeidiTranscriptPanel } from "@/components/session/HeidiTranscriptPanel";
 import { HeidiContextPanel } from "@/components/session/HeidiContextPanel";
 import { HeidiNotePanel } from "@/components/session/HeidiNotePanel";
+import { AskHeidiBar } from "@/components/session/AskHeidiBar";
+import { AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const SessionRecord = () => {
   const { id } = useParams();
@@ -232,9 +235,9 @@ const SessionRecord = () => {
 
   return (
     <AppLayout>
-      <div className="flex flex-col min-h-screen">
-        {/* Top Info Bar */}
-        <HeidiInfoBar
+      <div className="flex flex-col h-screen">
+        {/* Top Bar */}
+        <SessionTopBar
           patientName={patientName}
           onPatientNameChange={setPatientName}
           sessionDate={sessionDate}
@@ -246,14 +249,6 @@ const SessionRecord = () => {
           elapsedTime={elapsedTime}
           recordingMode={recordingMode}
           onRecordingModeChange={setRecordingMode}
-          sessionId={id}
-          onTranscriptUpdate={(transcript, isFinal) => {
-            if (!isFinal) {
-              // Preview interim results
-            }
-          }}
-          onFinalTranscriptChunk={handleTranscriptChunk}
-          onRecordingComplete={handleAudioRecordingComplete}
         />
 
         {/* Workflow Progress */}
@@ -264,53 +259,48 @@ const SessionRecord = () => {
         )}
 
         {/* Main Content */}
-        <div className="flex-1 px-6 py-4">
-          <Tabs defaultValue="transcript" className="w-full">
-            {/* Tab Navigation - compact tablist with separators */}
-            <TabsList className="items-center p-1 text-text-secondary px-4 flex h-10 shrink-0 flex-row justify-start gap-1 overflow-x-auto rounded-none border-0 bg-transparent w-full tabs-list-scrollbar mb-6">
+        <div className="flex-1 px-6 py-4 overflow-hidden flex flex-col">
+          <Tabs defaultValue="note" className="flex-1 flex flex-col">
+            {/* Tab Navigation */}
+            <TabsList className="w-fit mb-4 bg-transparent border-b rounded-none h-auto p-0 gap-1">
               <TabsTrigger
                 value="transcript"
-                className="justify-center whitespace-nowrap text-sm font-medium ring-offset-surface transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-selected focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-surface data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-outline data-[state=active]:text-text-primary hover:border hover:border-outline group flex items-center gap-x-1 rounded-sm border border-transparent px-2 py-1 text-text-secondary"
-                data-testid="session-tab-transcript"
+                className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-2 flex items-center gap-2"
               >
-                <AudioLines className="size-4 text-text-secondary group-hover:text-rose-500 group-data-[state=active]:text-rose-500" />
-                <p className="text-sm font-normal leading-normal tracking-normal">Transcript</p>
+                <AudioLines className="h-4 w-4" />
+                Transcript
               </TabsTrigger>
-              <div role="none" className="shrink-0 bg-border w-px h-6" />
+              <div className="w-px h-6 bg-border self-center" />
               <TabsTrigger
                 value="context"
-                className="justify-center whitespace-nowrap text-sm font-medium ring-offset-surface transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-selected focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-surface data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-outline data-[state=active]:text-text-primary hover:border hover:border-outline group flex items-center gap-x-1 rounded-sm border border-transparent px-2 py-1 text-text-secondary"
-                data-testid="session-tab-context"
+                className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-2 flex items-center gap-2"
               >
-                <ListPlus className="size-4 text-text-secondary group-hover:text-pink-500 group-data-[state=active]:text-pink-500" />
-                <p className="text-sm font-normal leading-normal tracking-normal">Context</p>
+                <ListPlus className="h-4 w-4" />
+                Context
               </TabsTrigger>
-              <div role="none" className="shrink-0 bg-border w-px h-6" />
+              <div className="w-px h-6 bg-border self-center" />
               <TabsTrigger
                 value="note"
-                className="justify-center whitespace-nowrap text-sm font-medium ring-offset-surface transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-selected focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-surface data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-outline data-[state=active]:text-text-primary hover:border hover:border-outline group flex items-center gap-x-1 rounded-sm border border-transparent px-2 py-1 text-text-secondary"
-                data-testid="session-tab-note"
+                className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-2 flex items-center gap-2"
               >
-                <PencilLine className="size-4 text-text-secondary group-hover:text-text-active group-data-[state=active]:text-text-active" />
-                <div className="group flex items-center gap-x-1">
-                  <p className="text-sm font-normal leading-normal tracking-normal">Note</p>
-                </div>
+                <PencilLine className="h-4 w-4" />
+                Note
               </TabsTrigger>
             </TabsList>
 
             {/* Tab Content */}
-            <TabsContent value="transcript" className="mt-0">
+            <TabsContent value="transcript" className="flex-1 mt-0 overflow-auto">
               <HeidiTranscriptPanel
                 transcript={transcript}
                 onTranscriptChange={setTranscript}
               />
             </TabsContent>
 
-            <TabsContent value="context" className="mt-0">
+            <TabsContent value="context" className="flex-1 mt-0 overflow-auto">
               <HeidiContextPanel context={context} onContextChange={setContext} sessionId={id} />
             </TabsContent>
 
-            <TabsContent value="note" className="mt-0">
+            <TabsContent value="note" className="flex-1 mt-0 overflow-auto">
               <HeidiNotePanel
                 note={generatedNote}
                 onNoteChange={setGeneratedNote}
@@ -320,6 +310,26 @@ const SessionRecord = () => {
               />
             </TabsContent>
           </Tabs>
+        </div>
+
+        {/* Ask Heidi Bar */}
+        <AskHeidiBar onSendMessage={(msg) => toast.info(`Message sent: ${msg}`)} />
+
+        {/* Bottom Warning */}
+        <div className="border-t px-6 py-3 bg-background">
+          <div className="flex items-center justify-between max-w-6xl mx-auto">
+            <Alert className="border-0 p-0 bg-transparent">
+              <AlertCircle className="h-4 w-4 text-orange-500" />
+              <AlertDescription className="text-sm text-orange-600 ml-2">
+                Review your note before use to ensure it accurately represents the visit
+              </AlertDescription>
+            </Alert>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Tutorials</span>
+              <span className="font-semibold">28%</span>
+              <span>📚</span>
+            </div>
+          </div>
         </div>
       </div>
     </AppLayout>
