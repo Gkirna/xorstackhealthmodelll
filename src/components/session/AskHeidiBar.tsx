@@ -131,18 +131,36 @@ export function AskHeidiBar({ sessionId, transcript, context }: AskHeidiBarProps
 
   return (
     <>
-      {/* Chat Messages Display */}
+      {/* Chat Header + Messages */}
+      {messages.length > 0 && (
+        <div className="px-6 pt-3">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-muted-foreground">Heidi conversation</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => setShowChat((v) => !v)}
+              >
+                {showChat ? 'Hide chat' : `Show chat (${messages.length})`}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showChat && messages.length > 0 && (
-        <div className="border-t bg-muted/30 px-6 py-4 max-h-96 overflow-y-auto">
-          <div className="max-w-4xl mx-auto space-y-4">
+        <div className="px-6 pb-2">
+          <div className="max-w-4xl mx-auto space-y-3 rounded-md border bg-background p-3 max-h-[50vh] overflow-y-auto">
             {messages.map((msg, idx) => (
               <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                <div className={`max-w-[80%] rounded-lg px-3 py-2 ${
                   msg.role === 'user' 
                     ? 'bg-primary text-primary-foreground' 
-                    : 'bg-background border'
+                    : 'bg-muted/20 border'
                 }`}>
-                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                 </div>
               </div>
             ))}
@@ -152,40 +170,41 @@ export function AskHeidiBar({ sessionId, transcript, context }: AskHeidiBarProps
       )}
 
       {/* Input Bar */}
-      <div className="border-t bg-background px-6 py-4">
-        <div className="flex items-center gap-3 max-w-4xl mx-auto">
-          <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0">
-            <div className="h-6 w-6 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center">
-              <span className="text-xs font-bold text-white">H</span>
+      <div className="bg-background px-6 py-3">
+        <div className="flex min-h-fit items-center gap-2 rounded-md border border-border bg-background px-3 py-2 sm:min-h-[52px] max-w-4xl mx-auto">
+          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
+            <div className="h-5 w-5 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center">
+              <span className="text-[10px] font-bold text-white">H</span>
             </div>
           </Button>
-          
-          <div className="flex-1 relative">
+
+          <div className="flex-1">
             <Input
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask Heidi to do anything..."
-              className="pr-20 h-10"
+              className="h-10 sm:h-11 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 px-0"
               disabled={isLoading}
             />
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="h-7 w-7">
-                <Mic className="h-4 w-4" />
-              </Button>
-              <Button
-                onClick={handleSend}
-                disabled={!message.trim() || isLoading}
-                size="icon"
-                className="h-7 w-7 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <ArrowUp className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
+          </div>
+
+          <div className="flex items-center gap-1 self-end sm:mb-0.5">
+            <Button variant="ghost" size="icon" className="h-7 w-7">
+              <Mic className="h-4 w-4" />
+            </Button>
+            <Button
+              onClick={handleSend}
+              disabled={!message.trim() || isLoading}
+              size="icon"
+              className="h-7 w-7 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md"
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowUp className="h-4 w-4" />
+              )}
+            </Button>
           </div>
         </div>
       </div>

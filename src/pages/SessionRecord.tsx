@@ -17,6 +17,8 @@ import { SessionTopBar } from "@/components/session/SessionTopBar";
 import { HeidiTranscriptPanel } from "@/components/session/HeidiTranscriptPanel";
 import { HeidiContextPanel } from "@/components/session/HeidiContextPanel";
 import { HeidiNotePanel } from "@/components/session/HeidiNotePanel";
+import { DictatingPanel } from "@/components/session/DictatingPanel";
+import { AudioUploadTranscription } from "@/components/AudioUploadTranscription";
 import { AskHeidiBar } from "@/components/session/AskHeidiBar";
 // removed bottom alert block
 
@@ -30,6 +32,7 @@ const SessionRecord = () => {
   // Real-time audio recording & transcription
   const {
     startRecording,
+    isTranscribing,
   } = useAudioRecording({
     onTranscriptUpdate: (text, isFinal) => {
       if (isFinal) {
@@ -38,19 +41,61 @@ const SessionRecord = () => {
         setTranscript(prev => prev ? `${prev}\n\n${text}` : text);
       } else {
         // Show interim updates in the editor without saving
-        setTranscript(prev => {
-          if (!prev) return text;
-          // For simplicity, append interim text on a new line
-          return `${prev}\n\n${text}`;
-        });
+        // We will append interim visually in the panel instead of mutating saved transcript
+        // For now, keep the previous behavior minimal (no-op)
       }
     },
   });
+
+  // Start mic transcription if empty; otherwise immediately generate note
+  const handleStartTranscribing = async () => {
+    if (recordingMode === 'upload') {
+      toast.info('Upload flow coming soon. Please use Dictating or Transcribing for now.');
+      return;
+    }
+
+    if (recordingMode === 'dictating') {
+      // Switch to transcript view and start recording
+      setActiveTab('transcript');
+      startRecording();
+      return;
+    }
+
+    const hasManualInput = transcript.trim().length > 0 || context.trim().length > 0;
+    if (hasManualInput) {
+      if (!orchestratorRef.current || !id) return;
+      setIsAutoPipelineRunning(true);
+      const result = await orchestratorRef.current.runCompletePipeline(id, transcript || '(No transcript provided)', {
+        context,
+        detailLevel: 'high',
+        template,
+      });
+      if (result.success && result.note) {
+        setGeneratedNote(result.note);
+        await updateSession.mutateAsync({ id, updates: { generated_note: result.note, status: 'review', template } });
+        toast.success('Clinical documentation complete!');
+      } else {
+        toast.error(result.errors?.[0] || 'Failed to generate note');
+      }
+      setIsAutoPipelineRunning(false);
+      return;
+    }
+    setActiveTab('transcript');
+    startRecording();
+  };
+
+  const handleRecordingModeChange = (mode: string) => {
+    setRecordingMode(mode);
+    if (mode === 'dictating' || mode === 'upload' || mode === 'transcribing') {
+      setActiveTab('transcript');
+    }
+  };
   
   // State
   const [transcript, setTranscript] = useState("");
   const [context, setContext] = useState("");
   const [generatedNote, setGeneratedNote] = useState("");
+  const [template, setTemplate] = useState<string>("soap");
   const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null);
   const [isAutoPipelineRunning, setIsAutoPipelineRunning] = useState(false);
   
@@ -61,6 +106,7 @@ const SessionRecord = () => {
   const [microphone, setMicrophone] = useState("default");
   const [elapsedTime, setElapsedTime] = useState("00:00:00");
   const [recordingMode, setRecordingMode] = useState("transcribing");
+  const [activeTab, setActiveTab] = useState<string>("note");
   
   const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -190,7 +236,10 @@ const SessionRecord = () => {
       setIsAutoPipelineRunning(true);
       
       // Run the complete auto-pipeline
-      const result = await orchestratorRef.current.runCompletePipeline(id, transcript);
+      const result = await orchestratorRef.current.runCompletePipeline(id, transcript, {
+        context,
+        detailLevel: 'high',
+      });
       
       if (result.success && result.note) {
         setGeneratedNote(result.note);
@@ -201,6 +250,7 @@ const SessionRecord = () => {
           updates: {
             generated_note: result.note,
             status: 'review',
+            template,
           },
         });
 
@@ -268,8 +318,8 @@ const SessionRecord = () => {
           onMicrophoneChange={setMicrophone}
           elapsedTime={elapsedTime}
           recordingMode={recordingMode}
-          onRecordingModeChange={setRecordingMode}
-          onStartRecording={startRecording}
+          onRecordingModeChange={handleRecordingModeChange}
+          onStartRecording={handleStartTranscribing}
         />
 
         {/* Workflow Progress */}
@@ -281,7 +331,7 @@ const SessionRecord = () => {
 
         {/* Main Content */}
         <div className="flex-1 px-6 py-4 overflow-hidden flex flex-col">
-          <Tabs defaultValue="note" className="flex-1 flex flex-col">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
             {/* Tab Navigation */}
             <TabsList className="w-fit mb-2 bg-transparent rounded-none h-auto p-0 gap-1">
               <TabsTrigger
@@ -310,7 +360,22 @@ const SessionRecord = () => {
             </TabsList>
 
             {/* Tab Content */}
-            <TabsContent value="transcript" className="flex-1 mt-0 overflow-auto">
+            <TabsContent value="transcript" className="flex-1 mt-0 overflow-auto space-y-4">
+              {recordingMode === 'dictating' && (
+                <DictatingPanel
+                  sessionId={id}
+                  onTranscriptUpdate={(t, isFinal) => {
+                    if (isFinal) setTranscript(prev => prev ? `${prev}\n\n${t}` : t);
+                  }}
+                  onFinalTranscriptChunk={(t) => setTranscript(prev => prev ? `${prev}\n\n${t}` : t)}
+                />
+              )}
+              {recordingMode === 'upload' && (
+                <AudioUploadTranscription
+                  sessionId={id}
+                  onTranscriptGenerated={(t) => setTranscript(prev => prev ? `${prev}\n\n${t}` : t)}
+                />
+              )}
               <HeidiTranscriptPanel
                 transcript={transcript}
                 onTranscriptChange={setTranscript}
@@ -328,6 +393,8 @@ const SessionRecord = () => {
                 onGenerate={handleGenerateNote}
                 isGenerating={isAutoPipelineRunning}
                 sessionId={id}
+                selectedTemplate={template}
+                onTemplateChange={setTemplate}
               />
             </TabsContent>
           </Tabs>

@@ -18,10 +18,12 @@ export function WorkflowProgress({ state }: WorkflowProgressProps) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           {state.isRunning && <Loader2 className="h-5 w-5 animate-spin" />}
-          AI Workflow Pipeline
+          {state.isRunning ? 'Generating note…' : 'AI Workflow Pipeline'}
         </CardTitle>
         <CardDescription>
-          Automated processing of your clinical documentation
+          {state.isRunning
+            ? `Processing step ${state.currentStep + 1} of ${state.steps.length}`
+            : 'Automated processing of your clinical documentation'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

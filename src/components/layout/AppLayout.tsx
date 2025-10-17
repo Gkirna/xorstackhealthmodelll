@@ -1,7 +1,6 @@
 import { ReactNode } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
-import { TopBar } from "./TopBar";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { motion } from "framer-motion";
 
@@ -15,7 +14,6 @@ export function AppLayout({ children }: AppLayoutProps) {
       <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
         <div className="flex-1 flex flex-col w-full">
-          <TopBar />
           <main className="flex-1 p-6 overflow-auto">
             <BreadcrumbNav />
             <motion.div
