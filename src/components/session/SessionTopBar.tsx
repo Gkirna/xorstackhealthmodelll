@@ -66,7 +66,7 @@ export function SessionTopBar({
     <div className="border-b bg-background">
       {/* First Row: Add patient details + Start button */}
       <div className="flex items-center justify-between px-6 py-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           {isEditingName ? (
             <Input
               value={tempName}
@@ -94,7 +94,7 @@ export function SessionTopBar({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 h-9 rounded-md flex items-center gap-2">
+            <Button onClick={onStartRecording} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 h-9 rounded-md flex items-center gap-2">
               <Mic className="h-4 w-4" />
               Start transcribing
               <ChevronDown className="h-4 w-4 ml-1" />
@@ -127,8 +127,8 @@ export function SessionTopBar({
       </div>
 
       {/* Second Row: Date, Language, Badge, Timer, Mic */}
-      <div className="flex items-center justify-between px-6 py-3 border-t">
-        <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between px-6 py-1">
+        <div className="flex items-center gap-2">
           {/* Date */}
           <Popover>
             <PopoverTrigger asChild>
@@ -164,7 +164,7 @@ export function SessionTopBar({
           </Select>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
           {/* Timer */}
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Clock className="h-4 w-4" />

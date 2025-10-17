@@ -32,7 +32,7 @@ export function BreadcrumbNav() {
   if (pathnames.length === 0) return null;
 
   return (
-    <Breadcrumb className="mb-4">
+    <Breadcrumb className="mb-4 hidden">
       <BreadcrumbList>
         <BreadcrumbItem>
           <BreadcrumbLink asChild>

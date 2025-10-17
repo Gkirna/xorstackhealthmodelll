@@ -35,7 +35,7 @@ export function HeidiTranscriptPanel({
         value={transcript}
         onChange={(e) => onTranscriptChange(e.target.value)}
         placeholder="Start recording or type manually..."
-        className="flex-1 min-h-[500px] text-sm leading-relaxed resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+        className="flex-1 min-h-[500px] text-sm leading-relaxed resize-none border bg-white focus-visible:ring-0 focus-visible:ring-offset-0"
       />
     </div>
   );

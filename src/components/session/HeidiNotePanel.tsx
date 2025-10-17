@@ -28,6 +28,7 @@ interface HeidiNotePanelProps {
 export function HeidiNotePanel({ note, onNoteChange, onGenerate, isGenerating, sessionId }: HeidiNotePanelProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [selectedTemplate, setSelectedTemplate] = useState("goldilocks");
+  const [spellcheckEnabled, setSpellcheckEnabled] = useState(true);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(note);
@@ -36,6 +37,44 @@ export function HeidiNotePanel({ note, onNoteChange, onGenerate, isGenerating, s
 
   const handleExport = () => {
     toast.info("Exporting note...");
+  };
+
+  const handleClear = () => {
+    onNoteChange("");
+  };
+
+  const handleDownloadTxt = () => {
+    const blob = new Blob([note || ""], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "clinical-note.txt";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const escapeHtml = (unsafe: string) =>
+    unsafe
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+
+  const handlePrint = () => {
+    const printable = window.open("", "_blank");
+    if (!printable) return;
+    printable.document.write(
+      `<!doctype html><html><head><title>Clinical Note</title><style>body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;white-space:pre-wrap;margin:2rem;}</style></head><body>${escapeHtml(
+        note || ""
+      )}</body></html>`
+    );
+    printable.document.close();
+    printable.focus();
+    printable.print();
+    printable.close();
   };
 
   return (
@@ -64,9 +103,36 @@ export function HeidiNotePanel({ note, onNoteChange, onGenerate, isGenerating, s
             <span className="text-sm">✏️ {selectedTemplate.charAt(0).toUpperCase() + selectedTemplate.slice(1)}</span>
           </Button>
 
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={handleCopy}>
+                Copy to Clipboard
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExport}>
+                Export as PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleDownloadTxt}>
+                Download .txt
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handlePrint}>
+                Print
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSpellcheckEnabled((v) => !v)}>
+                {spellcheckEnabled ? "Disable Spellcheck" : "Enable Spellcheck"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleClear}>
+                Clear note
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onGenerate} disabled={isGenerating}>
+                {isGenerating ? "Generating..." : "Generate note"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <div className="flex items-center gap-2">
@@ -108,10 +174,11 @@ export function HeidiNotePanel({ note, onNoteChange, onGenerate, isGenerating, s
       {/* Note Editor */}
       <Textarea
         ref={textareaRef}
+        spellCheck={spellcheckEnabled}
         value={note}
         onChange={(e) => onNoteChange(e.target.value)}
         placeholder="Your clinical note will appear here after generation..."
-        className="flex-1 min-h-[500px] text-sm resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+        className="flex-1 min-h-[500px] text-sm resize-none border bg-white focus-visible:ring-0 focus-visible:ring-offset-0"
       />
     </div>
   );

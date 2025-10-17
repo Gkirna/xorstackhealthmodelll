@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useSession, useUpdateSession } from "@/hooks/useSessions";
 import { useTranscription } from "@/hooks/useTranscription";
+import { useAudioRecording } from "@/hooks/useAudioRecording";
 import { useTranscriptUpdates } from "@/hooks/useRealtime";
 import { WorkflowOrchestrator } from "@/utils/WorkflowOrchestrator";
 import { WorkflowProgress } from "@/components/WorkflowProgress";
@@ -17,8 +18,7 @@ import { HeidiTranscriptPanel } from "@/components/session/HeidiTranscriptPanel"
 import { HeidiContextPanel } from "@/components/session/HeidiContextPanel";
 import { HeidiNotePanel } from "@/components/session/HeidiNotePanel";
 import { AskHeidiBar } from "@/components/session/AskHeidiBar";
-import { AlertCircle } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+// removed bottom alert block
 
 const SessionRecord = () => {
   const { id } = useParams();
@@ -26,6 +26,26 @@ const SessionRecord = () => {
   const { data: session, isLoading } = useSession(id);
   const updateSession = useUpdateSession();
   const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript } = useTranscription(id || '');
+  
+  // Real-time audio recording & transcription
+  const {
+    startRecording,
+  } = useAudioRecording({
+    onTranscriptUpdate: (text, isFinal) => {
+      if (isFinal) {
+        // Save final chunks to DB and append to local transcript
+        addTranscriptChunk(text, 'provider');
+        setTranscript(prev => prev ? `${prev}\n\n${text}` : text);
+      } else {
+        // Show interim updates in the editor without saving
+        setTranscript(prev => {
+          if (!prev) return text;
+          // For simplicity, append interim text on a new line
+          return `${prev}\n\n${text}`;
+        });
+      }
+    },
+  });
   
   // State
   const [transcript, setTranscript] = useState("");
@@ -249,6 +269,7 @@ const SessionRecord = () => {
           elapsedTime={elapsedTime}
           recordingMode={recordingMode}
           onRecordingModeChange={setRecordingMode}
+          onStartRecording={startRecording}
         />
 
         {/* Workflow Progress */}
@@ -262,10 +283,10 @@ const SessionRecord = () => {
         <div className="flex-1 px-6 py-4 overflow-hidden flex flex-col">
           <Tabs defaultValue="note" className="flex-1 flex flex-col">
             {/* Tab Navigation */}
-            <TabsList className="w-fit mb-4 bg-transparent border-b rounded-none h-auto p-0 gap-1">
+            <TabsList className="w-fit mb-2 bg-transparent rounded-none h-auto p-0 gap-1">
               <TabsTrigger
                 value="transcript"
-                className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-2 flex items-center gap-2"
+                className="data-[state=active]:bg-transparent rounded-none flex items-center gap-2"
               >
                 <AudioLines className="h-4 w-4" />
                 Transcript
@@ -273,7 +294,7 @@ const SessionRecord = () => {
               <div className="w-px h-6 bg-border self-center" />
               <TabsTrigger
                 value="context"
-                className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-2 flex items-center gap-2"
+                className="data-[state=active]:bg-transparent rounded-none flex items-center gap-2"
               >
                 <ListPlus className="h-4 w-4" />
                 Context
@@ -281,7 +302,7 @@ const SessionRecord = () => {
               <div className="w-px h-6 bg-border self-center" />
               <TabsTrigger
                 value="note"
-                className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-2 flex items-center gap-2"
+                className="data-[state=active]:bg-transparent rounded-none flex items-center gap-2"
               >
                 <PencilLine className="h-4 w-4" />
                 Note
@@ -315,22 +336,7 @@ const SessionRecord = () => {
         {/* Ask Heidi Bar */}
         <AskHeidiBar sessionId={id} transcript={transcript} context={context} />
 
-        {/* Bottom Warning */}
-        <div className="border-t px-6 py-3 bg-background">
-          <div className="flex items-center justify-between max-w-6xl mx-auto">
-            <Alert className="border-0 p-0 bg-transparent">
-              <AlertCircle className="h-4 w-4 text-orange-500" />
-              <AlertDescription className="text-sm text-orange-600 ml-2">
-                Review your note before use to ensure it accurately represents the visit
-              </AlertDescription>
-            </Alert>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Tutorials</span>
-              <span className="font-semibold">28%</span>
-              <span>📚</span>
-            </div>
-          </div>
-        </div>
+        
       </div>
     </AppLayout>
   );

@@ -143,8 +143,8 @@ export function HeidiContextPanel({
 
       {/* Context Text Area */}
       <div 
-        className={`flex-1 border-2 border-dashed rounded-lg p-4 transition-colors ${
-          isDragging ? 'border-primary bg-primary/5' : 'border-border'
+        className={`flex-1 rounded-lg p-4 transition-colors bg-white border ${
+          isDragging ? 'border-primary' : 'border-border'
         }`}
         onDragOver={(e) => {
           handleDragOver(e);
@@ -163,7 +163,7 @@ export function HeidiContextPanel({
           value={context}
           onChange={(e) => onContextChange(e.target.value)}
           placeholder="Add any additional context about the patient or paste files here"
-          className="h-full min-h-[400px] text-sm leading-relaxed resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent"
+          className="h-full min-h-[400px] text-sm leading-relaxed resize-none border bg-white focus-visible:ring-0 focus-visible:ring-offset-0"
         />
         <input
           ref={fileInputRef}
