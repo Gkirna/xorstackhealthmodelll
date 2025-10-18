@@ -68,11 +68,10 @@ const SessionRecord = () => {
       const result = await orchestratorRef.current.runCompletePipeline(id, transcript || '(No transcript provided)', {
         context,
         detailLevel: 'high',
-        template,
       });
       if (result.success && result.note) {
         setGeneratedNote(result.note);
-        await updateSession.mutateAsync({ id, updates: { generated_note: result.note, status: 'review', template } });
+        await updateSession.mutateAsync({ id, updates: { generated_note: result.note, status: 'review' } });
         toast.success('Clinical documentation complete!');
       } else {
         toast.error(result.errors?.[0] || 'Failed to generate note');
@@ -95,7 +94,7 @@ const SessionRecord = () => {
   const [transcript, setTranscript] = useState("");
   const [context, setContext] = useState("");
   const [generatedNote, setGeneratedNote] = useState("");
-  const [template, setTemplate] = useState<string>("soap");
+  const [selectedTemplate, setSelectedTemplate] = useState<"soap" | "progress" | "discharge" | "goldilocks">("soap");
   const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null);
   const [isAutoPipelineRunning, setIsAutoPipelineRunning] = useState(false);
   
@@ -250,7 +249,6 @@ const SessionRecord = () => {
           updates: {
             generated_note: result.note,
             status: 'review',
-            template,
           },
         });
 
@@ -393,8 +391,8 @@ const SessionRecord = () => {
                 onGenerate={handleGenerateNote}
                 isGenerating={isAutoPipelineRunning}
                 sessionId={id}
-                selectedTemplate={template}
-                onTemplateChange={setTemplate}
+                selectedTemplate={selectedTemplate}
+                onTemplateChange={setSelectedTemplate}
               />
             </TabsContent>
           </Tabs>

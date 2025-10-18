@@ -23,13 +23,13 @@ interface HeidiNotePanelProps {
   onGenerate: () => void;
   isGenerating: boolean;
   sessionId?: string;
-  selectedTemplate?: string;
-  onTemplateChange?: (value: string) => void;
+  selectedTemplate?: "soap" | "progress" | "discharge" | "goldilocks";
+  onTemplateChange?: (value: "soap" | "progress" | "discharge" | "goldilocks") => void;
 }
 
 export function HeidiNotePanel({ note, onNoteChange, onGenerate, isGenerating, sessionId, selectedTemplate: selectedTemplateProp, onTemplateChange }: HeidiNotePanelProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [selectedTemplate, setSelectedTemplate] = useState(selectedTemplateProp || "goldilocks");
+  const [selectedTemplate, setSelectedTemplate] = useState<"soap" | "progress" | "discharge" | "goldilocks">(selectedTemplateProp || "goldilocks");
   const [spellcheckEnabled, setSpellcheckEnabled] = useState(true);
 
   const handleCopy = () => {
@@ -85,7 +85,7 @@ export function HeidiNotePanel({ note, onNoteChange, onGenerate, isGenerating, s
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           {/* Template Selector */}
-          <Select value={selectedTemplate} onValueChange={(v) => { setSelectedTemplate(v); onTemplateChange && onTemplateChange(v); }}>
+          <Select value={selectedTemplate} onValueChange={(v: "soap" | "progress" | "discharge" | "goldilocks") => { setSelectedTemplate(v); onTemplateChange && onTemplateChange(v); }}>
             <SelectTrigger className="w-auto h-8 border-0 bg-transparent hover:bg-accent">
               <div className="flex items-center gap-2">
                 <span className="text-sm">📋</span>
