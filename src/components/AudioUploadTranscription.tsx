@@ -23,6 +23,7 @@ export function AudioUploadTranscription({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string>('');
+  const [processingStage, setProcessingStage] = useState<string>('');
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -54,6 +55,7 @@ export function AudioUploadTranscription({
     try {
       setIsUploading(true);
       setUploadProgress(0);
+      setProcessingStage('Preparing upload...');
 
       // Upload to Supabase Storage
       const fileName = sessionId 
@@ -61,6 +63,7 @@ export function AudioUploadTranscription({
         : `uploads/${Date.now()}-${selectedFile.name}`;
 
       console.log('📤 Uploading audio file:', fileName);
+      setProcessingStage('Uploading audio...');
 
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('audio-recordings')
@@ -73,6 +76,7 @@ export function AudioUploadTranscription({
 
       setUploadProgress(50);
       console.log('✅ Audio uploaded successfully');
+      setProcessingStage('Upload complete');
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
@@ -96,6 +100,7 @@ export function AudioUploadTranscription({
       toast.error('Failed to upload audio file');
       setIsUploading(false);
       setUploadProgress(0);
+      setProcessingStage('');
     }
   };
 
@@ -103,8 +108,10 @@ export function AudioUploadTranscription({
     try {
       setIsTranscribing(true);
       setUploadProgress(70);
+      setProcessingStage('Preparing audio for transcription...');
 
       console.log('🎙️ Starting transcription...');
+      console.log('File size:', (audioFile.size / 1024 / 1024).toFixed(2), 'MB');
 
       // Convert audio file to base64
       const reader = new FileReader();
@@ -120,8 +127,9 @@ export function AudioUploadTranscription({
       });
 
       setUploadProgress(80);
+      setProcessingStage('Transcribing audio...');
 
-      // Call transcription edge function (you'll need to create this)
+      // Call transcription edge function
       const { data, error } = await supabase.functions.invoke('transcribe-audio', {
         body: {
           audio: base64Audio,
@@ -132,6 +140,7 @@ export function AudioUploadTranscription({
       if (error) throw error;
 
       setUploadProgress(100);
+      setProcessingStage('Complete!');
 
       const transcriptText = data?.text || '';
       setTranscript(transcriptText);
@@ -142,12 +151,16 @@ export function AudioUploadTranscription({
 
       toast.success('Audio transcribed successfully!');
       console.log('✅ Transcription complete');
+      console.log('Transcript length:', transcriptText.length, 'characters');
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Transcription error:', error);
-      toast.error('Failed to transcribe audio. Please try again.');
+      const errorMessage = error?.message || 'Failed to transcribe audio';
+      toast.error(errorMessage);
+      setProcessingStage('Error occurred');
     } finally {
       setIsTranscribing(false);
+      setTimeout(() => setProcessingStage(''), 2000);
     }
   };
 
@@ -219,14 +232,14 @@ export function AudioUploadTranscription({
             </Button>
 
             {(isUploading || isTranscribing) && (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-muted-foreground">
-                    {isUploading ? 'Uploading...' : 'Transcribing...'}
+                    {processingStage || (isUploading ? 'Uploading...' : 'Transcribing...')}
                   </span>
                   <span className="font-medium">{uploadProgress}%</span>
                 </div>
-                <Progress value={uploadProgress} className="h-0.5" />
+                <Progress value={uploadProgress} className="h-1" />
               </div>
             )}
 

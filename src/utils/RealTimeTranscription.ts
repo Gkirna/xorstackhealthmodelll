@@ -65,9 +65,13 @@ export class RealTimeTranscription {
       let finalTranscript = '';
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
+        const result = event.results[i];
+        const transcript = result[0].transcript;
+        const confidence = result[0].confidence;
         
-        if (event.results[i].isFinal) {
+        console.log(`📝 Result ${i}: ${result.isFinal ? 'Final' : 'Interim'} (confidence: ${confidence?.toFixed(2) || 'N/A'})`);
+        
+        if (result.isFinal) {
           finalTranscript += transcript + ' ';
         } else {
           interimTranscript += transcript;
@@ -76,6 +80,7 @@ export class RealTimeTranscription {
 
       if (finalTranscript) {
         this.fullTranscript += finalTranscript;
+        console.log('✅ Final transcript chunk:', finalTranscript.trim());
         if (this.config.onResult) {
           this.config.onResult(finalTranscript.trim(), true);
         }
@@ -89,13 +94,15 @@ export class RealTimeTranscription {
     };
 
     this.recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
+      console.error('❌ Speech recognition error:', event.error);
       
       let errorMessage = 'Transcription error occurred';
+      let shouldRestart = false;
       
       switch (event.error) {
         case 'no-speech':
-          errorMessage = 'No speech detected. Please try again.';
+          errorMessage = 'No speech detected. Listening...';
+          shouldRestart = true;
           break;
         case 'audio-capture':
           errorMessage = 'Microphone not accessible. Please check permissions.';
@@ -105,9 +112,13 @@ export class RealTimeTranscription {
           break;
         case 'network':
           errorMessage = 'Network error. Please check your connection.';
+          shouldRestart = true;
           break;
         case 'aborted':
           errorMessage = 'Transcription aborted.';
+          break;
+        case 'service-not-allowed':
+          errorMessage = 'Speech recognition service not allowed.';
           break;
         default:
           errorMessage = `Transcription error: ${event.error}`;
@@ -117,14 +128,19 @@ export class RealTimeTranscription {
         this.config.onError(errorMessage);
       }
 
-      // Auto-restart on certain errors
-      if (this.config.continuous && ['no-speech', 'audio-capture'].includes(event.error)) {
+      // Auto-restart on certain errors in continuous mode
+      if (this.config.continuous && shouldRestart && this.isListening) {
+        console.log('⏳ Auto-restarting recognition in 500ms...');
         setTimeout(() => {
           if (this.isListening) {
-            console.log('Auto-restarting recognition...');
-            this.recognition.start();
+            try {
+              console.log('🔄 Restarting recognition...');
+              this.recognition.start();
+            } catch (e) {
+              console.error('Failed to restart:', e);
+            }
           }
-        }, 1000);
+        }, 500);
       }
     };
 

@@ -29,22 +29,41 @@ const SessionRecord = () => {
   const updateSession = useUpdateSession();
   const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript } = useTranscription(id || '');
   
+  // State
+  const [transcript, setTranscript] = useState("");
+  const [context, setContext] = useState("");
+  const [generatedNote, setGeneratedNote] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState<"soap" | "progress" | "discharge" | "goldilocks">("soap");
+  const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null);
+  const [isAutoPipelineRunning, setIsAutoPipelineRunning] = useState(false);
+  
+  // Info bar state
+  const [patientName, setPatientName] = useState("");
+  const [sessionDate, setSessionDate] = useState(new Date());
+  const [language, setLanguage] = useState("en");
+  const [microphone, setMicrophone] = useState("default");
+  const [elapsedTime, setElapsedTime] = useState("00:00:00");
+  const [recordingMode, setRecordingMode] = useState("transcribing");
+  const [activeTab, setActiveTab] = useState<string>("note");
+  
   // Real-time audio recording & transcription
   const {
     startRecording,
     isTranscribing,
+    audioLevel,
   } = useAudioRecording({
     onTranscriptUpdate: (text, isFinal) => {
       if (isFinal) {
         // Save final chunks to DB and append to local transcript
         addTranscriptChunk(text, 'provider');
         setTranscript(prev => prev ? `${prev}\n\n${text}` : text);
-      } else {
-        // Show interim updates in the editor without saving
-        // We will append interim visually in the panel instead of mutating saved transcript
-        // For now, keep the previous behavior minimal (no-op)
       }
     },
+    onError: (error) => {
+      console.error('Recording error:', error);
+      toast.error(error);
+    },
+    deviceId: microphone !== 'default' ? microphone : undefined,
   });
 
   // Start mic transcription if empty; otherwise immediately generate note
@@ -89,15 +108,6 @@ const SessionRecord = () => {
       setActiveTab('transcript');
     }
   };
-  
-  // State
-  const [transcript, setTranscript] = useState("");
-  const [context, setContext] = useState("");
-  const [generatedNote, setGeneratedNote] = useState("");
-  const [selectedTemplate, setSelectedTemplate] = useState<"soap" | "progress" | "discharge" | "goldilocks">("soap");
-  const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null);
-  const [isAutoPipelineRunning, setIsAutoPipelineRunning] = useState(false);
-  
   // Undo/Redo state
   const [transcriptHistory, setTranscriptHistory] = useState<string[]>([""]);
   const [transcriptHistoryIndex, setTranscriptHistoryIndex] = useState(0);
@@ -105,15 +115,6 @@ const SessionRecord = () => {
   const [contextHistoryIndex, setContextHistoryIndex] = useState(0);
   const [noteHistory, setNoteHistory] = useState<string[]>([""]);
   const [noteHistoryIndex, setNoteHistoryIndex] = useState(0);
-  
-  // Info bar state
-  const [patientName, setPatientName] = useState("");
-  const [sessionDate, setSessionDate] = useState(new Date());
-  const [language, setLanguage] = useState("en");
-  const [microphone, setMicrophone] = useState("default");
-  const [elapsedTime, setElapsedTime] = useState("00:00:00");
-  const [recordingMode, setRecordingMode] = useState("transcribing");
-  const [activeTab, setActiveTab] = useState<string>("note");
   
   const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
   const timerRef = useRef<number | null>(null);
