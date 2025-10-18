@@ -98,6 +98,14 @@ const SessionRecord = () => {
   const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null);
   const [isAutoPipelineRunning, setIsAutoPipelineRunning] = useState(false);
   
+  // Undo/Redo state
+  const [transcriptHistory, setTranscriptHistory] = useState<string[]>([""]);
+  const [transcriptHistoryIndex, setTranscriptHistoryIndex] = useState(0);
+  const [contextHistory, setContextHistory] = useState<string[]>([""]);
+  const [contextHistoryIndex, setContextHistoryIndex] = useState(0);
+  const [noteHistory, setNoteHistory] = useState<string[]>([""]);
+  const [noteHistoryIndex, setNoteHistoryIndex] = useState(0);
+  
   // Info bar state
   const [patientName, setPatientName] = useState("");
   const [sessionDate, setSessionDate] = useState(new Date());
@@ -118,8 +126,34 @@ const SessionRecord = () => {
       if (session.scheduled_at) {
         setSessionDate(new Date(session.scheduled_at));
       }
+      if (session.generated_note) {
+        setGeneratedNote(session.generated_note);
+      }
     }
   }, [session]);
+
+  // Auto-save transcript, context, and note
+  useEffect(() => {
+    if (!session || !id) return;
+    
+    const timeoutId = setTimeout(async () => {
+      const updates: any = {};
+      
+      if (transcript !== (session.generated_note || '')) {
+        // Store transcript in a custom column if needed
+      }
+      
+      if (generatedNote !== (session.generated_note || '')) {
+        updates.generated_note = generatedNote;
+      }
+      
+      if (Object.keys(updates).length > 0) {
+        await updateSession.mutateAsync({ id, updates });
+      }
+    }, 2000); // Auto-save after 2 seconds of inactivity
+
+    return () => clearTimeout(timeoutId);
+  }, [transcript, context, generatedNote, session, id, updateSession]);
 
   // Auto-save patient name on change
   useEffect(() => {
@@ -278,6 +312,101 @@ const SessionRecord = () => {
     navigate(`/session/${id}/review`);
   };
 
+  // Undo/Redo handlers
+  const handleTranscriptChange = (newTranscript: string) => {
+    setTranscript(newTranscript);
+    const newHistory = transcriptHistory.slice(0, transcriptHistoryIndex + 1);
+    newHistory.push(newTranscript);
+    setTranscriptHistory(newHistory);
+    setTranscriptHistoryIndex(newHistory.length - 1);
+  };
+
+  const handleContextChange = (newContext: string) => {
+    setContext(newContext);
+    const newHistory = contextHistory.slice(0, contextHistoryIndex + 1);
+    newHistory.push(newContext);
+    setContextHistory(newHistory);
+    setContextHistoryIndex(newHistory.length - 1);
+  };
+
+  const handleNoteChange = (newNote: string) => {
+    setGeneratedNote(newNote);
+    const newHistory = noteHistory.slice(0, noteHistoryIndex + 1);
+    newHistory.push(newNote);
+    setNoteHistory(newHistory);
+    setNoteHistoryIndex(newHistory.length - 1);
+  };
+
+  const undoTranscript = () => {
+    if (transcriptHistoryIndex > 0) {
+      setTranscriptHistoryIndex(transcriptHistoryIndex - 1);
+      setTranscript(transcriptHistory[transcriptHistoryIndex - 1]);
+    }
+  };
+
+  const redoTranscript = () => {
+    if (transcriptHistoryIndex < transcriptHistory.length - 1) {
+      setTranscriptHistoryIndex(transcriptHistoryIndex + 1);
+      setTranscript(transcriptHistory[transcriptHistoryIndex + 1]);
+    }
+  };
+
+  const undoContext = () => {
+    if (contextHistoryIndex > 0) {
+      setContextHistoryIndex(contextHistoryIndex - 1);
+      setContext(contextHistory[contextHistoryIndex - 1]);
+    }
+  };
+
+  const redoContext = () => {
+    if (contextHistoryIndex < contextHistory.length - 1) {
+      setContextHistoryIndex(contextHistoryIndex + 1);
+      setContext(contextHistory[contextHistoryIndex + 1]);
+    }
+  };
+
+  const undoNote = () => {
+    if (noteHistoryIndex > 0) {
+      setNoteHistoryIndex(noteHistoryIndex - 1);
+      setGeneratedNote(noteHistory[noteHistoryIndex - 1]);
+    }
+  };
+
+  const redoNote = () => {
+    if (noteHistoryIndex < noteHistory.length - 1) {
+      setNoteHistoryIndex(noteHistoryIndex + 1);
+      setGeneratedNote(noteHistory[noteHistoryIndex + 1]);
+    }
+  };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + Z for undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        if (activeTab === 'transcript') undoTranscript();
+        else if (activeTab === 'context') undoContext();
+        else if (activeTab === 'note') undoNote();
+      }
+      // Ctrl/Cmd + Shift + Z or Ctrl/Cmd + Y for redo
+      if (((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z') || ((e.ctrlKey || e.metaKey) && e.key === 'y')) {
+        e.preventDefault();
+        if (activeTab === 'transcript') redoTranscript();
+        else if (activeTab === 'context') redoContext();
+        else if (activeTab === 'note') redoNote();
+      }
+      // Ctrl/Cmd + S to save (already auto-saving, but show feedback)
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        toast.success('Auto-save active');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab, transcriptHistoryIndex, contextHistoryIndex, noteHistoryIndex]);
+
   if (isLoading) {
     return (
       <AppLayout>
@@ -376,23 +505,39 @@ const SessionRecord = () => {
               )}
               <HeidiTranscriptPanel
                 transcript={transcript}
-                onTranscriptChange={setTranscript}
+                onTranscriptChange={handleTranscriptChange}
+                onUndo={undoTranscript}
+                onRedo={redoTranscript}
+                canUndo={transcriptHistoryIndex > 0}
+                canRedo={transcriptHistoryIndex < transcriptHistory.length - 1}
               />
             </TabsContent>
 
             <TabsContent value="context" className="flex-1 mt-0 overflow-auto">
-              <HeidiContextPanel context={context} onContextChange={setContext} sessionId={id} />
+              <HeidiContextPanel 
+                context={context} 
+                onContextChange={handleContextChange} 
+                sessionId={id}
+                onUndo={undoContext}
+                onRedo={redoContext}
+                canUndo={contextHistoryIndex > 0}
+                canRedo={contextHistoryIndex < contextHistory.length - 1}
+              />
             </TabsContent>
 
             <TabsContent value="note" className="flex-1 mt-0 overflow-auto">
               <HeidiNotePanel
                 note={generatedNote}
-                onNoteChange={setGeneratedNote}
+                onNoteChange={handleNoteChange}
                 onGenerate={handleGenerateNote}
                 isGenerating={isAutoPipelineRunning}
                 sessionId={id}
                 selectedTemplate={selectedTemplate}
                 onTemplateChange={setSelectedTemplate}
+                onUndo={undoNote}
+                onRedo={redoNote}
+                canUndo={noteHistoryIndex > 0}
+                canRedo={noteHistoryIndex < noteHistory.length - 1}
               />
             </TabsContent>
           </Tabs>

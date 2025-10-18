@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { message, context } = await req.json();
+    const { message, context, conversationHistory = [] } = await req.json();
 
     if (!message) {
       return new Response(
@@ -25,18 +25,30 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const systemPrompt = `You are Heidi, an intelligent AI medical assistant. You help healthcare providers with:
-- Clinical documentation and note generation
-- Medical coding suggestions
-- Patient context analysis
-- Transcription editing and improvements
-- General medical knowledge questions
+    const systemPrompt = `You are Heidi, an advanced AI medical assistant specializing in clinical documentation and healthcare support.
 
-You provide concise, accurate, and professional responses. When dealing with medical information, you prioritize accuracy and clinical relevance.`;
+Your capabilities:
+- Generate clinical notes (SOAP, progress notes, discharge summaries)
+- Extract and suggest medical codes (ICD-10, CPT)
+- Answer medical questions with evidence-based information
+- Provide clinical decision support
+- Assist with documentation tasks
+- Extract actionable tasks from conversations
+- Analyze transcripts and provide insights
+
+Guidelines:
+- Be concise, accurate, and professional
+- Use medical terminology appropriately
+- Maintain HIPAA compliance awareness
+- Provide evidence-based recommendations
+- Format responses clearly with bullet points or sections when appropriate
+- Always prioritize patient safety
+- If asked to generate notes, use proper clinical format`;
 
     const messages = [
       { role: "system", content: systemPrompt },
-      ...(context ? [{ role: "user", content: `Context: ${context}` }] : []),
+      ...(context ? [{ role: "system", content: `Current session context:\n${context.substring(0, 4000)}` }] : []),
+      ...conversationHistory,
       { role: "user", content: message }
     ];
 
@@ -50,6 +62,8 @@ You provide concise, accurate, and professional responses. When dealing with med
         model: "google/gemini-2.5-flash",
         messages,
         stream: true,
+        temperature: 0.7,
+        max_tokens: 2000,
       }),
     });
 
@@ -75,7 +89,12 @@ You provide concise, accurate, and professional responses. When dealing with med
     }
 
     return new Response(response.body, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+      headers: { 
+        ...corsHeaders, 
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
     });
   } catch (error) {
     console.error("Error in ask-heidi-assistant:", error);

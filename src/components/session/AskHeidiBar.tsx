@@ -33,7 +33,10 @@ export function AskHeidiBar({ sessionId, transcript, context }: AskHeidiBarProps
 
   const streamChat = async (userMessage: string) => {
     try {
-      const contextInfo = [transcript, context].filter(Boolean).join('\n\n');
+      const contextInfo = [
+        transcript ? `Transcript: ${transcript.substring(0, 2500)}` : '',
+        context ? `Context: ${context.substring(0, 1500)}` : ''
+      ].filter(Boolean).join('\n\n');
       
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-heidi-assistant`, {
         method: 'POST',
@@ -43,17 +46,20 @@ export function AskHeidiBar({ sessionId, transcript, context }: AskHeidiBarProps
         },
         body: JSON.stringify({ 
           message: userMessage,
-          context: contextInfo 
+          context: contextInfo,
+          conversationHistory: messages.slice(-6) // Last 3 exchanges
         }),
       });
 
       if (!response.ok) {
         if (response.status === 429) {
           toast.error("Rate limit exceeded. Please try again later.");
+          setMessages(prev => prev.slice(0, -1));
           return;
         }
         if (response.status === 402) {
-          toast.error("Payment required. Please add funds to your workspace.");
+          toast.error("AI credits depleted. Please add credits to your workspace.");
+          setMessages(prev => prev.slice(0, -1));
           return;
         }
         throw new Error('Failed to get response');
@@ -65,6 +71,9 @@ export function AskHeidiBar({ sessionId, transcript, context }: AskHeidiBarProps
       const decoder = new TextDecoder();
       let assistantMessage = '';
       let buffer = '';
+
+      // Add empty assistant message placeholder
+      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
 
       while (true) {
         const { done, value } = await reader.read();
@@ -88,23 +97,51 @@ export function AskHeidiBar({ sessionId, transcript, context }: AskHeidiBarProps
             if (content) {
               assistantMessage += content;
               setMessages(prev => {
-                const last = prev[prev.length - 1];
-                if (last?.role === 'assistant') {
-                  return prev.map((m, i) => 
-                    i === prev.length - 1 ? { ...m, content: assistantMessage } : m
-                  );
-                }
-                return [...prev, { role: 'assistant', content: assistantMessage }];
+                const newMessages = [...prev];
+                newMessages[newMessages.length - 1] = {
+                  role: 'assistant',
+                  content: assistantMessage
+                };
+                return newMessages;
               });
             }
           } catch (e) {
-            console.error('Parse error:', e);
+            // Ignore parse errors for incomplete JSON chunks
+          }
+        }
+      }
+
+      // Process any remaining buffer
+      if (buffer.trim()) {
+        for (let line of buffer.split('\n')) {
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          if (line.startsWith(':') || line.trim() === '') continue;
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              assistantMessage += content;
+              setMessages(prev => {
+                const newMessages = [...prev];
+                newMessages[newMessages.length - 1] = {
+                  role: 'assistant',
+                  content: assistantMessage
+                };
+                return newMessages;
+              });
+            }
+          } catch (e) {
+            // Ignore final parse errors
           }
         }
       }
     } catch (error) {
       console.error('Stream error:', error);
       toast.error('Failed to get response from Heidi');
+      setMessages(prev => prev.filter(m => m.content !== ''));
     }
   };
 

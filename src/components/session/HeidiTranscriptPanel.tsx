@@ -6,11 +6,19 @@ import { toast } from "sonner";
 interface HeidiTranscriptPanelProps {
   transcript: string;
   onTranscriptChange: (text: string) => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 export function HeidiTranscriptPanel({
   transcript,
   onTranscriptChange,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
 }: HeidiTranscriptPanelProps) {
   const handleCopy = () => {
     if (transcript) {
@@ -19,17 +27,50 @@ export function HeidiTranscriptPanel({
     }
   };
 
+  const wordCount = transcript.trim().split(/\s+/).filter(Boolean).length;
+  const charCount = transcript.length;
+
   return (
     <div className="h-full flex flex-col">
-      <div className="flex justify-end mb-4">
-        <Button 
-          variant="ghost" 
-          onClick={handleCopy}
-          disabled={!transcript}
-          className="text-sm"
-        >
-          Copy
-        </Button>
+      <div className="flex justify-between items-center mb-4">
+        <div className="text-xs text-muted-foreground">
+          {wordCount} words · {charCount} characters
+        </div>
+        <div className="flex gap-1">
+          {onUndo && (
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={onUndo}
+              disabled={!canUndo}
+              className="text-sm"
+              title="Undo (Ctrl+Z)"
+            >
+              Undo
+            </Button>
+          )}
+          {onRedo && (
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={onRedo}
+              disabled={!canRedo}
+              className="text-sm"
+              title="Redo (Ctrl+Shift+Z)"
+            >
+              Redo
+            </Button>
+          )}
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={handleCopy}
+            disabled={!transcript}
+            className="text-sm"
+          >
+            Copy
+          </Button>
+        </div>
       </div>
       <Textarea
         value={transcript}

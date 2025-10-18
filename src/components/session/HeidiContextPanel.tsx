@@ -15,6 +15,10 @@ interface HeidiContextPanelProps {
   context: string;
   onContextChange: (text: string) => void;
   sessionId?: string;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 interface UploadedFile {
@@ -27,6 +31,10 @@ export function HeidiContextPanel({
   context,
   onContextChange,
   sessionId,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
 }: HeidiContextPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
@@ -117,12 +125,30 @@ export function HeidiContextPanel({
         <Button variant="ghost" size="icon" className="h-8 w-8">
           <ChevronDown className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <Undo className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <Redo className="h-4 w-4" />
-        </Button>
+          {onUndo && (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8"
+              onClick={onUndo}
+              disabled={!canUndo}
+              title="Undo (Ctrl+Z)"
+            >
+              <Undo className="h-4 w-4" />
+            </Button>
+          )}
+          {onRedo && (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8"
+              onClick={onRedo}
+              disabled={!canRedo}
+              title="Redo (Ctrl+Shift+Z)"
+            >
+              <Redo className="h-4 w-4" />
+            </Button>
+          )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="h-8">

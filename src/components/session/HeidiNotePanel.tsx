@@ -25,9 +25,13 @@ interface HeidiNotePanelProps {
   sessionId?: string;
   selectedTemplate?: "soap" | "progress" | "discharge" | "goldilocks";
   onTemplateChange?: (value: "soap" | "progress" | "discharge" | "goldilocks") => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
-export function HeidiNotePanel({ note, onNoteChange, onGenerate, isGenerating, sessionId, selectedTemplate: selectedTemplateProp, onTemplateChange }: HeidiNotePanelProps) {
+export function HeidiNotePanel({ note, onNoteChange, onGenerate, isGenerating, sessionId, selectedTemplate: selectedTemplateProp, onTemplateChange, onUndo, onRedo, canUndo = false, canRedo = false }: HeidiNotePanelProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<"soap" | "progress" | "discharge" | "goldilocks">(selectedTemplateProp || "goldilocks");
   const [spellcheckEnabled, setSpellcheckEnabled] = useState(true);
@@ -145,12 +149,30 @@ export function HeidiNotePanel({ note, onNoteChange, onGenerate, isGenerating, s
             <ChevronDown className="h-4 w-4" />
           </Button>
           <div className="w-px h-4 bg-border" />
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <Undo className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <Redo className="h-4 w-4" />
-          </Button>
+          {onUndo && (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8"
+              onClick={onUndo}
+              disabled={!canUndo}
+              title="Undo (Ctrl+Z)"
+            >
+              <Undo className="h-4 w-4" />
+            </Button>
+          )}
+          {onRedo && (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8"
+              onClick={onRedo}
+              disabled={!canRedo}
+              title="Redo (Ctrl+Shift+Z)"
+            >
+              <Redo className="h-4 w-4" />
+            </Button>
+          )}
           <div className="w-px h-4 bg-border" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

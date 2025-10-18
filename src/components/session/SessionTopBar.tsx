@@ -1,7 +1,8 @@
 import { Trash2, Calendar, Languages, Clock, Mic, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useMicrophoneSelection } from "@/hooks/useMicrophoneSelection";
 import {
   Select,
   SelectContent,
@@ -56,6 +57,22 @@ export function SessionTopBar({
 }: SessionTopBarProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(patientName);
+  
+  const { 
+    microphones, 
+    selectedMicId, 
+    setSelectedMicId, 
+    audioLevels, 
+    isMonitoring, 
+    startMonitoring, 
+    stopMonitoring 
+  } = useMicrophoneSelection();
+
+  // Start monitoring audio levels on mount
+  useEffect(() => {
+    startMonitoring();
+    return () => stopMonitoring();
+  }, []);
 
   const handleNameSubmit = () => {
     onPatientNameChange(tempName);
@@ -172,16 +189,25 @@ export function SessionTopBar({
           </div>
 
           {/* Microphone with level bars */}
-          <Select value={microphone} onValueChange={onMicrophoneChange}>
+          <Select 
+            value={selectedMicId} 
+            onValueChange={(value) => {
+              setSelectedMicId(value);
+              onMicrophoneChange(value);
+            }}
+          >
             <SelectTrigger className="h-8 w-auto gap-2 border-0 bg-transparent hover:bg-accent">
               <div className="flex items-center gap-2">
                 <Mic className="h-4 w-4 text-muted-foreground" />
                 <div className="flex items-center gap-0.5">
-                  {[...Array(5)].map((_, i) => (
+                  {audioLevels.map((level, i) => (
                     <div
                       key={i}
-                      className="w-1 rounded-full bg-green-500"
-                      style={{ height: `${8 + Math.random() * 4}px` }}
+                      className="w-1 rounded-full bg-green-500 transition-all duration-100"
+                      style={{ 
+                        height: `${Math.max(4, (level / 100) * 16)}px`,
+                        opacity: isMonitoring ? 1 : 0.3
+                      }}
                     />
                   ))}
                 </div>
@@ -189,9 +215,15 @@ export function SessionTopBar({
               </div>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="default">Default Microphone</SelectItem>
-              <SelectItem value="headset">Headset Microphone</SelectItem>
-              <SelectItem value="external">External USB Mic</SelectItem>
+              {microphones.length > 0 ? (
+                microphones.map((mic) => (
+                  <SelectItem key={mic.deviceId} value={mic.deviceId}>
+                    {mic.label}
+                  </SelectItem>
+                ))
+              ) : (
+                <SelectItem value="default">Default Microphone</SelectItem>
+              )}
             </SelectContent>
           </Select>
         </div>
