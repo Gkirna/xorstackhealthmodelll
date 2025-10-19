@@ -5,20 +5,20 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { Mic, Square, Play, Pause, Zap, Volume2, Download, Trash2 } from 'lucide-react';
 import { useAudioRecording } from '@/hooks/useAudioRecording';
+import { useTranscription } from '@/hooks/useTranscription';
+import { toast } from 'sonner';
 
 interface DictatingPanelProps {
   sessionId?: string;
-  onTranscriptUpdate?: (transcript: string, isFinal: boolean) => void;
-  onFinalTranscriptChunk?: (text: string) => void;
-  onRecordingComplete?: (audioBlob: Blob, audioUrl?: string) => void;
+  deviceId?: string;
 }
 
 export function DictatingPanel({
   sessionId,
-  onTranscriptUpdate,
-  onFinalTranscriptChunk,
-  onRecordingComplete,
+  deviceId,
 }: DictatingPanelProps) {
+  const { addTranscriptChunk } = useTranscription(sessionId || '');
+
   const {
     isRecording,
     isPaused,
@@ -38,26 +38,27 @@ export function DictatingPanel({
     formatDuration,
   } = useAudioRecording({
     onTranscriptUpdate: (text, isFinal) => {
-      console.log('📝 Dictation update:', { length: text.length, isFinal });
-      if (onTranscriptUpdate) {
-        onTranscriptUpdate(text, isFinal);
-      }
+      console.log('📝 Real-time dictation:', { length: text.length, isFinal, preview: text.substring(0, 50) });
     },
-    onFinalTranscriptChunk: (text) => {
-      console.log('✅ Final dictation chunk:', text.substring(0, 50), '...');
-      if (onFinalTranscriptChunk) {
-        onFinalTranscriptChunk(text);
+    onFinalTranscriptChunk: async (text) => {
+      console.log('✅ Saving final dictation chunk to DB:', text.substring(0, 50), '...');
+      if (sessionId) {
+        await addTranscriptChunk(text, 'provider');
+        toast.success(`Saved ${text.split(/\s+/).length} words`);
       }
     },
     onRecordingComplete: (blob, url) => {
-      console.log('🎙️ Recording complete:', {
+      console.log('🎙️ Dictation recording complete:', {
         size: (blob.size / 1024).toFixed(2) + ' KB',
         duration: formatDuration(duration)
       });
-      if (onRecordingComplete) {
-        onRecordingComplete(blob, url);
-      }
+      toast.success('Recording saved successfully');
     },
+    onError: (error) => {
+      console.error('❌ Dictation error:', error);
+      toast.error(error);
+    },
+    deviceId: deviceId !== 'default' ? deviceId : undefined,
   });
 
   const handleDownload = () => {

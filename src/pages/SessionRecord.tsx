@@ -46,40 +46,41 @@ const SessionRecord = () => {
   const [recordingMode, setRecordingMode] = useState("transcribing");
   const [activeTab, setActiveTab] = useState<string>("note");
   
-  // Real-time audio recording & transcription
-  const {
-    startRecording,
-    isTranscribing,
-    audioLevel,
-  } = useAudioRecording({
-    onTranscriptUpdate: (text, isFinal) => {
-      if (isFinal) {
-        // Save final chunks to DB and append to local transcript
-        addTranscriptChunk(text, 'provider');
-        setTranscript(prev => prev ? `${prev}\n\n${text}` : text);
-      }
-    },
-    onError: (error) => {
-      console.error('Recording error:', error);
-      toast.error(error);
-    },
-    deviceId: microphone !== 'default' ? microphone : undefined,
-  });
+  // Load existing transcripts on mount
+  useEffect(() => {
+    if (id) {
+      loadTranscripts();
+    }
+  }, [id, loadTranscripts]);
 
-  // Start mic transcription if empty; otherwise immediately generate note
+  // Sync transcript from DB chunks
+  useEffect(() => {
+    const fullTranscript = getFullTranscript();
+    if (fullTranscript && fullTranscript !== transcript) {
+      setTranscript(fullTranscript);
+    }
+  }, [transcriptChunks]);
+
+  // Real-time audio recording & transcription - not initialized here
+  // Will be initialized in DictatingPanel component
+
+  // Start session workflow
   const handleStartTranscribing = async () => {
     if (recordingMode === 'upload') {
-      toast.info('Upload flow coming soon. Please use Dictating or Transcribing for now.');
+      // Switch to transcript view for upload mode
+      setActiveTab('transcript');
+      toast.info('Upload your audio file to begin transcription');
       return;
     }
 
     if (recordingMode === 'dictating') {
-      // Switch to transcript view and start recording
+      // Switch to transcript view - DictatingPanel will handle recording
       setActiveTab('transcript');
-      startRecording();
+      toast.info('Click the microphone button to start dictating');
       return;
     }
 
+    // Transcribing mode - start recording immediately
     const hasManualInput = transcript.trim().length > 0 || context.trim().length > 0;
     if (hasManualInput) {
       if (!orchestratorRef.current || !id) return;
@@ -99,7 +100,7 @@ const SessionRecord = () => {
       return;
     }
     setActiveTab('transcript');
-    startRecording();
+    toast.info('Click the microphone button to start recording');
   };
 
   const handleRecordingModeChange = (mode: string) => {
@@ -492,16 +493,12 @@ const SessionRecord = () => {
               {recordingMode === 'dictating' && (
                 <DictatingPanel
                   sessionId={id}
-                  onTranscriptUpdate={(t, isFinal) => {
-                    if (isFinal) setTranscript(prev => prev ? `${prev}\n\n${t}` : t);
-                  }}
-                  onFinalTranscriptChunk={(t) => setTranscript(prev => prev ? `${prev}\n\n${t}` : t)}
+                  deviceId={microphone}
                 />
               )}
               {recordingMode === 'upload' && (
                 <AudioUploadTranscription
                   sessionId={id}
-                  onTranscriptGenerated={(t) => setTranscript(prev => prev ? `${prev}\n\n${t}` : t)}
                 />
               )}
               <HeidiTranscriptPanel

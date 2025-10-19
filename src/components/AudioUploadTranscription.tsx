@@ -5,18 +5,17 @@ import { Upload, FileAudio, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Progress } from '@/components/ui/progress';
+import { useTranscription } from '@/hooks/useTranscription';
 
 interface AudioUploadTranscriptionProps {
   sessionId?: string;
-  onTranscriptGenerated?: (transcript: string) => void;
-  onAudioUploaded?: (audioUrl: string) => void;
 }
 
 export function AudioUploadTranscription({
   sessionId,
-  onTranscriptGenerated,
-  onAudioUploaded,
 }: AudioUploadTranscriptionProps) {
+  const { addTranscriptChunk } = useTranscription(sessionId || '');
+  
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -84,16 +83,13 @@ export function AudioUploadTranscription({
         .getPublicUrl(fileName);
 
       setAudioUrl(publicUrl);
-      
-      if (onAudioUploaded) {
-        onAudioUploaded(publicUrl);
-      }
+      console.log('✅ Audio available at:', publicUrl);
 
       setUploadProgress(60);
       setIsUploading(false);
 
       // Start transcription
-      await transcribeAudio(selectedFile);
+      await transcribeAudio(selectedFile, fileName);
 
     } catch (error) {
       console.error('❌ Upload error:', error);
@@ -104,13 +100,13 @@ export function AudioUploadTranscription({
     }
   };
 
-  const transcribeAudio = async (audioFile: File) => {
+  const transcribeAudio = async (audioFile: File, storagePath: string) => {
     try {
       setIsTranscribing(true);
       setUploadProgress(70);
       setProcessingStage('Preparing audio for transcription...');
 
-      console.log('🎙️ Starting transcription...');
+      console.log('🎙️ Starting real-time transcription...');
       console.log('File:', audioFile.name);
       console.log('Size:', (audioFile.size / 1024 / 1024).toFixed(2), 'MB');
       console.log('Type:', audioFile.type);
@@ -122,6 +118,7 @@ export function AudioUploadTranscription({
           if (e.lengthComputable) {
             const percentLoaded = Math.round((e.loaded / e.total) * 10);
             setUploadProgress(70 + percentLoaded);
+            setProcessingStage(`Reading audio: ${Math.round((e.loaded / e.total) * 100)}%`);
           }
         };
         reader.onload = () => {
@@ -138,8 +135,8 @@ export function AudioUploadTranscription({
       });
 
       setUploadProgress(80);
-      setProcessingStage('Sending to AI transcription service...');
-      console.log('📤 Calling transcription edge function...');
+      setProcessingStage('Sending to AI transcription engine...');
+      console.log('📤 Invoking transcription edge function...');
 
       // Call transcription edge function with timeout
       const timeoutPromise = new Promise((_, reject) =>
@@ -159,31 +156,36 @@ export function AudioUploadTranscription({
       ]) as any;
 
       if (error) {
-        console.error('❌ Edge function error:', error);
+        console.error('❌ Transcription edge function error:', error);
         throw error;
       }
 
-      setUploadProgress(95);
-      setProcessingStage('Processing transcript...');
+      setUploadProgress(90);
+      setProcessingStage('Processing AI response...');
 
       const transcriptText = data?.text || '';
       
       if (!transcriptText) {
-        throw new Error('No transcript received from service');
+        throw new Error('No transcript received from AI service');
       }
 
       setTranscript(transcriptText);
+      const wordCount = transcriptText.split(/\s+/).length;
+      
       console.log('✅ Transcription complete');
       console.log('Transcript length:', transcriptText.length, 'characters');
-      console.log('Word count:', transcriptText.split(/\s+/).length, 'words');
+      console.log('Word count:', wordCount, 'words');
 
-      if (onTranscriptGenerated) {
-        onTranscriptGenerated(transcriptText);
+      // Save transcript to database
+      if (sessionId) {
+        setProcessingStage('Saving transcript to database...');
+        await addTranscriptChunk(transcriptText, 'provider');
+        console.log('💾 Transcript saved to database');
       }
 
       setUploadProgress(100);
       setProcessingStage('Complete!');
-      toast.success(`Transcribed ${transcriptText.split(/\s+/).length} words successfully!`);
+      toast.success(`Successfully transcribed and saved ${wordCount} words!`);
 
     } catch (error: any) {
       console.error('❌ Transcription error:', error);
