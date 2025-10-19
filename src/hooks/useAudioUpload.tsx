@@ -131,31 +131,49 @@ export function useAudioUpload(options: AudioUploadOptions = {}) {
   const transcribeAudio = useCallback(async (audioUrl: string) => {
     try {
       console.log('🎯 Starting transcription for uploaded audio...');
+      setState(prev => ({ ...prev, uploadProgress: 70 }));
       
-      // Call the transcription API
-      const response = await fetch('/api/transcribe-audio', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          audioUrl,
-          sessionId,
-        }),
+      // Download the audio file to convert to base64
+      const audioResponse = await fetch(audioUrl);
+      const audioBlob = await audioResponse.blob();
+      
+      setState(prev => ({ ...prev, uploadProgress: 80 }));
+      
+      // Convert to base64
+      const reader = new FileReader();
+      const base64Audio = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const base64 = reader.result as string;
+          const base64Data = base64.split(',')[1];
+          resolve(base64Data);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(audioBlob);
       });
 
-      if (!response.ok) {
-        throw new Error(`Transcription failed: ${response.statusText}`);
-      }
+      setState(prev => ({ ...prev, uploadProgress: 85 }));
+      console.log('📤 Calling transcription edge function...');
 
-      const data = await response.json();
+      // Call Supabase edge function
+      const { data, error } = await supabase.functions.invoke('transcribe-audio', {
+        body: {
+          audio: base64Audio,
+          session_id: sessionId,
+        },
+      });
+
+      if (error) throw error;
+
+      setState(prev => ({ ...prev, uploadProgress: 100 }));
       
-      if (data.transcript) {
-        console.log('✅ Transcription completed:', data.transcript.substring(0, 100) + '...');
+      const transcriptText = data?.text || '';
+      
+      if (transcriptText) {
+        console.log('✅ Transcription completed:', transcriptText.substring(0, 100) + '...');
         toast.success('Transcription completed');
         
         if (onTranscriptGenerated) {
-          onTranscriptGenerated(data.transcript);
+          onTranscriptGenerated(transcriptText);
         }
       } else {
         throw new Error('No transcript received from server');

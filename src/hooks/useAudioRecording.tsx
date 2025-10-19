@@ -199,7 +199,8 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           chunksRef.current.push(event.data);
-          console.log(`📦 Audio chunk received: ${event.data.size} bytes`);
+          const totalSize = chunksRef.current.reduce((acc, chunk) => acc + chunk.size, 0);
+          console.log(`📦 Audio chunk received: ${event.data.size} bytes (Total: ${(totalSize / 1024).toFixed(2)} KB)`);
         }
       };
 

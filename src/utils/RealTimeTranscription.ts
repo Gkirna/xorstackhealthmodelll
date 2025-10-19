@@ -69,7 +69,7 @@ export class RealTimeTranscription {
         const transcript = result[0].transcript;
         const confidence = result[0].confidence;
         
-        console.log(`📝 Result ${i}: ${result.isFinal ? 'Final' : 'Interim'} (confidence: ${confidence?.toFixed(2) || 'N/A'})`);
+        console.log(`📝 Result ${i}: ${result.isFinal ? 'Final' : 'Interim'} (confidence: ${confidence?.toFixed(2) || 'N/A'}) - "${transcript.substring(0, 50)}..."`);
         
         if (result.isFinal) {
           finalTranscript += transcript + ' ';
@@ -79,14 +79,17 @@ export class RealTimeTranscription {
       }
 
       if (finalTranscript) {
-        this.fullTranscript += finalTranscript;
-        console.log('✅ Final transcript chunk:', finalTranscript.trim());
+        const trimmedFinal = finalTranscript.trim();
+        this.fullTranscript += (this.fullTranscript ? ' ' : '') + trimmedFinal;
+        console.log('✅ Final transcript chunk:', trimmedFinal);
+        console.log('📊 Total transcript length:', this.fullTranscript.length, 'characters');
         if (this.config.onResult) {
-          this.config.onResult(finalTranscript.trim(), true);
+          this.config.onResult(trimmedFinal, true);
         }
       }
 
       if (interimTranscript && this.config.onResult) {
+        console.log('⏳ Interim update:', interimTranscript.substring(0, 50), '...');
         this.config.onResult(interimTranscript, false);
       }
 

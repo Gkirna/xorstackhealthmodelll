@@ -111,56 +111,101 @@ export function AudioUploadTranscription({
       setProcessingStage('Preparing audio for transcription...');
 
       console.log('🎙️ Starting transcription...');
-      console.log('File size:', (audioFile.size / 1024 / 1024).toFixed(2), 'MB');
+      console.log('File:', audioFile.name);
+      console.log('Size:', (audioFile.size / 1024 / 1024).toFixed(2), 'MB');
+      console.log('Type:', audioFile.type);
 
-      // Convert audio file to base64
+      // Convert audio file to base64 in chunks for better performance
       const reader = new FileReader();
       const base64Audio = await new Promise<string>((resolve, reject) => {
+        reader.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const percentLoaded = Math.round((e.loaded / e.total) * 10);
+            setUploadProgress(70 + percentLoaded);
+          }
+        };
         reader.onload = () => {
           const base64 = reader.result as string;
-          // Remove data URL prefix
           const base64Data = base64.split(',')[1];
+          console.log('✅ Audio converted to base64:', (base64Data.length / 1024).toFixed(2), 'KB');
           resolve(base64Data);
         };
-        reader.onerror = reject;
+        reader.onerror = (error) => {
+          console.error('❌ FileReader error:', error);
+          reject(new Error('Failed to read audio file'));
+        };
         reader.readAsDataURL(audioFile);
       });
 
       setUploadProgress(80);
-      setProcessingStage('Transcribing audio...');
+      setProcessingStage('Sending to AI transcription service...');
+      console.log('📤 Calling transcription edge function...');
 
-      // Call transcription edge function
-      const { data, error } = await supabase.functions.invoke('transcribe-audio', {
+      // Call transcription edge function with timeout
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Transcription timeout - please try a smaller file')), 120000)
+      );
+
+      const transcriptionPromise = supabase.functions.invoke('transcribe-audio', {
         body: {
           audio: base64Audio,
           session_id: sessionId,
         },
       });
 
-      if (error) throw error;
+      const { data, error } = await Promise.race([
+        transcriptionPromise,
+        timeoutPromise,
+      ]) as any;
 
-      setUploadProgress(100);
-      setProcessingStage('Complete!');
+      if (error) {
+        console.error('❌ Edge function error:', error);
+        throw error;
+      }
+
+      setUploadProgress(95);
+      setProcessingStage('Processing transcript...');
 
       const transcriptText = data?.text || '';
+      
+      if (!transcriptText) {
+        throw new Error('No transcript received from service');
+      }
+
       setTranscript(transcriptText);
+      console.log('✅ Transcription complete');
+      console.log('Transcript length:', transcriptText.length, 'characters');
+      console.log('Word count:', transcriptText.split(/\s+/).length, 'words');
 
       if (onTranscriptGenerated) {
         onTranscriptGenerated(transcriptText);
       }
 
-      toast.success('Audio transcribed successfully!');
-      console.log('✅ Transcription complete');
-      console.log('Transcript length:', transcriptText.length, 'characters');
+      setUploadProgress(100);
+      setProcessingStage('Complete!');
+      toast.success(`Transcribed ${transcriptText.split(/\s+/).length} words successfully!`);
 
     } catch (error: any) {
       console.error('❌ Transcription error:', error);
-      const errorMessage = error?.message || 'Failed to transcribe audio';
+      let errorMessage = 'Failed to transcribe audio';
+      
+      if (error?.message?.includes('timeout')) {
+        errorMessage = 'Transcription timeout - file may be too large. Try a shorter recording.';
+      } else if (error?.message?.includes('network')) {
+        errorMessage = 'Network error - please check your connection and try again.';
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
       toast.error(errorMessage);
-      setProcessingStage('Error occurred');
+      setProcessingStage('Error: ' + errorMessage);
     } finally {
       setIsTranscribing(false);
-      setTimeout(() => setProcessingStage(''), 2000);
+      setTimeout(() => {
+        if (!transcript) {
+          setProcessingStage('');
+        }
+      }, 3000);
     }
   };
 

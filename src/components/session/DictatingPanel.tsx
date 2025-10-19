@@ -37,9 +37,27 @@ export function DictatingPanel({
     clearRecording,
     formatDuration,
   } = useAudioRecording({
-    onTranscriptUpdate,
-    onFinalTranscriptChunk,
-    onRecordingComplete,
+    onTranscriptUpdate: (text, isFinal) => {
+      console.log('📝 Dictation update:', { length: text.length, isFinal });
+      if (onTranscriptUpdate) {
+        onTranscriptUpdate(text, isFinal);
+      }
+    },
+    onFinalTranscriptChunk: (text) => {
+      console.log('✅ Final dictation chunk:', text.substring(0, 50), '...');
+      if (onFinalTranscriptChunk) {
+        onFinalTranscriptChunk(text);
+      }
+    },
+    onRecordingComplete: (blob, url) => {
+      console.log('🎙️ Recording complete:', {
+        size: (blob.size / 1024).toFixed(2) + ' KB',
+        duration: formatDuration(duration)
+      });
+      if (onRecordingComplete) {
+        onRecordingComplete(blob, url);
+      }
+    },
   });
 
   const handleDownload = () => {
