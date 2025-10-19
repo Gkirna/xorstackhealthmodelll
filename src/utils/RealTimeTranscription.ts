@@ -209,15 +209,29 @@ export class RealTimeTranscription {
   }
 
   public pause() {
-    if (this.isListening) {
-      this.recognition.stop();
-      this.isListening = false;
+    if (this.isListening && this.recognition) {
+      try {
+        console.log('⏸️ Pausing speech recognition');
+        this.recognition.abort(); // Use abort instead of stop to prevent auto-restart
+        this.isListening = false;
+      } catch (error) {
+        console.error('Error pausing recognition:', error);
+      }
     }
   }
 
   public resume() {
-    if (!this.isListening && this.isSupported) {
-      this.recognition.start();
+    if (!this.isListening && this.isSupported && this.recognition) {
+      try {
+        console.log('▶️ Resuming speech recognition');
+        this.recognition.start();
+        this.isListening = true;
+      } catch (error) {
+        console.error('Error resuming recognition:', error);
+        if (this.config.onError) {
+          this.config.onError('Failed to resume transcription');
+        }
+      }
     }
   }
 

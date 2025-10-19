@@ -276,27 +276,34 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   }, [state.transcriptSupported, onRecordingComplete, onError, sampleRate, deviceId]);
 
   const pauseRecording = useCallback(() => {
+    console.log('⏸️ Pause recording called, current state:', mediaRecorderRef.current?.state);
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.pause();
-      setState(prev => ({ ...prev, isPaused: true }));
+      setState(prev => ({ ...prev, isPaused: true, isTranscribing: false }));
       
       // Pause transcription
       if (transcriptionRef.current) {
+        console.log('⏸️ Pausing transcription engine');
         transcriptionRef.current.pause();
       }
       
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
       toast.info('Recording paused');
     }
   }, []);
 
   const resumeRecording = useCallback(() => {
+    console.log('▶️ Resume recording called, current state:', mediaRecorderRef.current?.state);
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
       mediaRecorderRef.current.resume();
-      setState(prev => ({ ...prev, isPaused: false }));
+      setState(prev => ({ ...prev, isPaused: false, isTranscribing: true }));
       
       // Resume transcription
       if (transcriptionRef.current) {
+        console.log('▶️ Resuming transcription engine');
         transcriptionRef.current.resume();
       }
       
@@ -309,14 +316,22 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   }, []);
 
   const stopRecording = useCallback(() => {
+    console.log('⏹️ Stop recording called, current state:', mediaRecorderRef.current?.state);
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
       setState(prev => ({ 
         ...prev, 
         isRecording: false, 
         isPaused: false,
+        isTranscribing: false,
         duration: 0 
       }));
+      
+      // Stop transcription
+      if (transcriptionRef.current) {
+        console.log('⏹️ Stopping transcription engine');
+        transcriptionRef.current.stop();
+      }
       
       if (timerRef.current) {
         clearInterval(timerRef.current);
