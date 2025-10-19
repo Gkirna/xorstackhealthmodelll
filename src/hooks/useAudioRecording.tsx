@@ -249,10 +249,13 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       console.log('🎙️ MediaRecorder started');
       
       // Start transcription
-      if (transcriptionRef.current && state.transcriptSupported) {
+      if (transcriptionRef.current && transcriptionRef.current.isBrowserSupported()) {
         console.log('🚀 Starting real-time transcription...');
         const started = transcriptionRef.current.start();
-        if (!started) {
+        if (started) {
+          setState(prev => ({ ...prev, isTranscribing: true }));
+          console.log('✅ Real-time transcription started successfully');
+        } else {
           console.warn('⚠️ Transcription failed to start');
           toast.warning('Real-time transcription not available. You can still record and transcribe later.');
         }

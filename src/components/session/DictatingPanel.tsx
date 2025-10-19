@@ -43,8 +43,13 @@ export function DictatingPanel({
     onFinalTranscriptChunk: async (text) => {
       console.log('✅ Saving final dictation chunk to DB:', text.substring(0, 50), '...');
       if (sessionId) {
-        await addTranscriptChunk(text, 'provider');
-        toast.success(`Saved ${text.split(/\s+/).length} words`);
+        try {
+          await addTranscriptChunk(text, 'provider');
+          toast.success(`Saved ${text.split(/\s+/).length} words`);
+        } catch (error) {
+          console.error('Failed to save transcript:', error);
+          toast.error('Failed to save transcript');
+        }
       }
     },
     onRecordingComplete: (blob, url) => {
