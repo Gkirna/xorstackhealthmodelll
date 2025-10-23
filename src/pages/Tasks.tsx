@@ -4,11 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Plus, Calendar as CalendarIcon, Clipboard, Check, Link2, MessageSquare, FileText, Sparkles, CalendarDays } from "lucide-react";
+import { Search, Plus, Calendar as CalendarIcon, Clipboard, Check, Link2, MessageSquare, FileText, Sparkles, CalendarDays, MoreVertical, Pencil, Trash2, X } from "lucide-react";
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -24,10 +23,17 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Calendar } from "@/components/ui/calendar";
-import { Label } from "@/components/ui/label";
-import { useTasks, useCreateTask, Task } from "@/hooks/useTasks";
-import { format } from "date-fns";
+import { useTasks, useCreateTask, useUpdateTask, useDeleteTask, Task } from "@/hooks/useTasks";
+import { format, formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 
 type CategoryType = 'Order' | 'Coordinate' | 'Communicate' | 'Document' | 'Action';
@@ -43,12 +49,15 @@ const CATEGORY_CONFIG: Record<CategoryType, { icon: any; color: string }> = {
 const Tasks = () => {
   const { data: tasks = [], isLoading } = useTasks();
   const createTask = useCreateTask();
+  const updateTask = useUpdateTask();
+  const deleteTask = useDeleteTask();
   
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterDate, setFilterDate] = useState<Date | undefined>();
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskCategory, setNewTaskCategory] = useState<CategoryType | "">("");
 
@@ -82,6 +91,28 @@ const Tasks = () => {
     setNewTaskTitle("");
     setNewTaskCategory("");
     setIsCreateTaskOpen(false);
+  };
+
+  const handleToggleComplete = async (task: Task) => {
+    const newStatus = task.status === 'completed' ? 'pending' : 'completed';
+    await updateTask.mutateAsync({
+      id: task.id,
+      updates: {
+        status: newStatus,
+      },
+    });
+  };
+
+  const handleUpdateCategory = async (taskId: string, category: CategoryType) => {
+    await updateTask.mutateAsync({
+      id: taskId,
+      updates: { category },
+    });
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    await deleteTask.mutateAsync(taskId);
+    setSelectedTask(null);
   };
 
   const getStatusLabel = (status: string) => {
@@ -239,7 +270,7 @@ const Tasks = () => {
           </Button>
         </div>
 
-        {/* Tasks Content */}
+        {/* Tasks Table */}
         {isLoading ? (
           <div className="flex items-center justify-center py-24">
             <p className="text-muted-foreground">Loading tasks...</p>
@@ -262,10 +293,102 @@ const Tasks = () => {
             </Button>
           </div>
         ) : (
-          <div className="space-y-2">
-            {filteredTasks.map((task) => (
-              <TaskRow key={task.id} task={task} />
-            ))}
+          <div className="rounded-lg border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[40%]">Task title</TableHead>
+                  <TableHead className="w-[20%]">Patient</TableHead>
+                  <TableHead className="w-[20%]">Category</TableHead>
+                  <TableHead className="w-[15%]">Created</TableHead>
+                  <TableHead className="w-[5%]"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredTasks.map((task) => (
+                  <TableRow key={task.id} className="cursor-pointer" onClick={() => setSelectedTask(task)}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={task.status === "completed"}
+                            onCheckedChange={() => handleToggleComplete(task)}
+                            className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
+                          />
+                        </div>
+                        <span className="font-medium">{task.title}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">-</TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      {task.category ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700"
+                            >
+                              {CATEGORY_CONFIG[task.category as CategoryType] && (
+                                <>
+                                  {(() => {
+                                    const Icon = CATEGORY_CONFIG[task.category as CategoryType].icon;
+                                    return <Icon className={cn("mr-1.5 h-3.5 w-3.5", CATEGORY_CONFIG[task.category as CategoryType].color)} />;
+                                  })()}
+                                </>
+                              )}
+                              {task.category}
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="bg-popover">
+                            {Object.entries(CATEGORY_CONFIG).map(([category, config]) => {
+                              const Icon = config.icon;
+                              return (
+                                <DropdownMenuItem
+                                  key={category}
+                                  onClick={() => handleUpdateCategory(task.id, category as CategoryType)}
+                                >
+                                  <Icon className={cn("mr-2 h-4 w-4", config.color)} />
+                                  <span>{category}</span>
+                                  {task.category === category && <Check className="ml-auto h-4 w-4" />}
+                                </DropdownMenuItem>
+                              );
+                            })}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {formatDistanceToNow(new Date(task.created_at), { addSuffix: true })}
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="bg-popover">
+                          <DropdownMenuItem onClick={() => setSelectedTask(task)}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit task
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteTask(task.id)}
+                            className="text-red-600 focus:text-red-600"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete task
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>
@@ -322,28 +445,95 @@ const Tasks = () => {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Task Detail Sheet */}
+      <Sheet open={!!selectedTask} onOpenChange={(open) => !open && setSelectedTask(null)}>
+        <SheetContent className="bg-background sm:max-w-md">
+          <div className="flex items-start justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold">Tasks</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Incomplete tasks will be archived after 30 days
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={() => setSelectedTask(null)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {selectedTask && (
+            <div className="space-y-6">
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Created {format(new Date(selectedTask.created_at), "dd/MM/yy h:mma")}
+                </p>
+                <h3 className="text-xl font-semibold mb-4">{selectedTask.title}</h3>
+              </div>
+
+              <div className="space-y-3">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700"
+                    >
+                      {selectedTask.category && CATEGORY_CONFIG[selectedTask.category as CategoryType] && (
+                        <>
+                          {(() => {
+                            const Icon = CATEGORY_CONFIG[selectedTask.category as CategoryType].icon;
+                            return <Icon className={cn("mr-1.5 h-3.5 w-3.5", CATEGORY_CONFIG[selectedTask.category as CategoryType].color)} />;
+                          })()}
+                        </>
+                      )}
+                      {selectedTask.category || "Select category"}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="bg-popover">
+                    {Object.entries(CATEGORY_CONFIG).map(([category, config]) => {
+                      const Icon = config.icon;
+                      return (
+                        <DropdownMenuItem
+                          key={category}
+                          onClick={() => handleUpdateCategory(selectedTask.id, category as CategoryType)}
+                        >
+                          <Icon className={cn("mr-2 h-4 w-4", config.color)} />
+                          <span>{category}</span>
+                          {selectedTask.category === category && <Check className="ml-auto h-4 w-4" />}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <Button
+                  className="w-full bg-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive))]/90 text-white"
+                  onClick={() => handleToggleComplete(selectedTask)}
+                >
+                  <Check className="mr-2 h-4 w-4" />
+                  {selectedTask.status === 'completed' ? 'Mark as incomplete' : 'Mark as complete'}
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+                  onClick={() => handleDeleteTask(selectedTask.id)}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete task
+                </Button>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </AppLayout>
   );
 };
-
-// Task Row Component
-function TaskRow({ task }: { task: Task }) {
-  return (
-    <div className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
-      <Checkbox checked={task.status === "completed"} />
-      <div className="flex-1">
-        <p className="font-medium text-sm">{task.title}</p>
-      </div>
-      {task.category && CATEGORY_CONFIG[task.category as CategoryType] && (
-        <Badge variant="secondary" className="bg-blue-100 text-blue-700">
-          {task.category}
-        </Badge>
-      )}
-      <span className="text-xs text-muted-foreground">
-        {format(new Date(task.created_at), "MMM dd")}
-      </span>
-    </div>
-  );
-}
 
 export default Tasks;
