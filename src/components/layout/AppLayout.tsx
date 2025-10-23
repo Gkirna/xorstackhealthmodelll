@@ -14,12 +14,13 @@ export function AppLayout({ children }: AppLayoutProps) {
       <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
         <div className="flex-1 flex flex-col w-full">
-          <main className="flex-1 p-6 overflow-auto">
+          <main className="flex-1 flex flex-col overflow-hidden">
             <BreadcrumbNav />
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
+              className="flex-1 flex flex-col"
             >
               {children}
             </motion.div>

@@ -305,7 +305,7 @@ const SessionRecord = () => {
 
   return (
     <AppLayout>
-      <div className="flex flex-col h-screen">
+      <div className="flex flex-col h-full">
         {/* Top Bar */}
         <SessionTopBar
           patientName={patientName}

@@ -49,10 +49,16 @@ import {
 } from "@/components/ui/sidebar";
 
 const navigationItems = [
-  { title: "Dashboard", url: "/dashboard", icon: Home },
-  { title: "New Session", url: "/session/new", icon: PlusCircle },
+  { title: "View sessions", url: "/sessions", icon: FolderOpen, hasChevron: true },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
-  { title: "Templates", url: "/templates", icon: FileText },
+];
+
+const templateItems = [
+  { title: "Template library", url: "/templates", icon: FileText },
+  { title: "Community", url: "/community", icon: Users },
+];
+
+const bottomItems = [
   { title: "Team", url: "/team", icon: Users },
   { title: "Settings", url: "/settings", icon: Settings },
   { title: "Help", url: "/help", icon: HelpCircle },
@@ -198,25 +204,58 @@ export function AppSidebar() {
       </SidebarHeader>
       
       <SidebarContent>
+        {/* New Session Button - Prominent */}
+        <div className="p-4">
+          <Button 
+            asChild 
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+            size="lg"
+          >
+            <NavLink to="/session/new">
+              <PlusCircle className="h-4 w-4 mr-2" />
+              New session
+            </NavLink>
+          </Button>
+        </div>
+
+        {/* Main Navigation */}
         <SidebarGroup>
-          <SidebarGroupLabel>Main Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navigationItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink
-                      to={item.url}
-                      className={({ isActive }) =>
-                        isActive
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                          : "hover:bg-sidebar-accent/50"
-                      }
+                  {item.title === "View sessions" ? (
+                    <SidebarMenuButton 
+                      onClick={() => setShowSessions(!showSessions)}
+                      className="w-full justify-between"
                     >
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
+                      <div className="flex items-center gap-2">
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </div>
+                      {item.hasChevron && (
+                        showSessions ? (
+                          <ChevronLeft className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )
+                      )}
+                    </SidebarMenuButton>
+                  ) : (
+                    <SidebarMenuButton asChild>
+                      <NavLink
+                        to={item.url}
+                        className={({ isActive }) =>
+                          isActive
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                            : "hover:bg-sidebar-accent/50"
+                        }
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  )}
                 </SidebarMenuItem>
               ))}
               {isAdmin && (
@@ -236,23 +275,57 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
-              {/* View Sessions Toggle - positioned after New Session and before Tasks */}
-              <SidebarMenuItem>
-                <SidebarMenuButton 
-                  onClick={() => setShowSessions(!showSessions)}
-                  className="w-full justify-between"
-                >
-                  <div className="flex items-center gap-2">
-                    <FolderOpen className="h-4 w-4" />
-                    <span>{showSessions ? 'Hide sessions' : 'View sessions'}</span>
-                  </div>
-                  {showSessions ? (
-                    <ChevronLeft className="h-4 w-4" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4" />
-                  )}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Templates Section */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Templates</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {templateItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <NavLink
+                      to={item.url}
+                      className={({ isActive }) =>
+                        isActive
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                          : "hover:bg-sidebar-accent/50"
+                      }
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Bottom Navigation */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {bottomItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <NavLink
+                      to={item.url}
+                      className={({ isActive }) =>
+                        isActive
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                          : "hover:bg-sidebar-accent/50"
+                      }
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
