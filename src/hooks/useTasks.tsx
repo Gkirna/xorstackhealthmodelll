@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -18,30 +17,6 @@ export interface Task {
 }
 
 export function useTasks() {
-  const queryClient = useQueryClient();
-
-  // Set up realtime subscription
-  useEffect(() => {
-    const channel = supabase
-      .channel('tasks-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'tasks'
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['tasks'] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [queryClient]);
-
   return useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
