@@ -165,3 +165,40 @@ export function useDeleteTask() {
     },
   });
 }
+
+export function useDeleteAllTasks() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      return true;
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['tasks'] });
+      const previousTasks = queryClient.getQueryData<Task[]>(['tasks']);
+      
+      queryClient.setQueryData<Task[]>(['tasks'], []);
+      
+      return { previousTasks };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success('All tasks deleted successfully');
+    },
+    onError: (error, variables, context) => {
+      if (context?.previousTasks) {
+        queryClient.setQueryData(['tasks'], context.previousTasks);
+      }
+      toast.error('Failed to delete all tasks: ' + error.message);
+    },
+  });
+}

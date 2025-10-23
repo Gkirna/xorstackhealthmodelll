@@ -1,23 +1,26 @@
-import { Card, CardContent } from '@/components/ui/card';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
-import { Mic, Square, Play, Pause, Zap, Volume2, Download, Trash2 } from 'lucide-react';
+import { Mic, Square, Play, Pause, Zap } from 'lucide-react';
 import { useAudioRecording } from '@/hooks/useAudioRecording';
-import { useTranscription } from '@/hooks/useTranscription';
-import { toast } from 'sonner';
 
 interface DictatingPanelProps {
   sessionId?: string;
-  deviceId?: string;
+  onTranscriptUpdate?: (transcript: string, isFinal: boolean) => void;
+  onFinalTranscriptChunk?: (text: string) => void;
+  onRecordingComplete?: (audioBlob: Blob, audioUrl?: string) => void;
 }
 
 export function DictatingPanel({
   sessionId,
-  deviceId,
+  onTranscriptUpdate,
+  onFinalTranscriptChunk,
+  onRecordingComplete,
 }: DictatingPanelProps) {
-  const { addTranscriptChunk } = useTranscription(sessionId || '');
+  const [audioURL, setAudioURL] = useState<string | null>(null);
 
   const {
     isRecording,
@@ -27,55 +30,21 @@ export function DictatingPanel({
     interimTranscript,
     transcriptSupported,
     error,
-    audioLevel,
-    recordedUrl,
-    recordedBlob,
     startRecording,
     pauseRecording,
     resumeRecording,
     stopRecording,
-    clearRecording,
     formatDuration,
   } = useAudioRecording({
-    onTranscriptUpdate: (text, isFinal) => {
-      console.log('📝 Real-time dictation:', { length: text.length, isFinal, preview: text.substring(0, 50) });
-    },
-    onFinalTranscriptChunk: async (text) => {
-      console.log('✅ Saving final dictation chunk to DB:', text.substring(0, 50), '...');
-      if (sessionId) {
-        try {
-          await addTranscriptChunk(text, 'provider');
-          toast.success(`Saved ${text.split(/\s+/).length} words`);
-        } catch (error) {
-          console.error('Failed to save transcript:', error);
-          toast.error('Failed to save transcript');
-        }
+    onTranscriptUpdate,
+    onFinalTranscriptChunk,
+    onRecordingComplete: (blob, url) => {
+      setAudioURL(url || null);
+      if (onRecordingComplete) {
+        onRecordingComplete(blob, url);
       }
     },
-    onRecordingComplete: (blob, url) => {
-      console.log('🎙️ Dictation recording complete:', {
-        size: (blob.size / 1024).toFixed(2) + ' KB',
-        duration: formatDuration(duration)
-      });
-      toast.success('Recording saved successfully');
-    },
-    onError: (error) => {
-      console.error('❌ Dictation error:', error);
-      toast.error(error);
-    },
-    deviceId: deviceId !== 'default' ? deviceId : undefined,
   });
-
-  const handleDownload = () => {
-    if (!recordedBlob || !recordedUrl) return;
-    
-    const a = document.createElement('a');
-    a.href = recordedUrl;
-    a.download = `dictation-${Date.now()}.webm`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
 
   return (
     <Card>
@@ -136,44 +105,18 @@ export function DictatingPanel({
           </div>
         </div>
 
-        {/* Audio Level Indicator */}
-        {isRecording && !isPaused && (
-          <div className="space-y-1">
-            <div className="flex items-center gap-1.5">
-              <Volume2 className="h-3 w-3 text-muted-foreground" />
-              <span className="text-[10px] text-muted-foreground">Audio Level</span>
-            </div>
-            <Progress value={audioLevel} className="h-1" />
-          </div>
-        )}
-
         {/* Show interim transcript while recording */}
         {interimTranscript && isRecording && (
           <div className="p-2 bg-muted/40 rounded border border-dashed border-primary/20">
-            <p className="text-[10px] text-muted-foreground mb-0.5 flex items-center gap-1">
-              <span className="inline-block w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
-              Live dictation
-            </p>
+            <p className="text-[10px] text-muted-foreground mb-0.5">Live dictation</p>
             <p className="text-xs italic text-muted-foreground">{interimTranscript}</p>
           </div>
         )}
 
-        {recordedUrl && !isRecording && (
-          <div className="space-y-2 pt-2 border-t">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">Recording preview</p>
-              <div className="flex gap-1">
-                <Button onClick={handleDownload} variant="outline" size="sm" className="h-6 px-2 text-[10px]">
-                  <Download className="h-3 w-3 mr-1" />
-                  Save
-                </Button>
-                <Button onClick={clearRecording} variant="ghost" size="sm" className="h-6 px-2 text-[10px]">
-                  <Trash2 className="h-3 w-3 mr-1" />
-                  Clear
-                </Button>
-              </div>
-            </div>
-            <audio src={recordedUrl} controls className="w-full" />
+        {audioURL && (
+          <div className="pt-2 border-t">
+            <p className="text-xs text-muted-foreground mb-1">Recording preview</p>
+            <audio src={audioURL} controls className="w-full" />
           </div>
         )}
       </CardContent>

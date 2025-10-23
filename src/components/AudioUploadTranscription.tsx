@@ -5,24 +5,24 @@ import { Upload, FileAudio, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Progress } from '@/components/ui/progress';
-import { useTranscription } from '@/hooks/useTranscription';
 
 interface AudioUploadTranscriptionProps {
   sessionId?: string;
+  onTranscriptGenerated?: (transcript: string) => void;
+  onAudioUploaded?: (audioUrl: string) => void;
 }
 
 export function AudioUploadTranscription({
   sessionId,
+  onTranscriptGenerated,
+  onAudioUploaded,
 }: AudioUploadTranscriptionProps) {
-  const { addTranscriptChunk } = useTranscription(sessionId || '');
-  
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string>('');
-  const [processingStage, setProcessingStage] = useState<string>('');
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -54,7 +54,6 @@ export function AudioUploadTranscription({
     try {
       setIsUploading(true);
       setUploadProgress(0);
-      setProcessingStage('Preparing upload...');
 
       // Upload to Supabase Storage
       const fileName = sessionId 
@@ -62,7 +61,6 @@ export function AudioUploadTranscription({
         : `uploads/${Date.now()}-${selectedFile.name}`;
 
       console.log('📤 Uploading audio file:', fileName);
-      setProcessingStage('Uploading audio...');
 
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('audio-recordings')
@@ -75,7 +73,6 @@ export function AudioUploadTranscription({
 
       setUploadProgress(50);
       console.log('✅ Audio uploaded successfully');
-      setProcessingStage('Upload complete');
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
@@ -83,131 +80,74 @@ export function AudioUploadTranscription({
         .getPublicUrl(fileName);
 
       setAudioUrl(publicUrl);
-      console.log('✅ Audio available at:', publicUrl);
+      
+      if (onAudioUploaded) {
+        onAudioUploaded(publicUrl);
+      }
 
       setUploadProgress(60);
       setIsUploading(false);
 
       // Start transcription
-      await transcribeAudio(selectedFile, fileName);
+      await transcribeAudio(selectedFile);
 
     } catch (error) {
       console.error('❌ Upload error:', error);
       toast.error('Failed to upload audio file');
       setIsUploading(false);
       setUploadProgress(0);
-      setProcessingStage('');
     }
   };
 
-  const transcribeAudio = async (audioFile: File, storagePath: string) => {
+  const transcribeAudio = async (audioFile: File) => {
     try {
       setIsTranscribing(true);
       setUploadProgress(70);
-      setProcessingStage('Preparing audio for transcription...');
 
-      console.log('🎙️ Starting real-time transcription...');
-      console.log('File:', audioFile.name);
-      console.log('Size:', (audioFile.size / 1024 / 1024).toFixed(2), 'MB');
-      console.log('Type:', audioFile.type);
+      console.log('🎙️ Starting transcription...');
 
-      // Convert audio file to base64 in chunks for better performance
+      // Convert audio file to base64
       const reader = new FileReader();
       const base64Audio = await new Promise<string>((resolve, reject) => {
-        reader.onprogress = (e) => {
-          if (e.lengthComputable) {
-            const percentLoaded = Math.round((e.loaded / e.total) * 10);
-            setUploadProgress(70 + percentLoaded);
-            setProcessingStage(`Reading audio: ${Math.round((e.loaded / e.total) * 100)}%`);
-          }
-        };
         reader.onload = () => {
           const base64 = reader.result as string;
+          // Remove data URL prefix
           const base64Data = base64.split(',')[1];
-          console.log('✅ Audio converted to base64:', (base64Data.length / 1024).toFixed(2), 'KB');
           resolve(base64Data);
         };
-        reader.onerror = (error) => {
-          console.error('❌ FileReader error:', error);
-          reject(new Error('Failed to read audio file'));
-        };
+        reader.onerror = reject;
         reader.readAsDataURL(audioFile);
       });
 
       setUploadProgress(80);
-      setProcessingStage('Sending to AI transcription engine...');
-      console.log('📤 Invoking transcription edge function...');
 
-      // Call transcription edge function with timeout
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Transcription timeout - please try a smaller file')), 120000)
-      );
-
-      const transcriptionPromise = supabase.functions.invoke('transcribe-audio', {
+      // Call transcription edge function (you'll need to create this)
+      const { data, error } = await supabase.functions.invoke('transcribe-audio', {
         body: {
           audio: base64Audio,
           session_id: sessionId,
         },
       });
 
-      const { data, error } = await Promise.race([
-        transcriptionPromise,
-        timeoutPromise,
-      ]) as any;
-
-      if (error) {
-        console.error('❌ Transcription edge function error:', error);
-        throw error;
-      }
-
-      setUploadProgress(90);
-      setProcessingStage('Processing AI response...');
-
-      const transcriptText = data?.text || '';
-      
-      if (!transcriptText) {
-        throw new Error('No transcript received from AI service');
-      }
-
-      setTranscript(transcriptText);
-      const wordCount = transcriptText.split(/\s+/).length;
-      
-      console.log('✅ Transcription complete');
-      console.log('Transcript length:', transcriptText.length, 'characters');
-      console.log('Word count:', wordCount, 'words');
-
-      // Save transcript to database
-      if (sessionId) {
-        setProcessingStage('Saving transcript to database...');
-        await addTranscriptChunk(transcriptText, 'provider');
-        console.log('💾 Transcript saved to database');
-      }
+      if (error) throw error;
 
       setUploadProgress(100);
-      setProcessingStage('Complete!');
-      toast.success(`Successfully transcribed and saved ${wordCount} words!`);
 
-    } catch (error: any) {
-      console.error('❌ Transcription error:', error);
-      let errorMessage = 'Failed to transcribe audio';
-      
-      if (error?.message?.includes('timeout')) {
-        errorMessage = 'Transcription timeout - file may be too large. Try a shorter recording.';
-      } else if (error?.message?.includes('network')) {
-        errorMessage = 'Network error - please check your connection and try again.';
-      } else if (error?.message) {
-        errorMessage = error.message;
+      const transcriptText = data?.text || '';
+      setTranscript(transcriptText);
+
+      if (onTranscriptGenerated) {
+        onTranscriptGenerated(transcriptText);
       }
-      
-      toast.error(errorMessage);
-      setProcessingStage('Error: ' + errorMessage);
+
+      toast.success('Audio transcribed successfully!');
+      console.log('✅ Transcription complete');
+
+    } catch (error) {
+      console.error('❌ Transcription error:', error);
+      toast.error('Failed to transcribe audio. Please try again.');
     } finally {
       setIsTranscribing(false);
-      setTimeout(() => {
-        if (!transcript) {
-          setProcessingStage('');
-        }
-      }, 3000);
     }
   };
 
@@ -279,14 +219,14 @@ export function AudioUploadTranscription({
             </Button>
 
             {(isUploading || isTranscribing) && (
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-muted-foreground">
-                    {processingStage || (isUploading ? 'Uploading...' : 'Transcribing...')}
+                    {isUploading ? 'Uploading...' : 'Transcribing...'}
                   </span>
                   <span className="font-medium">{uploadProgress}%</span>
                 </div>
-                <Progress value={uploadProgress} className="h-1" />
+                <Progress value={uploadProgress} className="h-0.5" />
               </div>
             )}
 

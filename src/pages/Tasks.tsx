@@ -32,7 +32,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Calendar } from "@/components/ui/calendar";
-import { useTasks, useCreateTask, useUpdateTask, useDeleteTask, Task } from "@/hooks/useTasks";
+import { useTasks, useCreateTask, useUpdateTask, useDeleteTask, useDeleteAllTasks, Task } from "@/hooks/useTasks";
 import { format, formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +51,7 @@ const Tasks = () => {
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
+  const deleteAllTasks = useDeleteAllTasks();
   
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -115,6 +116,12 @@ const Tasks = () => {
     setSelectedTask(null);
   };
 
+  const handleDeleteAllTasks = async () => {
+    if (window.confirm('Are you sure you want to delete all tasks? This action cannot be undone.')) {
+      await deleteAllTasks.mutateAsync();
+    }
+  };
+
   const getStatusLabel = (status: string) => {
     if (status === 'pending') return 'To Do';
     if (status === 'completed') return 'Done';
@@ -133,13 +140,26 @@ const Tasks = () => {
               Incomplete tasks will be archived after 30 days
             </p>
           </div>
-          <Button 
-            className="bg-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive))]/90 text-white"
-            onClick={() => setIsCreateTaskOpen(true)}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            New task
-          </Button>
+          <div className="flex gap-2">
+            {tasks.length > 0 && (
+              <Button 
+                variant="outline"
+                className="text-red-600 border-red-600 hover:bg-red-50"
+                onClick={handleDeleteAllTasks}
+                disabled={deleteAllTasks.isPending}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Clear All Tasks
+              </Button>
+            )}
+            <Button 
+              className="bg-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive))]/90 text-white"
+              onClick={() => setIsCreateTaskOpen(true)}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              New task
+            </Button>
+          </div>
         </div>
 
         {/* Search and Filters */}
