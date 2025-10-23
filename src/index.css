@@ -145,3 +145,9 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+/* Sessions sidebar scroll container */
+.sidebar-sessions-list {
+  max-height: 100vh;
+  overflow-y: auto;
+}

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Search, Filter, PlusCircle, Calendar, FileText, Trash2 } from "lucide-react";
+import { Search, Filter, PlusCircle, Calendar, FileText, Trash2, ChevronLeft, ChevronRight, UserRoundSearch, ListFilter, ArrowDownUp, RefreshCw, WandSparkles, Unlink } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -83,222 +83,250 @@ const Sessions = () => {
     !s.scheduled_at || new Date(s.scheduled_at) <= new Date()
   );
 
+  // Group sessions by date
+  const groupSessionsByDate = (sessions: any[]) => {
+    const grouped: { [key: string]: any[] } = {};
+    sessions.forEach(session => {
+      const date = new Date(session.created_at).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+      if (!grouped[date]) {
+        grouped[date] = [];
+      }
+      grouped[date].push(session);
+    });
+    return grouped;
+  };
+
+  const groupedPastSessions = groupSessionsByDate(pastSessions);
+  const groupedUpcomingSessions = groupSessionsByDate(upcomingSessions);
+
+  const [showSessions, setShowSessions] = useState(false);
+
   return (
     <AppLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Sessions</h1>
-            <p className="text-muted-foreground">Manage your clinical encounter sessions</p>
-          </div>
-          <Button onClick={() => navigate("/session/new")}>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            New Session
+      <div className="flex h-full flex-row overflow-hidden border-r duration-500 ease-out min-w-[220px]">
+        {/* Sessions Toggle Button */}
+        <div className="flex items-center justify-center w-8 border-r bg-background">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setShowSessions(!showSessions)}
+            data-testid="sessions-toggle-button"
+          >
+            {showSessions ? (
+              <ChevronLeft className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
           </Button>
         </div>
 
-        {/* Search and Filter */}
-        <div className="flex gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search patients, MRN, or complaints..."
-              className="pl-9"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+        {/* Sessions Sidebar Panel */}
+        <div 
+          className={`flex h-full flex-col gap-2 overflow-hidden overflow-y-auto border-r py-4 transition-all duration-500 ease-out sm:flex w-full min-w-[220px] px-2 ${
+            showSessions ? 'block' : 'hidden'
+          }`}
+          data-testid="sidebar-session-list-panel"
+        >
+          <div className="flex h-full min-w-[200px] shrink-0 flex-col transition-transform duration-500 ease-out">
+            <div className="flex size-full w-full min-w-[182px] flex-col gap-2 sm:gap-1">
+              {/* Toolbar */}
+              <div className="flex h-6 items-center justify-between">
+                <div className="ml-auto hidden items-center gap-0.5 sm:flex">
+                  <Button variant="ghost" size="icon" className="h-5 w-5">
+                    <ListFilter className="h-3 w-3" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-5 w-5">
+                    <ArrowDownUp className="h-3 w-3" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-5 w-5">
+                    <Search className="h-3 w-3" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-5 w-5">
+                    <RefreshCw className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Search Input (Hidden by default) */}
+              <div className="overflow-hidden" style={{ opacity: 0, height: '0px' }}>
+                <div className="flex h-fit items-center gap-2 rounded-md border border-solid border-border px-3 bg-transparent transition-all">
+                  <Search className="h-3.5 w-3.5 cursor-pointer text-xs text-text-secondary hover:text-text-primary" />
+                  <input 
+                    className="flex h-[38px] w-full truncate border-0 bg-transparent transition-colors placeholder:text-text-secondary focus-visible:outline-none text-base font-normal sm:h-7 sm:text-xs" 
+                    placeholder="Search" 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Tabs */}
+              <div className="w-full transition-all ease-in-out" style={{ height: 'calc(100% - 62px)' }}>
+                <div className="inline-flex items-center justify-center rounded-md p-1 text-text-secondary h-fit w-full bg-transparent py-0">
+                  <button 
+                    type="button" 
+                    role="tab"
+                    className={`inline-flex items-center justify-center whitespace-nowrap px-3 py-1.5 text-sm font-medium transition-all w-full rounded-none border-b-2 border-outline ${
+                      activeTab === 'upcoming' 
+                        ? 'bg-surface text-text-primary border-border-selected' 
+                        : 'hover:bg-background-tertiary-hover hover:text-text-primary'
+                    }`}
+                    onClick={() => setActiveTab('upcoming')}
+                  >
+                    <p className="text-xs font-medium leading-snug tracking-normal">Schedule</p>
+                  </button>
+                  <button 
+                    type="button" 
+                    role="tab"
+                    className={`inline-flex items-center justify-center whitespace-nowrap px-3 py-1.5 text-sm font-medium transition-all w-full rounded-none border-b-2 border-outline ${
+                      activeTab === 'past' 
+                        ? 'bg-surface text-text-primary border-border-selected' 
+                        : 'hover:bg-background-tertiary-hover hover:text-text-primary'
+                    }`}
+                    onClick={() => setActiveTab('past')}
+                  >
+                    <p className="text-xs font-medium leading-snug tracking-normal">Past</p>
+                  </button>
+                </div>
+
+                {/* Sessions Content */}
+                <div className="mt-1.5" style={{ height: 'calc(100% - 36px)' }}>
+                  {activeTab === 'upcoming' ? (
+                    <div className="h-full">
+                      {isLoading ? (
+                        <div className="text-center py-8 text-muted-foreground">Loading sessions...</div>
+                      ) : Object.keys(groupedUpcomingSessions).length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Calendar className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                          <p>No upcoming sessions scheduled</p>
+                        </div>
+                      ) : (
+                        <div className="h-full overflow-y-auto">
+                          {Object.entries(groupedUpcomingSessions).map(([date, sessions]) => (
+                            <div key={date}>
+                              <div className="p-1.5">
+                                <p className="text-xs font-medium leading-snug tracking-normal text-text-secondary">{date}</p>
+                              </div>
+                              {sessions.map((session) => (
+                                <div key={session.id} className="w-[calc(100%-4px)] mb-1">
+                                  <a 
+                                    href={`/session/${session.id}/record`}
+                                    className="inline-flex cursor-pointer items-center whitespace-nowrap rounded-md px-1.5 py-1 text-xs font-medium tracking-normal leading-5 h-fit group relative w-full justify-between overflow-hidden transition-all duration-200 ease-in-out hover:pr-10 hover:bg-background-tertiary-hover hover:text-text-primary"
+                                    title={session.patient_name}
+                                  >
+                                    <div className="absolute right-[0.9rem] flex h-full flex-row items-center opacity-0 transition-all delay-100 duration-200 ease-in-out group-hover:opacity-100">
+                                      <input type="checkbox" className="size-4 shrink-0 rounded-sm border border-border-selected" />
+                                    </div>
+                                    <div className="flex w-full items-center gap-2">
+                                      <span className="relative flex shrink-0 overflow-hidden rounded-full size-6 border-[0.75px] border-text-tertiary text-text-tertiary hover:border-border-selected hover:text-text-primary">
+                                        <span className="size-full rounded-full text-sm w-full flex items-center justify-center bg-transparent">
+                                          <Unlink className="h-3 w-3" />
+                                        </span>
+                                      </span>
+                                      <div className="flex flex-1 flex-col overflow-hidden">
+                                        <span className="flex w-fit max-w-full items-center gap-1">
+                                          <p className="text-xs font-normal leading-snug tracking-normal max-w-full truncate">{session.patient_name}</p>
+                                        </span>
+                                        <div className="flex items-center gap-1">
+                                          <p className="text-[10px] font-normal leading-snug tracking-normal truncate text-text-secondary duration-200">
+                                            {session.scheduled_at ? format(new Date(session.scheduled_at), 'h:mm a') : 'Not scheduled'}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </a>
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="h-full">
+                      {isLoading ? (
+                        <div className="text-center py-8 text-muted-foreground">Loading sessions...</div>
+                      ) : Object.keys(groupedPastSessions).length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <FileText className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                          <p>No past sessions found</p>
+                        </div>
+                      ) : (
+                        <div className="h-full overflow-y-auto">
+                          {Object.entries(groupedPastSessions).map(([date, sessions]) => (
+                            <div key={date}>
+                              <div className="p-1.5">
+                                <p className="text-xs font-medium leading-snug tracking-normal text-text-secondary">{date}</p>
+                              </div>
+                              {sessions.map((session) => (
+                                <div key={session.id} className="w-[calc(100%-4px)] mb-1">
+                                  <a 
+                                    href={`/session/${session.id}/review`}
+                                    className="inline-flex cursor-pointer items-center whitespace-nowrap rounded-md px-1.5 py-1 text-xs font-medium tracking-normal leading-5 h-fit group relative w-full justify-between overflow-hidden transition-all duration-200 ease-in-out hover:pr-10 hover:bg-background-tertiary-hover hover:text-text-primary"
+                                    title={session.patient_name}
+                                  >
+                                    <div className="absolute right-[0.9rem] flex h-full flex-row items-center opacity-0 transition-all delay-100 duration-200 ease-in-out group-hover:opacity-100">
+                                      <input type="checkbox" className="size-4 shrink-0 rounded-sm border border-border-selected" />
+                                    </div>
+                                    <div className="flex w-full items-center gap-2">
+                                      <span className="relative flex shrink-0 overflow-hidden rounded-full size-6 border-[0.75px] border-text-tertiary text-text-tertiary hover:border-border-selected hover:text-text-primary">
+                                        <span className="size-full rounded-full text-sm w-full flex items-center justify-center bg-transparent">
+                                          {session.patient_name ? (
+                                            <span className="text-xs font-normal tracking-normal leading-none">
+                                              {session.patient_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                                            </span>
+                                          ) : (
+                                            <Unlink className="h-3 w-3" />
+                                          )}
+                                        </span>
+                                      </span>
+                                      <div className="flex flex-1 flex-col overflow-hidden">
+                                        <span className="flex w-fit max-w-full items-center gap-1">
+                                          <p className="text-xs font-normal leading-snug tracking-normal max-w-full truncate">{session.patient_name || 'Untitled session'}</p>
+                                        </span>
+                                        <div className="flex items-center gap-1">
+                                          <p className="text-[10px] font-normal leading-snug tracking-normal truncate text-text-secondary duration-200">
+                                            {format(new Date(session.created_at), 'h:mm a')}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </a>
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Bottom Action */}
+                <div className="mt-auto">
+                  <Button 
+                    variant="outline" 
+                    className="h-7 min-w-7 rounded-md px-2.5 py-2 text-xs font-medium tracking-normal leading-7 flex gap-3 text-text-secondary"
+                  >
+                    <WandSparkles className="h-3 w-3" />
+                    <p className="text-xs font-medium leading-snug tracking-normal">Tidy up</p>
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-48">
-              <Filter className="mr-2 h-4 w-4" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-popover">
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="finalized">Finalized</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
 
-        {/* Sessions List */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
-            <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-            <TabsTrigger value="past">Past</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="upcoming" className="space-y-4 mt-6">
-            {isLoading ? (
-              <div className="text-center py-12 text-muted-foreground">Loading sessions...</div>
-            ) : upcomingSessions.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Calendar className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                <p>No upcoming sessions scheduled</p>
-              </div>
-            ) : (
-              upcomingSessions.map((session) => (
-                <Card key={session.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <CardTitle className="text-xl">{session.patient_name}</CardTitle>
-                        <CardDescription className="flex items-center gap-2">
-                          <span>{session.patient_id}</span>
-                          {session.chief_complaint && (
-                            <>
-                              <span>•</span>
-                              <span>{session.chief_complaint}</span>
-                            </>
-                          )}
-                        </CardDescription>
-                      </div>
-                      <Badge variant="secondary">{session.appointment_type || 'General'}</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-6 text-sm text-muted-foreground mb-4">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4" />
-                        <span>{session.scheduled_at ? format(new Date(session.scheduled_at), 'MMM d, yyyy h:mm a') : 'Not scheduled'}</span>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button 
-                        variant="default" 
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/session/${session.id}/record`);
-                        }}
-                      >
-                        Start Session
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Session?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This will permanently delete this session. This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction 
-                              onClick={() => handleDeleteSession(session.id)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </TabsContent>
-          
-          <TabsContent value="past" className="space-y-4 mt-6">
-            {isLoading ? (
-              <div className="text-center py-12 text-muted-foreground">Loading sessions...</div>
-            ) : pastSessions.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <FileText className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                <p>No past sessions found</p>
-              </div>
-            ) : (
-              pastSessions.map((session) => (
-                <Card 
-                  key={session.id} 
-                  className="hover:shadow-md transition-shadow"
-                >
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1 flex-1" onClick={() => navigate(`/session/${session.id}/review`)}>
-                        <CardTitle className="text-xl cursor-pointer">{session.patient_name}</CardTitle>
-                        <CardDescription className="flex items-center gap-2">
-                          <span>{session.patient_id}</span>
-                          {session.chief_complaint && (
-                            <>
-                              <span>•</span>
-                              <span>{session.chief_complaint}</span>
-                            </>
-                          )}
-                        </CardDescription>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">{session.appointment_type || 'General'}</Badge>
-                        <Badge variant={getStatusColor(session.status) as any}>
-                          {session.status}
-                        </Badge>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Calendar className="h-4 w-4" />
-                        <span>{format(new Date(session.created_at), 'MMM d, yyyy')}</span>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => navigate(`/session/${session.id}/review`)}
-                        >
-                          <FileText className="mr-2 h-4 w-4" />
-                          View Details
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Session?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This will permanently delete this session and all associated data. This action cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction 
-                                onClick={() => handleDeleteSession(session.id)}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </TabsContent>
-        </Tabs>
+        {/* Main Content - Shows current tab content (Tasks, New Session, Team, Settings, etc.) */}
+        <div className="flex-1 flex flex-col">
+          {/* This area shows the current tab content - Tasks, New Session, Team, Settings, etc. */}
+          {/* The main area displays whatever tab is currently active */}
+        </div>
       </div>
     </AppLayout>
   );
