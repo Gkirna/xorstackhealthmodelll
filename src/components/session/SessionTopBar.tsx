@@ -38,6 +38,7 @@ interface SessionTopBarProps {
   recordingMode: string;
   onRecordingModeChange: (mode: string) => void;
   onStartRecording?: () => void;
+  isRecording?: boolean;
 }
 
 export function SessionTopBar({
@@ -53,6 +54,7 @@ export function SessionTopBar({
   recordingMode,
   onRecordingModeChange,
   onStartRecording,
+  isRecording = false,
 }: SessionTopBarProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(patientName);
@@ -94,9 +96,16 @@ export function SessionTopBar({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button onClick={onStartRecording} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 h-9 rounded-md flex items-center gap-2">
+            <Button 
+              onClick={onStartRecording} 
+              className={`${
+                isRecording 
+                  ? 'bg-red-600 hover:bg-red-700 animate-pulse' 
+                  : 'bg-green-600 hover:bg-green-700'
+              } text-white px-4 py-2 h-9 rounded-md flex items-center gap-2`}
+            >
               <Mic className="h-4 w-4" />
-              Start transcribing
+              {isRecording ? 'Stop transcribing' : 'Start transcribing'}
               <ChevronDown className="h-4 w-4 ml-1" />
             </Button>
           </DropdownMenuTrigger>

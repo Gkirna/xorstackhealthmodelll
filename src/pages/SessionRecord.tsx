@@ -29,59 +29,119 @@ const SessionRecord = () => {
   const updateSession = useUpdateSession();
   const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript } = useTranscription(id || '');
   
+  // Speaker tracking (alternates between doctor and patient)
+  const speakerRef = useRef<'provider' | 'patient'>('provider');
+  const transcriptCountRef = useRef(0);
+
   // Real-time audio recording & transcription
   const {
     startRecording,
+    stopRecording,
+    isRecording,
     isTranscribing,
   } = useAudioRecording({
+    continuous: true,
     onTranscriptUpdate: (text, isFinal) => {
-      if (isFinal) {
-        // Save final chunks to DB and append to local transcript
-        addTranscriptChunk(text, 'provider');
-        setTranscript(prev => prev ? `${prev}\n\n${text}` : text);
-      } else {
-        // Show interim updates in the editor without saving
-        // We will append interim visually in the panel instead of mutating saved transcript
-        // For now, keep the previous behavior minimal (no-op)
+      if (isFinal && text.trim()) {
+        // Alternate speaker for each transcript chunk
+        const currentSpeaker = speakerRef.current;
+        transcriptCountRef.current++;
+        
+        console.log(`💬 Transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
+        
+        // Save to database with speaker label
+        addTranscriptChunk(text, currentSpeaker);
+        
+        // Update local transcript with speaker label
+        const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
+        setTranscript(prev => prev ? `${prev}\n\n**${speakerLabel}:** ${text}` : `**${speakerLabel}:** ${text}`);
+        
+        // Alternate to next speaker
+        speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
       }
+    },
+    onError: (error) => {
+      console.error('Recording error:', error);
+      toast.error(error);
     },
   });
 
-  // Start mic transcription if empty; otherwise immediately generate note
+  // Start mic transcription and automatically generate note when stopped
   const handleStartTranscribing = async () => {
     if (recordingMode === 'upload') {
       toast.info('Upload flow coming soon. Please use Dictating or Transcribing for now.');
       return;
     }
 
-    if (recordingMode === 'dictating') {
-      // Switch to transcript view and start recording
+    if (recordingMode === 'dictating' || recordingMode === 'transcribing') {
+      // Check if already recording
+      if (isRecording) {
+        // Stop recording and auto-generate note
+        toast.info('Stopping transcription and generating clinical note...');
+        stopRecording();
+        
+        // Wait a moment for final transcript to be saved
+        setTimeout(async () => {
+          await autoGenerateNote();
+        }, 1500);
+        return;
+      }
+      
+      // Start new recording session
       setActiveTab('transcript');
-      startRecording();
+      speakerRef.current = 'provider'; // Reset to doctor
+      transcriptCountRef.current = 0;
+      toast.success('Starting live transcription... Speak now!');
+      await startRecording();
       return;
     }
 
+    // If manual input exists, generate note immediately
     const hasManualInput = transcript.trim().length > 0 || context.trim().length > 0;
     if (hasManualInput) {
-      if (!orchestratorRef.current || !id) return;
+      await autoGenerateNote();
+    }
+  };
+
+  // Auto-generate clinical note from transcript
+  const autoGenerateNote = async () => {
+    if (!id || !orchestratorRef.current) return;
+    
+    if (!transcript.trim()) {
+      toast.error("No transcript available to generate note");
+      return;
+    }
+
+    try {
       setIsAutoPipelineRunning(true);
-      const result = await orchestratorRef.current.runCompletePipeline(id, transcript || '(No transcript provided)', {
+      setActiveTab('note'); // Switch to note tab
+      
+      toast.info('Generating clinical documentation...');
+      
+      const result = await orchestratorRef.current.runCompletePipeline(id, transcript, {
         context,
         detailLevel: 'high',
-        template,
       });
+      
       if (result.success && result.note) {
         setGeneratedNote(result.note);
-        await updateSession.mutateAsync({ id, updates: { generated_note: result.note, status: 'review', template } });
+        await updateSession.mutateAsync({ 
+          id, 
+          updates: { 
+            generated_note: result.note, 
+            status: 'review'
+          } 
+        });
         toast.success('Clinical documentation complete!');
       } else {
         toast.error(result.errors?.[0] || 'Failed to generate note');
       }
+    } catch (error) {
+      console.error('Note generation error:', error);
+      toast.error('An error occurred while generating the note');
+    } finally {
       setIsAutoPipelineRunning(false);
-      return;
     }
-    setActiveTab('transcript');
-    startRecording();
   };
 
   const handleRecordingModeChange = (mode: string) => {
@@ -95,7 +155,7 @@ const SessionRecord = () => {
   const [transcript, setTranscript] = useState("");
   const [context, setContext] = useState("");
   const [generatedNote, setGeneratedNote] = useState("");
-  const [template, setTemplate] = useState<string>("soap");
+  const [template, setTemplate] = useState<"soap" | "progress" | "discharge" | "goldilocks">("soap");
   const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null);
   const [isAutoPipelineRunning, setIsAutoPipelineRunning] = useState(false);
   
@@ -250,7 +310,6 @@ const SessionRecord = () => {
           updates: {
             generated_note: result.note,
             status: 'review',
-            template,
           },
         });
 
@@ -320,6 +379,7 @@ const SessionRecord = () => {
           recordingMode={recordingMode}
           onRecordingModeChange={handleRecordingModeChange}
           onStartRecording={handleStartTranscribing}
+          isRecording={isRecording}
         />
 
         {/* Workflow Progress */}
