@@ -20,6 +20,7 @@ import { HeidiNotePanel } from "@/components/session/HeidiNotePanel";
 import { DictatingPanel } from "@/components/session/DictatingPanel";
 import { AudioUploadTranscription } from "@/components/AudioUploadTranscription";
 import { AskHeidiBar } from "@/components/session/AskHeidiBar";
+import { TranscriptionControlPanel } from "@/components/session/TranscriptionControlPanel";
 // removed bottom alert block
 
 const SessionRecord = () => {
@@ -63,7 +64,11 @@ const SessionRecord = () => {
   const {
     startRecording,
     stopRecording,
+    pauseRecording,
+    resumeRecording,
     isRecording,
+    isPaused,
+    duration,
     isTranscribing,
   } = useAudioRecording({
     continuous: true,
@@ -468,6 +473,30 @@ const SessionRecord = () => {
         {/* Ask Heidi Bar */}
         <AskHeidiBar sessionId={id} transcript={transcript} context={context} />
 
+        {/* Transcription Control Panel */}
+        {(recordingMode === 'transcribing' || recordingMode === 'dictating') && (
+          <TranscriptionControlPanel
+            isRecording={isRecording}
+            isPaused={isPaused}
+            duration={duration}
+            isTranscribing={isTranscribing}
+            onStart={async () => {
+              setActiveTab('transcript');
+              speakerRef.current = 'provider';
+              transcriptCountRef.current = 0;
+              await startRecording();
+            }}
+            onPause={pauseRecording}
+            onResume={resumeRecording}
+            onStop={async () => {
+              stopRecording();
+              setTimeout(async () => {
+                await autoGenerateNote();
+              }, 1500);
+            }}
+            recordingMode={recordingMode}
+          />
+        )}
         
       </div>
     </AppLayout>
