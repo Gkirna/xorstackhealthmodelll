@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,32 @@ const SessionRecord = () => {
   const speakerRef = useRef<'provider' | 'patient'>('provider');
   const transcriptCountRef = useRef(0);
 
+  // Memoized callback to prevent audio recorder reinitialization
+  const handleTranscriptUpdate = useCallback((text: string, isFinal: boolean) => {
+    if (isFinal && text.trim()) {
+      // Alternate speaker for each transcript chunk
+      const currentSpeaker = speakerRef.current;
+      transcriptCountRef.current++;
+      
+      console.log(`💬 Transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
+      
+      // Save to database with speaker label
+      addTranscriptChunk(text, currentSpeaker);
+      
+      // Update local transcript with speaker label
+      const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
+      setTranscript(prev => prev ? `${prev}\n\n**${speakerLabel}:** ${text}` : `**${speakerLabel}:** ${text}`);
+      
+      // Alternate to next speaker
+      speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
+    }
+  }, [addTranscriptChunk]);
+
+  const handleRecordingError = useCallback((error: string) => {
+    console.error('Recording error:', error);
+    toast.error(error);
+  }, []);
+
   // Real-time audio recording & transcription
   const {
     startRecording,
@@ -41,29 +67,8 @@ const SessionRecord = () => {
     isTranscribing,
   } = useAudioRecording({
     continuous: true,
-    onTranscriptUpdate: (text, isFinal) => {
-      if (isFinal && text.trim()) {
-        // Alternate speaker for each transcript chunk
-        const currentSpeaker = speakerRef.current;
-        transcriptCountRef.current++;
-        
-        console.log(`💬 Transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
-        
-        // Save to database with speaker label
-        addTranscriptChunk(text, currentSpeaker);
-        
-        // Update local transcript with speaker label
-        const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
-        setTranscript(prev => prev ? `${prev}\n\n**${speakerLabel}:** ${text}` : `**${speakerLabel}:** ${text}`);
-        
-        // Alternate to next speaker
-        speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
-      }
-    },
-    onError: (error) => {
-      console.error('Recording error:', error);
-      toast.error(error);
-    },
+    onTranscriptUpdate: handleTranscriptUpdate,
+    onError: handleRecordingError,
   });
 
   // Start mic transcription and automatically generate note when stopped
