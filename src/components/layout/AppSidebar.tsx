@@ -19,7 +19,9 @@ import {
   RefreshCw,
   Calendar,
   WandSparkles,
-  Unlink
+  Unlink,
+  Check,
+  Trash2
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -32,8 +34,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { useUserRole } from "@/hooks/useUserRole";
-import { useSessions } from "@/hooks/useSessions";
+import { useSessions, useDeleteSession } from "@/hooks/useSessions";
 import { format } from "date-fns";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Sidebar,
   SidebarContent,
@@ -74,9 +77,11 @@ export function AppSidebar() {
   const [showSessions, setShowSessions] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("past");
+  const [selectedSessions, setSelectedSessions] = useState<string[]>([]);
   
   // Sessions data
   const { data: sessions = [], isLoading } = useSessions();
+  const deleteSession = useDeleteSession();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -148,6 +153,39 @@ export function AppSidebar() {
 
   const groupedPastSessions = groupSessionsByDate(pastSessions);
   const groupedUpcomingSessions = groupSessionsByDate(upcomingSessions);
+
+  const currentSessions = activeTab === 'past' ? pastSessions : upcomingSessions;
+  const allSelected = currentSessions.length > 0 && selectedSessions.length === currentSessions.length;
+
+  const handleSelectAll = () => {
+    if (allSelected) {
+      setSelectedSessions([]);
+    } else {
+      setSelectedSessions(currentSessions.map(s => s.id));
+    }
+  };
+
+  const handleSelectSession = (sessionId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedSessions(prev => 
+      prev.includes(sessionId) 
+        ? prev.filter(id => id !== sessionId)
+        : [...prev, sessionId]
+    );
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedSessions.length === 0) return;
+    
+    try {
+      await Promise.all(selectedSessions.map(id => deleteSession.mutateAsync(id)));
+      setSelectedSessions([]);
+      toast.success(`Deleted ${selectedSessions.length} session(s)`);
+    } catch (error) {
+      toast.error('Failed to delete sessions');
+    }
+  };
 
   return (
     <div className="flex h-full min-h-0 overflow-hidden">
@@ -435,10 +473,14 @@ export function AppSidebar() {
                           {sessions.map((session) => (
                             <div
                               key={session.id}
-                              className="p-2 rounded-md hover:bg-muted cursor-pointer group"
-                              onClick={() => navigate(`/session/${session.id}/review`)}
+                              className="p-2 rounded-md hover:bg-muted cursor-pointer group relative"
                             >
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2" onClick={() => navigate(`/session/${session.id}/review`)}>
+                                <Checkbox
+                                  checked={selectedSessions.includes(session.id)}
+                                  onClick={(e) => handleSelectSession(session.id, e as any)}
+                                  className="shrink-0"
+                                />
                                 <span className="relative flex shrink-0 overflow-hidden rounded-full size-6 border-[0.75px] border-text-tertiary text-text-tertiary">
                                   <span className="size-full rounded-full text-sm w-full flex items-center justify-center bg-transparent">
                                     {session.patient_name ? (
@@ -479,10 +521,14 @@ export function AppSidebar() {
                           {sessions.map((session) => (
                             <div
                               key={session.id}
-                              className="p-2 rounded-md hover:bg-muted cursor-pointer group"
-                              onClick={() => navigate(`/session/${session.id}/record`)}
+                              className="p-2 rounded-md hover:bg-muted cursor-pointer group relative"
                             >
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2" onClick={() => navigate(`/session/${session.id}/record`)}>
+                                <Checkbox
+                                  checked={selectedSessions.includes(session.id)}
+                                  onClick={(e) => handleSelectSession(session.id, e as any)}
+                                  className="shrink-0"
+                                />
                                 <span className="relative flex shrink-0 overflow-hidden rounded-full size-6 border-[0.75px] border-text-tertiary text-text-tertiary">
                                   <span className="size-full rounded-full text-sm w-full flex items-center justify-center bg-transparent">
                                     <Unlink className="h-3 w-3" />
@@ -507,15 +553,36 @@ export function AppSidebar() {
           </div>
         </div>
 
-        {/* Bottom Action - Fixed */}
-        <div className="p-4 border-t flex-shrink-0">
-          <Button 
-            variant="outline" 
-            className="h-7 min-w-7 rounded-md px-2.5 py-2 text-xs font-medium tracking-normal leading-7 flex gap-3 text-text-secondary w-full"
-          >
-            <WandSparkles className="h-3 w-3" />
-            <p className="text-xs font-medium leading-snug tracking-normal">Tidy up</p>
-          </Button>
+        {/* Bottom Actions - Fixed */}
+        <div className="p-4 border-t flex-shrink-0 space-y-2">
+          {selectedSessions.length > 0 ? (
+            <>
+              <Button 
+                variant="outline" 
+                className="w-full justify-start gap-2 text-xs h-7"
+                onClick={handleSelectAll}
+              >
+                <Check className="h-3 w-3" />
+                {allSelected ? 'Deselect all' : 'Select all'}
+              </Button>
+              <Button 
+                variant="destructive" 
+                className="w-full justify-start gap-2 text-xs h-7"
+                onClick={handleDeleteSelected}
+              >
+                <Trash2 className="h-3 w-3" />
+                Delete selected ({selectedSessions.length})
+              </Button>
+            </>
+          ) : (
+            <Button 
+              variant="outline" 
+              className="w-full justify-start gap-2 text-xs h-7"
+            >
+              <WandSparkles className="h-3 w-3" />
+              Tidy up
+            </Button>
+          )}
         </div>
       </div>
     )}

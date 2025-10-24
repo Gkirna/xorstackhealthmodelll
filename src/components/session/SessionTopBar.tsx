@@ -39,6 +39,7 @@ interface SessionTopBarProps {
   onRecordingModeChange: (mode: string) => void;
   onStartRecording?: () => void;
   isRecording?: boolean;
+  onUploadClick: () => void;
 }
 
 export function SessionTopBar({
@@ -55,6 +56,7 @@ export function SessionTopBar({
   onRecordingModeChange,
   onStartRecording,
   isRecording = false,
+  onUploadClick,
 }: SessionTopBarProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(patientName);
@@ -125,7 +127,10 @@ export function SessionTopBar({
               {recordingMode === 'dictating' && <Check className="h-4 w-4 text-green-600" />}
             </DropdownMenuItem>
             <DropdownMenuItem
-              onClick={() => onRecordingModeChange('upload')}
+              onClick={() => {
+                onRecordingModeChange('upload');
+                onUploadClick();
+              }}
               className="flex items-center justify-between"
             >
               <span>Upload session audio</span>

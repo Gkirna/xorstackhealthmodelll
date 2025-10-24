@@ -20,8 +20,7 @@ import { HeidiNotePanel } from "@/components/session/HeidiNotePanel";
 import { DictatingPanel } from "@/components/session/DictatingPanel";
 import { AudioUploadTranscription } from "@/components/AudioUploadTranscription";
 import { AskHeidiBar } from "@/components/session/AskHeidiBar";
-import { TranscriptionControlPanel } from "@/components/session/TranscriptionControlPanel";
-// removed bottom alert block
+import { UploadRecordingDialog } from "@/components/session/UploadRecordingDialog";
 
 const SessionRecord = () => {
   const { id } = useParams();
@@ -159,6 +158,15 @@ const SessionRecord = () => {
     if (mode === 'dictating' || mode === 'upload' || mode === 'transcribing') {
       setActiveTab('transcript');
     }
+    if (mode === 'upload') {
+      setUploadDialogOpen(true);
+    }
+  };
+
+  const handleUploadRecording = async (file: File, mode: "transcribe" | "dictate") => {
+    toast.info(`Processing ${file.name}...`);
+    // TODO: Implement audio file upload and transcription
+    console.log('Upload file:', file, 'Mode:', mode);
   };
   
   // State
@@ -177,6 +185,7 @@ const SessionRecord = () => {
   const [elapsedTime, setElapsedTime] = useState("00:00:00");
   const [recordingMode, setRecordingMode] = useState("transcribing");
   const [activeTab, setActiveTab] = useState<string>("note");
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   
   const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -390,6 +399,7 @@ const SessionRecord = () => {
           onRecordingModeChange={handleRecordingModeChange}
           onStartRecording={handleStartTranscribing}
           isRecording={isRecording}
+          onUploadClick={() => setUploadDialogOpen(true)}
         />
 
         {/* Workflow Progress */}
@@ -473,31 +483,12 @@ const SessionRecord = () => {
         {/* Ask Heidi Bar */}
         <AskHeidiBar sessionId={id} transcript={transcript} context={context} />
 
-        {/* Transcription Control Panel */}
-        {(recordingMode === 'transcribing' || recordingMode === 'dictating') && (
-          <TranscriptionControlPanel
-            isRecording={isRecording}
-            isPaused={isPaused}
-            duration={duration}
-            isTranscribing={isTranscribing}
-            onStart={async () => {
-              setActiveTab('transcript');
-              speakerRef.current = 'provider';
-              transcriptCountRef.current = 0;
-              await startRecording();
-            }}
-            onPause={pauseRecording}
-            onResume={resumeRecording}
-            onStop={async () => {
-              stopRecording();
-              setTimeout(async () => {
-                await autoGenerateNote();
-              }, 1500);
-            }}
-            recordingMode={recordingMode}
-          />
-        )}
-        
+        {/* Upload Recording Dialog */}
+        <UploadRecordingDialog
+          open={uploadDialogOpen}
+          onOpenChange={setUploadDialogOpen}
+          onUpload={handleUploadRecording}
+        />
       </div>
     </AppLayout>
   );
