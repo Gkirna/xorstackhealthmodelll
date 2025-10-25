@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { SOAPNoteDisplay } from "./SOAPNoteDisplay";
 import { Copy, Download, Mic, Undo, Redo, ChevronDown, MoreHorizontal, Check } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -19,6 +20,7 @@ import {
 
 interface HeidiNotePanelProps {
   note: string;
+  noteJson?: any;
   onNoteChange: (text: string) => void;
   onGenerate: () => void;
   isGenerating: boolean;
@@ -31,10 +33,11 @@ interface HeidiNotePanelProps {
   canRedo?: boolean;
 }
 
-export function HeidiNotePanel({ note, onNoteChange, onGenerate, isGenerating, sessionId, selectedTemplate: selectedTemplateProp, onTemplateChange, onUndo, onRedo, canUndo = false, canRedo = false }: HeidiNotePanelProps) {
+export function HeidiNotePanel({ note, noteJson, onNoteChange, onGenerate, isGenerating, sessionId, selectedTemplate: selectedTemplateProp, onTemplateChange, onUndo, onRedo, canUndo = false, canRedo = false }: HeidiNotePanelProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<"soap" | "progress" | "discharge" | "goldilocks">(selectedTemplateProp || "goldilocks");
   const [spellcheckEnabled, setSpellcheckEnabled] = useState(true);
+  const [viewMode, setViewMode] = useState<"formatted" | "raw">("formatted");
 
   const handleCopy = () => {
     navigator.clipboard.writeText(note);
@@ -195,15 +198,21 @@ export function HeidiNotePanel({ note, onNoteChange, onGenerate, isGenerating, s
         </div>
       </div>
 
-      {/* Note Editor */}
-      <Textarea
-        ref={textareaRef}
-        spellCheck={spellcheckEnabled}
-        value={note}
-        onChange={(e) => onNoteChange(e.target.value)}
-        placeholder="Your clinical note will appear here after generation..."
-        className="flex-1 min-h-[500px] text-sm resize-none border bg-white focus-visible:ring-0 focus-visible:ring-offset-0"
-      />
+      {/* Note Display/Editor */}
+      {viewMode === "formatted" && noteJson ? (
+        <div className="flex-1 min-h-[500px] p-6 border rounded-lg bg-card overflow-auto">
+          <SOAPNoteDisplay note={noteJson} />
+        </div>
+      ) : (
+        <Textarea
+          ref={textareaRef}
+          spellCheck={spellcheckEnabled}
+          value={note}
+          onChange={(e) => onNoteChange(e.target.value)}
+          placeholder="Your clinical note will appear here after generation..."
+          className="flex-1 min-h-[500px] text-sm resize-none border bg-card focus-visible:ring-0 focus-visible:ring-offset-0"
+        />
+      )}
     </div>
   );
 }

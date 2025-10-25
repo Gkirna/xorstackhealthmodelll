@@ -18,10 +18,10 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 210 40% 10%;
 
-    /* Heidi Blue Primary */
-    --primary: 216 100% 53%; /* #0F5AFF */
+    /* Green Primary (like Heidi) */
+    --primary: 142 76% 36%; /* #16A34A */
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 216 100% 45%;
+    --primary-hover: 142 76% 30%;
 
     /* Violet Accent */
     --secondary: 258 90% 60%; /* #6B36FB */
@@ -88,9 +88,9 @@ All colors MUST be HSL.
     --popover: 210 35% 15%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 216 100% 53%;
+    --primary: 142 76% 36%;
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 216 100% 60%;
+    --primary-hover: 142 76% 40%;
 
     --secondary: 258 90% 60%;
     --secondary-foreground: 0 0% 100%;

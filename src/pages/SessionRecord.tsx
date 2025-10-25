@@ -484,6 +484,7 @@ const SessionRecord = () => {
             <TabsContent value="note" className="flex-1 mt-0 overflow-auto">
               <HeidiNotePanel
                 note={generatedNote}
+                noteJson={session?.note_json}
                 onNoteChange={setGeneratedNote}
                 onGenerate={handleGenerateNote}
                 isGenerating={isAutoPipelineRunning}
