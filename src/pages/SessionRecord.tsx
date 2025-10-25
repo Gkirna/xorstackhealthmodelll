@@ -20,7 +20,7 @@ import { HeidiNotePanel } from "@/components/session/HeidiNotePanel";
 import { DictatingPanel } from "@/components/session/DictatingPanel";
 import { AudioUploadTranscription } from "@/components/AudioUploadTranscription";
 import { AskHeidiBar } from "@/components/session/AskHeidiBar";
-import { UploadRecordingDialog } from "@/components/session/UploadRecordingDialog";
+// removed bottom alert block
 
 const SessionRecord = () => {
   const { id } = useParams();
@@ -77,31 +77,45 @@ const SessionRecord = () => {
 
   // Start mic transcription and automatically generate note when stopped
   const handleStartTranscribing = async () => {
+    // Prevent multiple simultaneous calls
+    if (isStartingRecording) {
+      return;
+    }
+
+    if (isRecording) {
+      // Stop recording and auto-generate note
+      toast.info('Stopping transcription and generating clinical note...');
+      stopRecording();
+      
+      // Wait a moment for final transcript to be saved
+      setTimeout(async () => {
+        await autoGenerateNote();
+      }, 1500);
+      return;
+    }
+
     if (recordingMode === 'upload') {
       toast.info('Upload flow coming soon. Please use Dictating or Transcribing for now.');
       return;
     }
 
     if (recordingMode === 'dictating' || recordingMode === 'transcribing') {
-      // Check if already recording
-      if (isRecording) {
-        // Stop recording and auto-generate note
-        toast.info('Stopping transcription and generating clinical note...');
-        stopRecording();
-        
-        // Wait a moment for final transcript to be saved
-        setTimeout(async () => {
-          await autoGenerateNote();
-        }, 1500);
-        return;
-      }
+      setIsStartingRecording(true);
       
-      // Start new recording session
-      setActiveTab('transcript');
-      speakerRef.current = 'provider'; // Reset to doctor
-      transcriptCountRef.current = 0;
-      toast.success('Starting live transcription... Speak now!');
-      await startRecording();
+      try {
+        // Start new recording session
+        setActiveTab('transcript');
+        speakerRef.current = 'provider'; // Reset to doctor
+        transcriptCountRef.current = 0;
+        toast.success('Starting live transcription... Speak now!');
+        
+        await startRecording();
+      } catch (error) {
+        console.error('Failed to start recording:', error);
+        toast.error('Failed to start recording. Please try again.');
+      } finally {
+        setIsStartingRecording(false);
+      }
       return;
     }
 
@@ -176,6 +190,7 @@ const SessionRecord = () => {
   const [template, setTemplate] = useState<"soap" | "progress" | "discharge" | "goldilocks">("soap");
   const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null);
   const [isAutoPipelineRunning, setIsAutoPipelineRunning] = useState(false);
+  const [isStartingRecording, setIsStartingRecording] = useState(false);
   
   // Info bar state
   const [patientName, setPatientName] = useState("");
@@ -399,7 +414,7 @@ const SessionRecord = () => {
           onRecordingModeChange={handleRecordingModeChange}
           onStartRecording={handleStartTranscribing}
           isRecording={isRecording}
-          onUploadClick={() => setUploadDialogOpen(true)}
+          isStartingRecording={isStartingRecording}
         />
 
         {/* Workflow Progress */}
@@ -483,12 +498,7 @@ const SessionRecord = () => {
         {/* Ask Heidi Bar */}
         <AskHeidiBar sessionId={id} transcript={transcript} context={context} />
 
-        {/* Upload Recording Dialog */}
-        <UploadRecordingDialog
-          open={uploadDialogOpen}
-          onOpenChange={setUploadDialogOpen}
-          onUpload={handleUploadRecording}
-        />
+        
       </div>
     </AppLayout>
   );

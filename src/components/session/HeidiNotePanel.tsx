@@ -207,3 +207,6 @@ export function HeidiNotePanel({ note, onNoteChange, onGenerate, isGenerating, s
     </div>
   );
 }
+
+
+

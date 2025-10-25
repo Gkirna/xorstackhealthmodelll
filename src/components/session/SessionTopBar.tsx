@@ -39,7 +39,7 @@ interface SessionTopBarProps {
   onRecordingModeChange: (mode: string) => void;
   onStartRecording?: () => void;
   isRecording?: boolean;
-  onUploadClick: () => void;
+  isStartingRecording?: boolean;
 }
 
 export function SessionTopBar({
@@ -56,7 +56,7 @@ export function SessionTopBar({
   onRecordingModeChange,
   onStartRecording,
   isRecording = false,
-  onUploadClick,
+  isStartingRecording = false,
 }: SessionTopBarProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(patientName);
@@ -96,48 +96,76 @@ export function SessionTopBar({
           </Button>
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button 
-              onClick={onStartRecording} 
-              className={`${
-                isRecording 
-                  ? 'bg-red-600 hover:bg-red-700 animate-pulse' 
-                  : 'bg-green-600 hover:bg-green-700'
-              } text-white px-4 py-2 h-9 rounded-md flex items-center gap-2`}
-            >
-              <Mic className="h-4 w-4" />
-              {isRecording ? 'Stop transcribing' : 'Start transcribing'}
-              <ChevronDown className="h-4 w-4 ml-1" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem
-              onClick={() => onRecordingModeChange('transcribing')}
-              className="flex items-center justify-between"
-            >
-              <span>Transcribing</span>
-              {recordingMode === 'transcribing' && <Check className="h-4 w-4 text-green-600" />}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => onRecordingModeChange('dictating')}
-              className="flex items-center justify-between"
-            >
-              <span>Dictating</span>
-              {recordingMode === 'dictating' && <Check className="h-4 w-4 text-green-600" />}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => {
-                onRecordingModeChange('upload');
-                onUploadClick();
-              }}
-              className="flex items-center justify-between"
-            >
-              <span>Upload session audio</span>
-              {recordingMode === 'upload' && <Check className="h-4 w-4 text-green-600" />}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center">
+          {/* Main Button - Start/Stop Process */}
+          <Button 
+            onClick={onStartRecording} 
+            disabled={isStartingRecording}
+            className={`${
+              isRecording 
+                ? 'bg-red-600 hover:bg-red-700 animate-pulse' 
+                : recordingMode === 'upload'
+                ? 'bg-blue-600 hover:bg-blue-700'
+                : 'bg-green-600 hover:bg-green-700'
+            } text-white px-4 py-2 h-9 rounded-r-none flex items-center gap-2 ${
+              isStartingRecording ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            <Mic className="h-4 w-4" />
+            {isStartingRecording 
+              ? 'Starting...'
+              : isRecording 
+                ? (recordingMode === 'transcribing' ? 'Stop transcribing' : 
+                   recordingMode === 'dictating' ? 'Stop dictating' : 'Stop')
+                : (recordingMode === 'transcribing' ? 'Start transcribing' : 
+                   recordingMode === 'dictating' ? 'Start dictating' : 
+                   recordingMode === 'upload' ? 'Upload session audio' : 'Start transcribing')
+            }
+          </Button>
+
+          {/* Chevron Down Dropdown - Mode Selection */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                disabled={isStartingRecording}
+                className={`${
+                  isRecording 
+                    ? 'bg-red-600 hover:bg-red-700' 
+                    : recordingMode === 'upload'
+                    ? 'bg-blue-600 hover:bg-blue-700'
+                    : 'bg-green-600 hover:bg-green-700'
+                } text-white px-2 h-9 rounded-l-none border-l-0 ${
+                  isStartingRecording ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem
+                onClick={() => onRecordingModeChange('transcribing')}
+                className="flex items-center justify-between"
+              >
+                <span>Transcribing</span>
+                {recordingMode === 'transcribing' && <Check className="h-4 w-4 text-green-600" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onRecordingModeChange('dictating')}
+                className="flex items-center justify-between"
+              >
+                <span>Dictating</span>
+                {recordingMode === 'dictating' && <Check className="h-4 w-4 text-green-600" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onRecordingModeChange('upload')}
+                className="flex items-center justify-between"
+              >
+                <span>Upload session audio</span>
+                {recordingMode === 'upload' && <Check className="h-4 w-4 text-green-600" />}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* Second Row: Date, Language, Badge, Timer, Mic */}
