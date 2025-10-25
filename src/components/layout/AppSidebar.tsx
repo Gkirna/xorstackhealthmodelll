@@ -28,7 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { NotificationSheet } from "@/components/NotificationSheet";
+import { NotificationCenter } from "@/components/NotificationCenter";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -78,7 +78,6 @@ export function AppSidebar() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("past");
   const [selectedSessions, setSelectedSessions] = useState<string[]>([]);
-  const [notificationOpen, setNotificationOpen] = useState(false);
   
   // Sessions data
   const { data: sessions = [], isLoading } = useSessions();
@@ -236,6 +235,7 @@ export function AppSidebar() {
 
           {/* Controls on the right (always visible) */}
           <div className="flex items-center gap-2">
+            {!isCollapsed && <NotificationCenter />}
             <SidebarTrigger />
           </div>
         </div>
@@ -243,10 +243,10 @@ export function AppSidebar() {
       
       <SidebarContent>
         {/* New Session Button - Prominent */}
-        <div className="p-4 space-y-3">
+        <div className="p-4">
           <Button 
             asChild 
-            className="w-full bg-primary hover:bg-primary-hover text-primary-foreground"
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
             size="lg"
           >
             <NavLink to="/session/new">
@@ -254,19 +254,6 @@ export function AppSidebar() {
               New session
             </NavLink>
           </Button>
-          
-          {/* Notification Button */}
-          {!isCollapsed && (
-            <Button 
-              variant="outline" 
-              size="lg"
-              className="w-full"
-              onClick={() => setNotificationOpen(true)}
-            >
-              <Bell className="h-4 w-4 mr-2" />
-              Notifications
-            </Button>
-          )}
         </div>
 
         {/* Main Navigation */}
@@ -599,9 +586,6 @@ export function AppSidebar() {
         </div>
       </div>
     )}
-    
-    {/* Notification Sheet */}
-    <NotificationSheet open={notificationOpen} onOpenChange={setNotificationOpen} />
     </div>
   );
 }

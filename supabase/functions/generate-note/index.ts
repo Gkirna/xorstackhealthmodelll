@@ -1,21 +1,33 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// import { serve } from "https://deno.land/std@0.168.0/http/server.ts"; 
+import express from "express";
+// import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
+import { env } from "process";
+import dotenv from "dotenv";
+dotenv.config();
+
+const app = express();
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseServiceRoleKey = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+if (!supabaseUrl || !supabaseServiceRoleKey) {
+  throw new Error('Missing Supabase environment variables');
+}
+app.post('/generate-note', async (req, res) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+      return new Response(null, { headers: corsHeaders });
+    }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+    const supabase = createClient(
+      supabaseUrl,
+      supabaseServiceRoleKey
+    );
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -38,7 +50,7 @@ serve(async (req) => {
     const startTime = Date.now();
 
     // Call Lovable AI (Gemini 2.5 Flash)
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const LOVABLE_API_KEY = process.env.VITE_LOVABLE_API_KEY;
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY not configured');
     }
