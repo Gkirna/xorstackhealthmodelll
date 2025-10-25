@@ -21,22 +21,25 @@ import {
   WandSparkles,
   Unlink,
   Check,
-  Trash2
+  Trash2,
+  Plus
 } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { NavLink, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { NotificationCenter } from "@/components/NotificationCenter";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useSessions, useDeleteSession } from "@/hooks/useSessions";
+import { useNotifications } from "@/hooks/useNotifications";
 import { format } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sidebar,
   SidebarContent,
@@ -82,6 +85,7 @@ export function AppSidebar() {
   // Sessions data
   const { data: sessions = [], isLoading } = useSessions();
   const deleteSession = useDeleteSession();
+  const { data: notifications = [] } = useNotifications();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -235,25 +239,79 @@ export function AppSidebar() {
 
           {/* Controls on the right (always visible) */}
           <div className="flex items-center gap-2">
-            {!isCollapsed && <NotificationCenter />}
             <SidebarTrigger />
           </div>
         </div>
       </SidebarHeader>
       
       <SidebarContent>
-        {/* New Session Button - Prominent */}
+        {/* New Session Button + Notification - Prominent */}
         <div className="p-4">
-          <Button 
-            asChild 
-            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-            size="lg"
-          >
-            <NavLink to="/session/new">
-              <PlusCircle className="h-4 w-4 mr-2" />
-              New session
-            </NavLink>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              asChild 
+              className="flex-1 bg-primary hover:bg-primary-hover text-primary-foreground"
+              size="lg"
+            >
+              <Link to="/session/new">
+                <Plus className="h-4 w-4 mr-2" />
+                New session
+              </Link>
+            </Button>
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="icon" className="relative h-11 w-11">
+                  <Bell className="h-5 w-5" />
+                  {notifications.length > 0 && (
+                    <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-[10px] font-bold text-white flex items-center justify-center">
+                      {notifications.length}
+                    </span>
+                  )}
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-96 p-0">
+                <div className="flex flex-col h-full">
+                  <div className="flex items-center justify-between p-6 border-b">
+                    <h2 className="text-lg font-semibold">Notifications</h2>
+                  </div>
+                  <ScrollArea className="flex-1">
+                    {notifications.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center px-6">
+                        <div className="mb-4 text-muted-foreground">
+                          <svg className="w-20 h-20 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                        <h3 className="text-lg font-medium mb-2">Nothing to see here</h3>
+                        <p className="text-sm text-muted-foreground max-w-sm">
+                          No more notifications, you're free to focus on patient care.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-4 space-y-3">
+                        {notifications.map((notification) => (
+                          <div
+                            key={notification.id}
+                            className="p-4 rounded-lg border bg-card hover:bg-accent/50 transition-all cursor-pointer"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1">
+                                <p className="font-medium text-sm mb-1">{notification.title}</p>
+                                <p className="text-xs text-muted-foreground mb-2">{notification.message}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {new Date(notification.created_at).toLocaleString()}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
         </div>
 
         {/* Main Navigation */}

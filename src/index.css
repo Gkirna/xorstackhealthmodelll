@@ -9,41 +9,42 @@ All colors MUST be HSL.
 @layer base {
   :root {
     /* Heidi Health Design System - Light Mode */
-    --background: 230 30% 94%; /* #E6EAF2 */
-    --foreground: 210 40% 10%; /* #182029 */
+    --background: 40 20% 96%; /* #F7F5F2 - Warm beige background */
+    --foreground: 0 0% 20%; /* #333333 - Dark text */
 
     --card: 0 0% 100%;
-    --card-foreground: 210 40% 10%;
+    --card-foreground: 0 0% 20%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 210 40% 10%;
+    --popover-foreground: 0 0% 20%;
 
-    /* Heidi Blue Primary */
-    --primary: 216 100% 53%; /* #0F5AFF */
+    /* Brown Primary for most buttons */
+    --primary: 25 35% 35%; /* #6B4E3D - Brown */
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 216 100% 45%;
+    --primary-hover: 25 35% 28%;
 
-    /* Violet Accent */
-    --secondary: 258 90% 60%; /* #6B36FB */
-    --secondary-foreground: 0 0% 100%;
-    --secondary-hover: 258 90% 50%;
+    /* Green for action buttons */
+    --success: 142 76% 36%; /* #16A34A - Green */
+    --success-foreground: 0 0% 100%;
+    --success-hover: 142 76% 30%;
 
     /* Muted backgrounds */
-    --muted: 230 30% 94%;
-    --muted-foreground: 210 16% 47%;
+    --muted: 40 15% 92%;
+    --muted-foreground: 0 0% 45%;
 
-    /* Gold Accent */
-    --accent: 45 100% 50%; /* #FFD700 */
-    --accent-foreground: 210 40% 10%;
-    --accent-light: 46 100% 72%; /* #FEDA6A */
+    /* Secondary - kept for compatibility */
+    --secondary: 25 25% 50%;
+    --secondary-foreground: 0 0% 100%;
+    --secondary-hover: 25 25% 40%;
+
+    /* Accent */
+    --accent: 40 15% 92%;
+    --accent-foreground: 0 0% 20%;
+    --accent-light: 40 20% 95%;
 
     /* Destructive */
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-
-    /* Success - Green */
-    --success: 142 71% 45%;
-    --success-foreground: 0 0% 100%;
 
     /* Warning - Amber */
     --warning: 38 92% 50%;
@@ -79,35 +80,36 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 210 40% 10%;
-    --foreground: 210 40% 98%;
+    --background: 0 0% 12%;
+    --foreground: 0 0% 95%;
 
-    --card: 210 35% 15%;
-    --card-foreground: 210 40% 98%;
+    --card: 0 0% 15%;
+    --card-foreground: 0 0% 95%;
 
-    --popover: 210 35% 15%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 0 0% 15%;
+    --popover-foreground: 0 0% 95%;
 
-    --primary: 216 100% 53%;
+    --primary: 25 35% 35%;
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 216 100% 60%;
+    --primary-hover: 25 35% 42%;
 
-    --secondary: 258 90% 60%;
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --success-hover: 142 76% 42%;
+
+    --secondary: 25 25% 50%;
     --secondary-foreground: 0 0% 100%;
-    --secondary-hover: 258 90% 70%;
+    --secondary-hover: 25 25% 60%;
 
-    --muted: 210 30% 20%;
-    --muted-foreground: 215 20% 65%;
+    --muted: 0 0% 20%;
+    --muted-foreground: 0 0% 65%;
 
-    --accent: 45 100% 50%;
-    --accent-foreground: 210 40% 10%;
-    --accent-light: 46 100% 72%;
+    --accent: 0 0% 20%;
+    --accent-foreground: 0 0% 95%;
+    --accent-light: 0 0% 25%;
 
     --destructive: 0 63% 31%;
     --destructive-foreground: 0 0% 100%;
-
-    --success: 142 71% 35%;
-    --success-foreground: 0 0% 100%;
 
     --warning: 38 92% 40%;
     --warning-foreground: 0 0% 100%;

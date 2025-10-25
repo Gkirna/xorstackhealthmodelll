@@ -191,6 +191,8 @@ const SessionRecord = () => {
   const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null);
   const [isAutoPipelineRunning, setIsAutoPipelineRunning] = useState(false);
   const [isStartingRecording, setIsStartingRecording] = useState(false);
+  const [showFormattedNote, setShowFormattedNote] = useState(true);
+  const [noteJson, setNoteJson] = useState<any>(null);
   
   // Info bar state
   const [patientName, setPatientName] = useState("");
@@ -199,7 +201,7 @@ const SessionRecord = () => {
   const [microphone, setMicrophone] = useState("default");
   const [elapsedTime, setElapsedTime] = useState("00:00:00");
   const [recordingMode, setRecordingMode] = useState("transcribing");
-  const [activeTab, setActiveTab] = useState<string>("note");
+  const [activeTab, setActiveTab] = useState<string>("transcript");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   
   const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
@@ -210,6 +212,8 @@ const SessionRecord = () => {
   useEffect(() => {
     if (session) {
       setPatientName(session.patient_name || "New Patient");
+      setGeneratedNote(session.generated_note || "");
+      setNoteJson(session.note_json || null);
       if (session.scheduled_at) {
         setSessionDate(new Date(session.scheduled_at));
       }
@@ -337,6 +341,7 @@ const SessionRecord = () => {
       
       if (result.success && result.note) {
         setGeneratedNote(result.note);
+        // Note: note_json will be fetched from session data after generation
         
         // Update session with all results
         await updateSession.mutateAsync({
@@ -488,6 +493,9 @@ const SessionRecord = () => {
                 onGenerate={handleGenerateNote}
                 isGenerating={isAutoPipelineRunning}
                 sessionId={id}
+                noteJson={noteJson}
+                showFormatted={showFormattedNote}
+                onToggleFormatted={() => setShowFormattedNote(!showFormattedNote)}
                 selectedTemplate={template}
                 onTemplateChange={setTemplate}
               />

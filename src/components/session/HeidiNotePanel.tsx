@@ -1,8 +1,9 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Copy, Download, Mic, Undo, Redo, ChevronDown, MoreHorizontal, Check } from "lucide-react";
+import { Copy, Download, Mic, Undo, Redo, ChevronDown, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
+import { ClinicalNoteDisplay } from "./ClinicalNoteDisplay";
 import {
   Select,
   SelectContent,
@@ -29,9 +30,27 @@ interface HeidiNotePanelProps {
   onRedo?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
+  noteJson?: any;
+  showFormatted?: boolean;
+  onToggleFormatted?: () => void;
 }
 
-export function HeidiNotePanel({ note, onNoteChange, onGenerate, isGenerating, sessionId, selectedTemplate: selectedTemplateProp, onTemplateChange, onUndo, onRedo, canUndo = false, canRedo = false }: HeidiNotePanelProps) {
+export function HeidiNotePanel({ 
+  note, 
+  onNoteChange, 
+  onGenerate, 
+  isGenerating, 
+  sessionId, 
+  selectedTemplate: selectedTemplateProp, 
+  onTemplateChange, 
+  onUndo, 
+  onRedo, 
+  canUndo = false, 
+  canRedo = false,
+  noteJson,
+  showFormatted = true,
+  onToggleFormatted 
+}: HeidiNotePanelProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<"soap" | "progress" | "discharge" | "goldilocks">(selectedTemplateProp || "goldilocks");
   const [spellcheckEnabled, setSpellcheckEnabled] = useState(true);
@@ -137,6 +156,11 @@ export function HeidiNotePanel({ note, onNoteChange, onGenerate, isGenerating, s
               <DropdownMenuItem onClick={onGenerate} disabled={isGenerating}>
                 {isGenerating ? "Generating..." : "Generate note"}
               </DropdownMenuItem>
+              {onToggleFormatted && (
+                <DropdownMenuItem onClick={onToggleFormatted}>
+                  {showFormatted ? "Show Raw Text" : "Show Formatted"}
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -195,15 +219,21 @@ export function HeidiNotePanel({ note, onNoteChange, onGenerate, isGenerating, s
         </div>
       </div>
 
-      {/* Note Editor */}
-      <Textarea
-        ref={textareaRef}
-        spellCheck={spellcheckEnabled}
-        value={note}
-        onChange={(e) => onNoteChange(e.target.value)}
-        placeholder="Your clinical note will appear here after generation..."
-        className="flex-1 min-h-[500px] text-sm resize-none border bg-white focus-visible:ring-0 focus-visible:ring-offset-0"
-      />
+      {/* Note Display */}
+      <div className="flex-1 overflow-auto">
+        {showFormatted && noteJson ? (
+          <ClinicalNoteDisplay noteJson={noteJson} plaintext={note} />
+        ) : (
+          <Textarea
+            ref={textareaRef}
+            spellCheck={spellcheckEnabled}
+            value={note}
+            onChange={(e) => onNoteChange(e.target.value)}
+            placeholder="Your clinical note will appear here after generation..."
+            className="w-full min-h-[500px] text-sm resize-none border bg-card focus-visible:ring-0 focus-visible:ring-offset-0"
+          />
+        )}
+      </div>
     </div>
   );
 }

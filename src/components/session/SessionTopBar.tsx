@@ -101,15 +101,8 @@ export function SessionTopBar({
           <Button 
             onClick={onStartRecording} 
             disabled={isStartingRecording}
-            className={`${
-              isRecording 
-                ? 'bg-red-600 hover:bg-red-700 animate-pulse' 
-                : recordingMode === 'upload'
-                ? 'bg-blue-600 hover:bg-blue-700'
-                : 'bg-green-600 hover:bg-green-700'
-            } text-white px-4 py-2 h-9 rounded-r-none flex items-center gap-2 ${
-              isStartingRecording ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
+            variant={isRecording ? "destructive" : "success"}
+            className="px-4 py-2 h-9 rounded-r-none flex items-center gap-2"
           >
             <Mic className="h-4 w-4" />
             {isStartingRecording 
@@ -128,15 +121,8 @@ export function SessionTopBar({
             <DropdownMenuTrigger asChild>
               <Button 
                 disabled={isStartingRecording}
-                className={`${
-                  isRecording 
-                    ? 'bg-red-600 hover:bg-red-700' 
-                    : recordingMode === 'upload'
-                    ? 'bg-blue-600 hover:bg-blue-700'
-                    : 'bg-green-600 hover:bg-green-700'
-                } text-white px-2 h-9 rounded-l-none border-l-0 ${
-                  isStartingRecording ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
+                variant={isRecording ? "destructive" : "success"}
+                className="px-2 h-9 rounded-l-none border-l border-white/20"
               >
                 <ChevronDown className="h-4 w-4" />
               </Button>
@@ -147,21 +133,21 @@ export function SessionTopBar({
                 className="flex items-center justify-between"
               >
                 <span>Transcribing</span>
-                {recordingMode === 'transcribing' && <Check className="h-4 w-4 text-green-600" />}
+                {recordingMode === 'transcribing' && <Check className="h-4 w-4" />}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => onRecordingModeChange('dictating')}
                 className="flex items-center justify-between"
               >
                 <span>Dictating</span>
-                {recordingMode === 'dictating' && <Check className="h-4 w-4 text-green-600" />}
+                {recordingMode === 'dictating' && <Check className="h-4 w-4" />}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => onRecordingModeChange('upload')}
                 className="flex items-center justify-between"
               >
                 <span>Upload session audio</span>
-                {recordingMode === 'upload' && <Check className="h-4 w-4 text-green-600" />}
+                {recordingMode === 'upload' && <Check className="h-4 w-4" />}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
