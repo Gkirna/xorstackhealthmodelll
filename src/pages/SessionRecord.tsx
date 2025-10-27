@@ -21,44 +21,39 @@ import { HeidiNotePanel } from "@/components/session/HeidiNotePanel";
 import { DictatingPanel } from "@/components/session/DictatingPanel";
 import { AudioUploadTranscription } from "@/components/AudioUploadTranscription";
 import { AskHeidiBar } from "@/components/session/AskHeidiBar";
-import { SpeakerToggle } from "@/components/session/SpeakerToggle";
+// removed bottom alert block
 
 const SessionRecord = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: session, isLoading } = useSession(id);
   const updateSession = useUpdateSession();
+  const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript } = useTranscription(id || '');
   
-  // State - declare before hooks that use callbacks
-  const [transcriptSaveStatus, setTranscriptSaveStatus] = useState<'saved' | 'saving' | 'error' | null>(null);
-  
-  const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript } = useTranscription(id || '', setTranscriptSaveStatus);
-  
-  // Speaker tracking - manually controlled for accuracy
-  const [currentSpeaker, setCurrentSpeaker] = useState<'provider' | 'patient'>('provider');
+  // Speaker tracking (alternates between doctor and patient)
+  const speakerRef = useRef<'provider' | 'patient'>('provider');
   const transcriptCountRef = useRef(0);
 
   // Memoized callback to prevent audio recorder reinitialization
   const handleTranscriptUpdate = useCallback((text: string, isFinal: boolean) => {
     if (isFinal && text.trim()) {
+      // Alternate speaker for each transcript chunk
+      const currentSpeaker = speakerRef.current;
       transcriptCountRef.current++;
       
       console.log(`💬 Transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
       
-      // Save to database with current speaker label
+      // Save to database with speaker label
       addTranscriptChunk(text, currentSpeaker);
       
       // Update local transcript with speaker label
-      const speakerLabel = currentSpeaker === 'provider' ? '👨‍⚕️ Doctor' : '🧑 Patient';
+      const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
       setTranscript(prev => prev ? `${prev}\n\n**${speakerLabel}:** ${text}` : `**${speakerLabel}:** ${text}`);
+      
+      // Alternate to next speaker
+      speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
     }
-  }, [addTranscriptChunk, currentSpeaker]);
-
-  // Handle speaker change from toggle
-  const handleSpeakerChange = useCallback((speaker: 'provider' | 'patient') => {
-    setCurrentSpeaker(speaker);
-    console.log(`🔄 Speaker changed to: ${speaker}`);
-  }, []);
+  }, [addTranscriptChunk]);
 
   const handleRecordingError = useCallback((error: string) => {
     console.error('Recording error:', error);
@@ -111,7 +106,7 @@ const SessionRecord = () => {
       try {
         // Start new recording session
         setActiveTab('transcript');
-        setCurrentSpeaker('provider'); // Reset to doctor
+        speakerRef.current = 'provider'; // Reset to doctor
         transcriptCountRef.current = 0;
         toast.success('Starting live transcription... Speak now!');
         
@@ -522,7 +517,6 @@ const SessionRecord = () => {
               <HeidiTranscriptPanel
                 transcript={transcript}
                 onTranscriptChange={setTranscript}
-                saveStatus={transcriptSaveStatus}
               />
             </TabsContent>
 
@@ -550,12 +544,7 @@ const SessionRecord = () => {
         {/* Ask Heidi Bar */}
         <AskHeidiBar sessionId={id} transcript={transcript} context={context} />
 
-        {/* Speaker Toggle - shows during live transcription */}
-        <SpeakerToggle
-          currentSpeaker={currentSpeaker}
-          onSpeakerChange={handleSpeakerChange}
-          isRecording={isRecording}
-        />
+        
       </div>
     </AppLayout>
   );

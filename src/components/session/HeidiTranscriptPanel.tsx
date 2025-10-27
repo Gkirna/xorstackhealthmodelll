@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Copy, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
+import { Copy } from "lucide-react";
 import { toast } from "sonner";
 
 interface HeidiTranscriptPanelProps {
@@ -10,7 +10,6 @@ interface HeidiTranscriptPanelProps {
   onRedo?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
-  saveStatus?: 'saving' | 'saved' | 'error' | null;
 }
 
 export function HeidiTranscriptPanel({
@@ -20,7 +19,6 @@ export function HeidiTranscriptPanel({
   onRedo,
   canUndo = false,
   canRedo = false,
-  saveStatus = null,
 }: HeidiTranscriptPanelProps) {
   const handleCopy = () => {
     if (transcript) {
@@ -35,32 +33,8 @@ export function HeidiTranscriptPanel({
   return (
     <div className="h-full flex flex-col">
       <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-3">
-          <div className="text-xs text-muted-foreground">
-            {wordCount} words · {charCount} characters
-          </div>
-          {saveStatus && (
-            <div className="flex items-center gap-1.5 text-xs">
-              {saveStatus === 'saving' && (
-                <>
-                  <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
-                  <span className="text-blue-500">Saving...</span>
-                </>
-              )}
-              {saveStatus === 'saved' && (
-                <>
-                  <CheckCircle2 className="h-3 w-3 text-success" />
-                  <span className="text-success">Saved</span>
-                </>
-              )}
-              {saveStatus === 'error' && (
-                <>
-                  <AlertCircle className="h-3 w-3 text-destructive" />
-                  <span className="text-destructive">Save failed</span>
-                </>
-              )}
-            </div>
-          )}
+        <div className="text-xs text-muted-foreground">
+          {wordCount} words · {charCount} characters
         </div>
         <div className="flex gap-1">
           {onUndo && (
