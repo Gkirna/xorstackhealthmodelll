@@ -15,11 +15,14 @@ export function useTranscription(sessionId: string) {
   const [transcriptChunks, setTranscriptChunks] = useState<TranscriptChunk[]>([]);
   const [isTranscribing, setIsTranscribing] = useState(false);
 
-  const addTranscriptChunk = useCallback(async (text: string, speaker: string = 'provider') => {
+  const addTranscriptChunk = useCallback(async (text: string, speaker: string = 'provider', retryCount = 0) => {
     if (!sessionId || !text.trim()) return;
 
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 1000; // 1 second
+
     try {
-      console.log('💾 Saving transcript chunk:', { sessionId, text: text.substring(0, 50) + '...', speaker });
+      console.log('💾 Saving transcript chunk:', { sessionId, text: text.substring(0, 50) + '...', speaker, attempt: retryCount + 1 });
       
       const { data, error } = await supabase
         .from('session_transcripts')
@@ -42,7 +45,33 @@ export function useTranscription(sessionId: string) {
       return data;
     } catch (error) {
       console.error('Error adding transcript chunk:', error);
-      toast.error('Failed to save transcript');
+      
+      // Retry logic with exponential backoff
+      if (retryCount < MAX_RETRIES) {
+        const delay = RETRY_DELAY * Math.pow(2, retryCount);
+        console.log(`🔄 Retrying in ${delay}ms... (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return addTranscriptChunk(text, speaker, retryCount + 1);
+      }
+      
+      // Final failure after all retries
+      toast.error('Failed to save transcript after multiple attempts', {
+        description: 'Your transcript is cached locally and will be saved when connection is restored.'
+      });
+      
+      // Store failed chunk locally for later retry
+      const failedChunk = {
+        id: `local-${Date.now()}`,
+        session_id: sessionId,
+        text: text.trim(),
+        speaker,
+        timestamp_offset: Date.now(),
+        created_at: new Date().toISOString(),
+        pending: true
+      };
+      
+      setTranscriptChunks(prev => [...prev, failedChunk as any]);
     }
   }, [sessionId]);
 

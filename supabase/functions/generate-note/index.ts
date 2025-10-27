@@ -32,11 +32,13 @@ serve(async (req) => {
     }
 
     const requestData = await req.json();
-    const { session_id, transcript_text, detail_level = 'medium' } = requestData;
+    const { session_id, transcript_text, detail_level = 'medium', template = 'soap' } = requestData;
 
     if (!session_id || !transcript_text) {
       throw new Error('Missing required fields: session_id, transcript_text');
     }
+
+    console.log(`Generating ${template} note with ${detail_level} detail level`);
 
     const startTime = Date.now();
 
@@ -46,27 +48,60 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
+    const TEMPLATE_STRUCTURES = {
+      soap: {
+        subjective: "Patient-reported symptoms, history, concerns",
+        objective: "Vital signs, physical exam findings, test results",
+        assessment: "Diagnosis, differential diagnoses, clinical impression",
+        plan: "Treatment plan, medications, follow-up, patient education"
+      },
+      hpi: {
+        hpi: "History of Present Illness with timeline",
+        physical_exam: "Physical examination findings",
+        assessment: "Clinical assessment and diagnoses",
+        plan: "Diagnostic workup, treatment, medications"
+      },
+      progress: {
+        interval_history: "Changes since last visit",
+        current_status: "Current symptoms and status",
+        assessment: "Updated clinical assessment",
+        plan: "Treatment changes and follow-up"
+      },
+      discharge: {
+        admission_diagnosis: "Reason for admission",
+        hospital_course: "Summary of hospital stay",
+        discharge_diagnosis: "Final diagnoses",
+        discharge_medications: "Medication list",
+        follow_up: "Follow-up instructions"
+      }
+    };
+
+    const templateStructure = TEMPLATE_STRUCTURES[template as keyof typeof TEMPLATE_STRUCTURES] || TEMPLATE_STRUCTURES.soap;
+    const sections = Object.entries(templateStructure)
+      .map(([key, desc]) => `    "${key}": "${desc}"`)
+      .join(',\n');
+
     const systemPrompt = `You are an expert medical scribe assistant with extensive knowledge of clinical documentation standards.
 
+Template: ${template.toUpperCase()}
 Detail level: ${detail_level}
 
 CRITICAL INSTRUCTIONS:
-1. Generate a comprehensive, accurate clinical note following SOAP format
-2. Use appropriate medical terminology and ICD-10 compatible language
-3. Include specific measurements, dosages, and clinical findings
-4. Maintain professional medical documentation standards
-5. Preserve patient safety information and critical alerts
-6. Structure the output as valid JSON
+1. Generate a comprehensive, accurate clinical note using the specified template
+2. Extract information from speaker-labeled transcript (Doctor: / Patient: prefixes)
+3. Use appropriate medical terminology and ICD-10 compatible language
+4. Include specific measurements, dosages, and clinical findings
+5. Maintain professional medical documentation standards
+6. Preserve patient safety information and critical alerts
+7. Structure the output as valid JSON
 
 Output format (MUST be valid JSON):
 {
-  "soap": {
-    "subjective": "Patient-reported symptoms, history, concerns",
-    "objective": "Vital signs, physical exam findings, test results",
-    "assessment": "Diagnosis, differential diagnoses, clinical impression",
-    "plan": "Treatment plan, medications, follow-up, patient education"
+  "template": "${template}",
+  "sections": {
+${sections}
   },
-  "plaintext": "Full formatted clinical note with all SOAP sections"
+  "plaintext": "Full formatted clinical note with proper section headers and content"
 }
 
 Quality criteria:
@@ -74,6 +109,7 @@ Quality criteria:
 - Completeness: No critical details omitted
 - Clarity: Medical terminology used appropriately
 - Structure: Logical flow and organization
+- Speaker Attribution: Correctly identify doctor vs patient statements
 - Compliance: Follows documentation standards`;
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -110,9 +146,17 @@ Quality criteria:
     let noteData;
     try {
       noteData = JSON.parse(generatedContent);
+      // Ensure we have the sections data
+      if (!noteData.sections && noteData.soap) {
+        // Legacy format conversion
+        noteData.sections = noteData.soap;
+        noteData.template = 'soap';
+      }
     } catch {
+      // Fallback for non-JSON responses
       noteData = {
-        soap: { subjective: '', objective: '', assessment: '', plan: '' },
+        template: template,
+        sections: {},
         plaintext: generatedContent
       };
     }
@@ -124,7 +168,7 @@ Quality criteria:
       .from('sessions')
       .update({
         generated_note: noteData.plaintext,
-        note_json: noteData.soap,
+        note_json: noteData.sections || noteData.soap || {},
         updated_at: new Date().toISOString(),
       })
       .eq('id', session_id)
@@ -158,7 +202,8 @@ Quality criteria:
       JSON.stringify({
         success: true,
         note: noteData.plaintext,
-        note_json: noteData.soap,
+        note_json: noteData.sections || noteData.soap || {},
+        template: noteData.template || template,
         warnings: [],
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

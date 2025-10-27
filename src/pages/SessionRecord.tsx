@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -139,15 +140,28 @@ const SessionRecord = () => {
       setIsAutoPipelineRunning(true);
       setActiveTab('note'); // Switch to note tab
       
-      toast.info('Generating clinical documentation...');
+      toast.info(`Generating ${template.toUpperCase()} clinical documentation...`);
+      setSaveStatus('saving');
       
       const result = await orchestratorRef.current.runCompletePipeline(id, transcript, {
         context,
         detailLevel: 'high',
+        template,
       });
       
       if (result.success && result.note) {
         setGeneratedNote(result.note);
+        // Fetch updated session to get note_json
+        const { data: updatedSession } = await supabase
+          .from('sessions')
+          .select('note_json')
+          .eq('id', id)
+          .single();
+        
+        if (updatedSession?.note_json) {
+          setNoteJson(updatedSession.note_json);
+        }
+        
         await updateSession.mutateAsync({ 
           id, 
           updates: { 
@@ -155,9 +169,14 @@ const SessionRecord = () => {
             status: 'review'
           } 
         });
+        setSaveStatus('saved');
         toast.success('Clinical documentation complete!');
+        
+        setTimeout(() => setSaveStatus(null), 3000);
       } else {
+        setSaveStatus('error');
         toast.error(result.errors?.[0] || 'Failed to generate note');
+        setTimeout(() => setSaveStatus(null), 5000);
       }
     } catch (error) {
       console.error('Note generation error:', error);
@@ -193,6 +212,7 @@ const SessionRecord = () => {
   const [isStartingRecording, setIsStartingRecording] = useState(false);
   const [showFormattedNote, setShowFormattedNote] = useState(true);
   const [noteJson, setNoteJson] = useState<any>(null);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | null>(null);
   
   // Info bar state
   const [patientName, setPatientName] = useState("");
@@ -333,15 +353,28 @@ const SessionRecord = () => {
     try {
       setIsAutoPipelineRunning(true);
       
+      setSaveStatus('saving');
+      
       // Run the complete auto-pipeline
       const result = await orchestratorRef.current.runCompletePipeline(id, transcript, {
         context,
         detailLevel: 'high',
+        template,
       });
       
       if (result.success && result.note) {
         setGeneratedNote(result.note);
-        // Note: note_json will be fetched from session data after generation
+        
+        // Fetch updated session to get note_json
+        const { data: updatedSession } = await supabase
+          .from('sessions')
+          .select('note_json')
+          .eq('id', id)
+          .single();
+        
+        if (updatedSession?.note_json) {
+          setNoteJson(updatedSession.note_json);
+        }
         
         // Update session with all results
         await updateSession.mutateAsync({
@@ -352,13 +385,18 @@ const SessionRecord = () => {
           },
         });
 
+        setSaveStatus('saved');
         toast.success('Clinical documentation complete!');
+        
+        setTimeout(() => setSaveStatus(null), 3000);
         
         if (result.errors && result.errors.length > 0) {
           toast.warning(`Note completed with ${result.errors.length} optional step(s) failed`);
         }
       } else {
+        setSaveStatus('error');
         toast.error(result.errors?.[0] || 'Failed to generate note');
+        setTimeout(() => setSaveStatus(null), 5000);
       }
     } catch (error) {
       console.error('Workflow error:', error);

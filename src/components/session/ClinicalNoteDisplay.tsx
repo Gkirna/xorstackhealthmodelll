@@ -1,57 +1,81 @@
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
-interface SOAPData {
-  subjective?: string;
-  objective?: string;
-  assessment?: string;
-  plan?: string;
+interface NoteSection {
+  [key: string]: string;
 }
 
 interface ClinicalNoteDisplayProps {
-  noteJson?: SOAPData | null;
+  noteJson?: NoteSection | null;
   plaintext?: string;
+  template?: 'soap' | 'hpi' | 'progress' | 'discharge';
 }
 
-export function ClinicalNoteDisplay({ noteJson, plaintext }: ClinicalNoteDisplayProps) {
-  // If we have structured SOAP data, display it formatted
-  if (noteJson && typeof noteJson === 'object') {
+const SECTION_LABELS: Record<string, Record<string, string>> = {
+  soap: {
+    subjective: 'Subjective',
+    objective: 'Objective',
+    assessment: 'Assessment',
+    plan: 'Plan'
+  },
+  hpi: {
+    hpi: 'History of Present Illness',
+    physical_exam: 'Physical Examination',
+    assessment: 'Assessment',
+    plan: 'Plan'
+  },
+  progress: {
+    interval_history: 'Interval History',
+    current_status: 'Current Status',
+    assessment: 'Assessment',
+    plan: 'Plan'
+  },
+  discharge: {
+    admission_diagnosis: 'Admission Diagnosis',
+    hospital_course: 'Hospital Course',
+    discharge_diagnosis: 'Discharge Diagnosis',
+    discharge_medications: 'Discharge Medications',
+    follow_up: 'Follow-up Instructions'
+  }
+};
+
+const TEMPLATE_LABELS: Record<string, string> = {
+  soap: 'SOAP Note',
+  hpi: 'HPI + Assessment + Plan',
+  progress: 'Progress Note',
+  discharge: 'Discharge Summary'
+};
+
+export function ClinicalNoteDisplay({ noteJson, plaintext, template = 'soap' }: ClinicalNoteDisplayProps) {
+  const sectionLabels = SECTION_LABELS[template] || SECTION_LABELS.soap;
+  const templateLabel = TEMPLATE_LABELS[template];
+  
+  // If we have structured data, display it formatted
+  if (noteJson && typeof noteJson === 'object' && Object.keys(noteJson).length > 0) {
     return (
-      <div className="space-y-6">
-        {noteJson.subjective && (
-          <Card className="p-4">
-            <h3 className="text-lg font-semibold mb-2 text-foreground">Subjective</h3>
-            <p className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
-              {noteJson.subjective}
-            </p>
-          </Card>
-        )}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Badge variant="outline" className="text-xs">
+            {templateLabel}
+          </Badge>
+        </div>
         
-        {noteJson.objective && (
-          <Card className="p-4">
-            <h3 className="text-lg font-semibold mb-2 text-foreground">Objective</h3>
-            <p className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
-              {noteJson.objective}
-            </p>
-          </Card>
-        )}
-        
-        {noteJson.assessment && (
-          <Card className="p-4">
-            <h3 className="text-lg font-semibold mb-2 text-foreground">Assessment</h3>
-            <p className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
-              {noteJson.assessment}
-            </p>
-          </Card>
-        )}
-        
-        {noteJson.plan && (
-          <Card className="p-4">
-            <h3 className="text-lg font-semibold mb-2 text-foreground">Plan</h3>
-            <p className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
-              {noteJson.plan}
-            </p>
-          </Card>
-        )}
+        {Object.entries(noteJson).map(([key, value]) => {
+          if (!value || typeof value !== 'string') return null;
+          
+          const label = sectionLabels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+          
+          return (
+            <Card key={key} className="p-5 border border-border/50 bg-card/50">
+              <h3 className="text-base font-semibold mb-3 text-foreground border-b border-border/30 pb-2">
+                {label}
+              </h3>
+              <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
+                {value}
+              </div>
+            </Card>
+          );
+        })}
       </div>
     );
   }
@@ -60,9 +84,9 @@ export function ClinicalNoteDisplay({ noteJson, plaintext }: ClinicalNoteDisplay
   if (plaintext) {
     return (
       <Card className="p-6">
-        <p className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed font-mono">
+        <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
           {plaintext}
-        </p>
+        </div>
       </Card>
     );
   }
@@ -71,7 +95,7 @@ export function ClinicalNoteDisplay({ noteJson, plaintext }: ClinicalNoteDisplay
   return (
     <Card className="p-6">
       <p className="text-sm text-muted-foreground text-center">
-        No clinical note generated yet. Start a session to create one.
+        No clinical note generated yet. Start recording to create one.
       </p>
     </Card>
   );

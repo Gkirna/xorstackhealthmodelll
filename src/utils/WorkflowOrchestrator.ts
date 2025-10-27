@@ -57,7 +57,7 @@ export class WorkflowOrchestrator {
   public async runCompletePipeline(
     sessionId: string,
     transcript: string,
-    options?: { context?: string; detailLevel?: 'low' | 'medium' | 'high'; template?: 'soap' | 'goldilocks' | 'progress' | 'discharge' }
+    options?: { context?: string; detailLevel?: 'low' | 'medium' | 'high'; template?: string }
   ): Promise<{
     success: boolean;
     note?: string;
@@ -140,7 +140,7 @@ export class WorkflowOrchestrator {
   private async generateNote(
     sessionId: string,
     transcript: string,
-    options?: { context?: string; detailLevel?: 'low' | 'medium' | 'high'; template?: 'soap' | 'goldilocks' | 'progress' | 'discharge' }
+    options?: { context?: string; detailLevel?: 'low' | 'medium' | 'high'; template?: string }
   ) {
     try {
       this.updateStep(1, { progress: 40, message: 'Generating SOAP note...' });
