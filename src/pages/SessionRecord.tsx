@@ -9,6 +9,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useSession, useUpdateSession } from "@/hooks/useSessions";
 import { useTranscription } from "@/hooks/useTranscription";
+import { useRealTimeTranscription } from "@/hooks/useRealTimeTranscription";
 import { useAudioRecording } from "@/hooks/useAudioRecording";
 import { useTranscriptUpdates } from "@/hooks/useRealtime";
 import { WorkflowOrchestrator } from "@/utils/WorkflowOrchestrator";
@@ -16,6 +17,7 @@ import { WorkflowProgress } from "@/components/WorkflowProgress";
 import type { WorkflowState } from "@/utils/WorkflowOrchestrator";
 import { SessionTopBar } from "@/components/session/SessionTopBar";
 import { HeidiTranscriptPanel } from "@/components/session/HeidiTranscriptPanel";
+import { EnhancedTranscriptPanel } from "@/components/session/EnhancedTranscriptPanel";
 import { HeidiContextPanel } from "@/components/session/HeidiContextPanel";
 import { HeidiNotePanel } from "@/components/session/HeidiNotePanel";
 import { DictatingPanel } from "@/components/session/DictatingPanel";
@@ -28,11 +30,29 @@ const SessionRecord = () => {
   const navigate = useNavigate();
   const { data: session, isLoading } = useSession(id);
   const updateSession = useUpdateSession();
-  const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript } = useTranscription(id || '');
+  // Enhanced real-time transcription with subscriptions
+  const {
+    transcriptChunks,
+    isTranscribing: isTranscribingState,
+    stats,
+    addTranscriptChunk,
+    loadTranscripts,
+    saveAllPendingChunks,
+  } = useRealTimeTranscription(id || '');
+  
+  // Keep backward compatibility
+  const getFullTranscript = useCallback(() => {
+    return transcriptChunks.map(chunk => chunk.text).join('\n\n');
+  }, [transcriptChunks]);
   
   // Speaker tracking (alternates between doctor and patient)
   const speakerRef = useRef<'provider' | 'patient'>('provider');
   const transcriptCountRef = useRef(0);
+
+  // Real-time subscription for transcript updates
+  useTranscriptUpdates(id || '', (newTranscript) => {
+    loadTranscripts();
+  });
 
   // Memoized callback to prevent audio recorder reinitialization
   const handleTranscriptUpdate = useCallback((text: string, isFinal: boolean) => {
@@ -43,7 +63,7 @@ const SessionRecord = () => {
       
       console.log(`💬 Transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
       
-      // Save to database with speaker label
+      // Save to database with speaker label (batched)
       addTranscriptChunk(text, currentSpeaker);
       
       // Update local transcript with speaker label
@@ -86,6 +106,10 @@ const SessionRecord = () => {
     if (isRecording) {
       // Stop recording and auto-generate note
       toast.info('Stopping transcription and generating clinical note...');
+      
+      // Save all pending chunks before stopping
+      await saveAllPendingChunks();
+      
       stopRecording();
       
       // Wait a moment for final transcript to be saved
@@ -514,9 +538,13 @@ const SessionRecord = () => {
                   onTranscriptGenerated={(t) => setTranscript(prev => prev ? `${prev}\n\n${t}` : t)}
                 />
               )}
-              <HeidiTranscriptPanel
+              <EnhancedTranscriptPanel
+                transcriptChunks={transcriptChunks}
                 transcript={transcript}
                 onTranscriptChange={setTranscript}
+                isTranscribing={isTranscribing || isTranscribingState}
+                stats={stats}
+                autoScroll={true}
               />
             </TabsContent>
 
