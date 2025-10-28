@@ -21,11 +21,8 @@ import { HeidiNotePanel } from "@/components/session/HeidiNotePanel";
 import { DictatingPanel } from "@/components/session/DictatingPanel";
 import { AudioUploadTranscription } from "@/components/AudioUploadTranscription";
 import { AskHeidiBar } from "@/components/session/AskHeidiBar";
-import { ExtremelyAdvancedVoiceVisualizationDashboard } from '@/components/ExtremelyAdvancedVoiceVisualizationDashboard';
+import { BackgroundVoiceAnalytics } from '@/components/BackgroundVoiceAnalytics';
 import { ExtremelyAdvancedAutoCorrectorDashboard } from '@/components/ExtremelyAdvancedAutoCorrectorDashboard';
-import { AdvancedTranscriptionDashboard } from '@/components/AdvancedTranscriptionDashboard';
-import { useAdvancedTranscription } from '@/hooks/useAdvancedTranscription';
-import type { EnhancedTranscriptionData } from '@/types/advancedTranscription';
 
 const SessionRecord = () => {
   const { id } = useParams();
@@ -52,7 +49,6 @@ const SessionRecord = () => {
   const [recordingMode, setRecordingMode] = useState("transcribing");
   const [activeTab, setActiveTab] = useState<string>("transcript");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [enhancedTranscriptionData, setEnhancedTranscriptionData] = useState<EnhancedTranscriptionData | null>(null);
   
   // ALL REFS NEXT
   const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
@@ -63,7 +59,6 @@ const SessionRecord = () => {
 
   // CUSTOM HOOKS NEXT
   const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats } = useTranscription(id || '', 'unknown');
-  const { processAudioWithFullAnalysis, isProcessing } = useAdvancedTranscription();
 
   const {
     startRecording,
@@ -91,31 +86,6 @@ const SessionRecord = () => {
         setTranscript(prev => prev ? `${prev}\n\n**${speakerLabel}:** ${text}` : `**${speakerLabel}:** ${text}`);
         
         speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
-      }
-    },
-    onRecordingComplete: async (audioBlob: Blob, audioUrl?: string) => {
-      console.log('🎯 Recording complete, starting advanced analysis...');
-      toast.info('Processing with advanced transcription and medical NER...');
-      
-      try {
-        // Convert blob to base64
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          const base64Audio = (reader.result as string).split(',')[1];
-          const enhancedData = await processAudioWithFullAnalysis(base64Audio);
-          
-          if (enhancedData) {
-            setEnhancedTranscriptionData(enhancedData);
-            console.log(`✅ Advanced analysis complete:`, {
-              speakers: enhancedData.speaker_count,
-              entities: enhancedData.entities.length,
-              confidence: (enhancedData.confidence * 100).toFixed(1) + '%'
-            });
-          }
-        };
-        reader.readAsDataURL(audioBlob);
-      } catch (error) {
-        console.error('Advanced transcription error:', error);
       }
     },
     onError: (error: string) => {
@@ -499,20 +469,11 @@ const SessionRecord = () => {
                 isTranscribing={isTranscribing}
               />
               
-              {/* Ultra-Advanced Voice Analytics Dashboard */}
-              <div className="mt-6">
-                <ExtremelyAdvancedVoiceVisualizationDashboard
-                  voiceAnalyzer={voiceAnalyzer}
-                  isActive={isRecording}
-                />
-              </div>
-              
-              {/* Advanced Transcription Analysis */}
-              {enhancedTranscriptionData && (
-                <div className="mt-6">
-                  <AdvancedTranscriptionDashboard data={enhancedTranscriptionData} />
-                </div>
-              )}
+              {/* Background Voice Analytics - All features running silently */}
+              <BackgroundVoiceAnalytics
+                voiceAnalyzer={voiceAnalyzer}
+                isActive={isRecording}
+              />
             </TabsContent>
 
             <TabsContent value="context" className="flex-1 mt-0 overflow-auto">

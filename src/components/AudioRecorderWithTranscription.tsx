@@ -2,18 +2,20 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Mic, Square, Play, Pause, Zap } from 'lucide-react';
+import { Mic, Square, Play, Pause, Zap, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Progress } from '@/components/ui/progress';
 import { RealTimeTranscription } from '@/utils/RealTimeTranscription';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { EnhancedAudioRecorder } from './EnhancedAudioRecorder';
 
 interface AudioRecorderWithTranscriptionProps {
   sessionId?: string;
   onTranscriptUpdate?: (transcript: string, isFinal: boolean) => void;
   onRecordingComplete?: (audioBlob: Blob, audioUrl?: string) => void;
   onFinalTranscriptChunk?: (text: string) => void;
+  useEnhancedFeatures?: boolean;
 }
 
 export function AudioRecorderWithTranscription({
@@ -21,6 +23,7 @@ export function AudioRecorderWithTranscription({
   onTranscriptUpdate,
   onRecordingComplete,
   onFinalTranscriptChunk,
+  useEnhancedFeatures = false,
 }: AudioRecorderWithTranscriptionProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -286,6 +289,18 @@ export function AudioRecorderWithTranscription({
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // Use enhanced features if enabled
+  if (useEnhancedFeatures) {
+    return (
+      <EnhancedAudioRecorder
+        sessionId={sessionId}
+        onTranscriptUpdate={onTranscriptUpdate}
+        onRecordingComplete={onRecordingComplete}
+        onFinalTranscriptChunk={onFinalTranscriptChunk}
+      />
+    );
+  }
 
   return (
     <Card>
