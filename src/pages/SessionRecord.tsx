@@ -21,46 +21,45 @@ import { HeidiNotePanel } from "@/components/session/HeidiNotePanel";
 import { DictatingPanel } from "@/components/session/DictatingPanel";
 import { AudioUploadTranscription } from "@/components/AudioUploadTranscription";
 import { AskHeidiBar } from "@/components/session/AskHeidiBar";
-// removed bottom alert block
+import { ExtremelyAdvancedVoiceVisualizationDashboard } from '@/components/ExtremelyAdvancedVoiceVisualizationDashboard';
+import { ExtremelyAdvancedAutoCorrectorDashboard } from '@/components/ExtremelyAdvancedAutoCorrectorDashboard';
 
 const SessionRecord = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: session, isLoading } = useSession(id);
   const updateSession = useUpdateSession();
-  const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats } = useTranscription(id || '');
   
-  // Speaker tracking (alternates between doctor and patient)
+  // ALL STATE HOOKS FIRST
+  const [transcript, setTranscript] = useState("");
+  const [context, setContext] = useState("");
+  const [generatedNote, setGeneratedNote] = useState("");
+  const [template, setTemplate] = useState<"soap" | "progress" | "discharge" | "goldilocks">("soap");
+  const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null);
+  const [isAutoPipelineRunning, setIsAutoPipelineRunning] = useState(false);
+  const [isStartingRecording, setIsStartingRecording] = useState(false);
+  const [showFormattedNote, setShowFormattedNote] = useState(true);
+  const [noteJson, setNoteJson] = useState<any>(null);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | null>(null);
+  const [patientName, setPatientName] = useState("");
+  const [sessionDate, setSessionDate] = useState(new Date());
+  const [language, setLanguage] = useState("en");
+  const [microphone, setMicrophone] = useState("default");
+  const [elapsedTime, setElapsedTime] = useState("00:00:00");
+  const [recordingMode, setRecordingMode] = useState("transcribing");
+  const [activeTab, setActiveTab] = useState<string>("transcript");
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  
+  // ALL REFS NEXT
+  const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const startTimeRef = useRef<Date>(new Date());
   const speakerRef = useRef<'provider' | 'patient'>('provider');
   const transcriptCountRef = useRef(0);
 
-  // Memoized callback to prevent audio recorder reinitialization
-  const handleTranscriptUpdate = useCallback((text: string, isFinal: boolean) => {
-    if (isFinal && text.trim()) {
-      // Alternate speaker for each transcript chunk
-      const currentSpeaker = speakerRef.current;
-      transcriptCountRef.current++;
-      
-      console.log(`💬 Transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
-      
-      // Save to database with speaker label
-      addTranscriptChunk(text, currentSpeaker);
-      
-      // Update local transcript with speaker label
-      const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
-      setTranscript(prev => prev ? `${prev}\n\n**${speakerLabel}:** ${text}` : `**${speakerLabel}:** ${text}`);
-      
-      // Alternate to next speaker
-      speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
-    }
-  }, [addTranscriptChunk]);
+  // CUSTOM HOOKS NEXT
+  const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats } = useTranscription(id || '', 'unknown');
 
-  const handleRecordingError = useCallback((error: string) => {
-    console.error('Recording error:', error);
-    toast.error(error);
-  }, []);
-
-  // Real-time audio recording & transcription
   const {
     startRecording,
     stopRecording,
@@ -70,29 +69,42 @@ const SessionRecord = () => {
     isPaused,
     duration,
     isTranscribing,
+    currentVoiceGender,
+    currentVoiceCharacteristics,
+    voiceAnalyzer,
+    extremelyAdvancedAutoCorrector,
   } = useAudioRecording({
     continuous: true,
-    onTranscriptUpdate: handleTranscriptUpdate,
-    onError: handleRecordingError,
+    onTranscriptUpdate: (text: string, isFinal: boolean) => {
+      if (isFinal && text.trim()) {
+        const currentSpeaker = speakerRef.current;
+        transcriptCountRef.current++;
+        
+        console.log(`💬 Transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
+        
+        const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
+        setTranscript(prev => prev ? `${prev}\n\n**${speakerLabel}:** ${text}` : `**${speakerLabel}:** ${text}`);
+        
+        speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
+      }
+    },
+    onError: (error: string) => {
+      console.error('Recording error:', error);
+      toast.error(error);
+    },
   });
 
-  // Start mic transcription and automatically generate note when stopped
-  const handleStartTranscribing = async () => {
-    // Prevent multiple simultaneous calls
+  // CALLBACKS AFTER HOOKS
+  const handleStartTranscribing = useCallback(async () => {
     if (isStartingRecording) {
       return;
     }
 
     if (isRecording) {
-      // Stop recording and auto-generate note
       toast.info('Stopping transcription and generating clinical note...');
-      
-      // Save all pending chunks before stopping
       await saveAllPendingChunks();
-      
       stopRecording();
       
-      // Wait a moment for final transcript to be saved
       setTimeout(async () => {
         await autoGenerateNote();
       }, 1500);
@@ -108,9 +120,8 @@ const SessionRecord = () => {
       setIsStartingRecording(true);
       
       try {
-        // Start new recording session
         setActiveTab('transcript');
-        speakerRef.current = 'provider'; // Reset to doctor
+        speakerRef.current = 'provider';
         transcriptCountRef.current = 0;
         toast.success('Starting live transcription... Speak now!');
         
@@ -124,15 +135,13 @@ const SessionRecord = () => {
       return;
     }
 
-    // If manual input exists, generate note immediately
     const hasManualInput = transcript.trim().length > 0 || context.trim().length > 0;
     if (hasManualInput) {
       await autoGenerateNote();
     }
-  };
+  }, [isStartingRecording, isRecording, recordingMode, transcript, context, saveAllPendingChunks, stopRecording, startRecording]);
 
-  // Auto-generate clinical note from transcript
-  const autoGenerateNote = async () => {
+  const autoGenerateNote = useCallback(async () => {
     if (!id || !orchestratorRef.current) return;
     
     if (!transcript.trim()) {
@@ -142,7 +151,7 @@ const SessionRecord = () => {
 
     try {
       setIsAutoPipelineRunning(true);
-      setActiveTab('note'); // Switch to note tab
+      setActiveTab('note');
       
       toast.info(`Generating ${template.toUpperCase()} clinical documentation...`);
       setSaveStatus('saving');
@@ -155,7 +164,6 @@ const SessionRecord = () => {
       
       if (result.success && result.note) {
         setGeneratedNote(result.note);
-        // Fetch updated session to get note_json
         const { data: updatedSession } = await supabase
           .from('sessions')
           .select('note_json')
@@ -188,9 +196,9 @@ const SessionRecord = () => {
     } finally {
       setIsAutoPipelineRunning(false);
     }
-  };
+  }, [id, transcript, context, template, updateSession]);
 
-  const handleRecordingModeChange = (mode: string) => {
+  const handleRecordingModeChange = useCallback((mode: string) => {
     setRecordingMode(mode);
     if (mode === 'dictating' || mode === 'upload' || mode === 'transcribing') {
       setActiveTab('transcript');
@@ -198,147 +206,14 @@ const SessionRecord = () => {
     if (mode === 'upload') {
       setUploadDialogOpen(true);
     }
-  };
+  }, []);
 
-  const handleUploadRecording = async (file: File, mode: "transcribe" | "dictate") => {
+  const handleUploadRecording = useCallback(async (file: File, mode: "transcribe" | "dictate") => {
     toast.info(`Processing ${file.name}...`);
-    // TODO: Implement audio file upload and transcription
     console.log('Upload file:', file, 'Mode:', mode);
-  };
-  
-  // State
-  const [transcript, setTranscript] = useState("");
-  const [context, setContext] = useState("");
-  const [generatedNote, setGeneratedNote] = useState("");
-  const [template, setTemplate] = useState<"soap" | "progress" | "discharge" | "goldilocks">("soap");
-  const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null);
-  const [isAutoPipelineRunning, setIsAutoPipelineRunning] = useState(false);
-  const [isStartingRecording, setIsStartingRecording] = useState(false);
-  const [showFormattedNote, setShowFormattedNote] = useState(true);
-  const [noteJson, setNoteJson] = useState<any>(null);
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | null>(null);
-  
-  // Info bar state
-  const [patientName, setPatientName] = useState("");
-  const [sessionDate, setSessionDate] = useState(new Date());
-  const [language, setLanguage] = useState("en");
-  const [microphone, setMicrophone] = useState("default");
-  const [elapsedTime, setElapsedTime] = useState("00:00:00");
-  const [recordingMode, setRecordingMode] = useState("transcribing");
-  const [activeTab, setActiveTab] = useState<string>("transcript");
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  
-  const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
-  const timerRef = useRef<number | null>(null);
-  const startTimeRef = useRef<Date>(new Date());
-
-  // Initialize session data
-  useEffect(() => {
-    if (session) {
-      setPatientName(session.patient_name || "New Patient");
-      setGeneratedNote(session.generated_note || "");
-      setNoteJson(session.note_json || null);
-      if (session.scheduled_at) {
-        setSessionDate(new Date(session.scheduled_at));
-      }
-    }
-  }, [session]);
-
-  // Auto-save patient name on change
-  useEffect(() => {
-    if (!session || !id) return;
-    
-    const timeoutId = setTimeout(async () => {
-      if (patientName !== session.patient_name) {
-        await updateSession.mutateAsync({
-          id,
-          updates: { patient_name: patientName },
-        });
-      }
-    }, 1000); // Debounce by 1 second
-
-    return () => clearTimeout(timeoutId);
-  }, [patientName, session, id, updateSession]);
-
-  // Initialize workflow orchestrator
-  useEffect(() => {
-    orchestratorRef.current = new WorkflowOrchestrator((state) => {
-      setWorkflowState(state);
-      setIsAutoPipelineRunning(state.isRunning);
-    });
-    
-    return () => {
-      orchestratorRef.current = null;
-    };
   }, []);
 
-  // Timer for elapsed time
-  useEffect(() => {
-    const updateTimer = () => {
-      const now = new Date();
-      const diff = now.getTime() - startTimeRef.current.getTime();
-      const hours = Math.floor(diff / 3600000);
-      const minutes = Math.floor((diff % 3600000) / 60000);
-      const seconds = Math.floor((diff % 60000) / 1000);
-      setElapsedTime(
-        `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
-      );
-    };
-
-    timerRef.current = window.setInterval(updateTimer, 1000);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, []);
-
-  // Load existing transcripts
-  useEffect(() => {
-    if (id) {
-      loadTranscripts();
-    }
-  }, [id, loadTranscripts]);
-
-  // Update transcript when chunks change
-  useEffect(() => {
-    const fullTranscript = getFullTranscript();
-    if (fullTranscript) {
-      setTranscript(fullTranscript);
-    }
-  }, [transcriptChunks, getFullTranscript]);
-
-  // Subscribe to realtime transcript updates
-  useTranscriptUpdates(id || '', (newTranscript) => {
-    loadTranscripts();
-  });
-
-  // Handle real-time transcript chunks from audio recorder
-  const handleTranscriptChunk = async (text: string) => {
-    if (!text.trim() || !id) return;
-    
-    // Save to database
-    await addTranscriptChunk(text, 'provider');
-    
-    // Update local transcript
-    setTranscript(prev => prev ? `${prev}\n\n${text}` : text);
-  };
-
-  const handleAudioRecordingComplete = async (audioBlob: Blob, audioUrl?: string) => {
-    console.log('Audio recording complete, size:', audioBlob.size);
-    
-    if (audioUrl && id) {
-      // Update session with audio URL
-      await updateSession.mutateAsync({
-        id,
-        updates: {
-          // Note: You may need to add an audio_url column to sessions table
-        }
-      });
-      
-      toast.success('Recording saved');
-    }
-  };
-
-  const handleGenerateNote = async () => {
+  const handleGenerateNote = useCallback(async () => {
     if (!transcript.trim()) {
       toast.error("Please add transcript content first");
       return;
@@ -356,10 +231,8 @@ const SessionRecord = () => {
 
     try {
       setIsAutoPipelineRunning(true);
-      
       setSaveStatus('saving');
       
-      // Run the complete auto-pipeline
       const result = await orchestratorRef.current.runCompletePipeline(id, transcript, {
         context,
         detailLevel: 'high',
@@ -369,7 +242,6 @@ const SessionRecord = () => {
       if (result.success && result.note) {
         setGeneratedNote(result.note);
         
-        // Fetch updated session to get note_json
         const { data: updatedSession } = await supabase
           .from('sessions')
           .select('note_json')
@@ -380,7 +252,6 @@ const SessionRecord = () => {
           setNoteJson(updatedSession.note_json);
         }
         
-        // Update session with all results
         await updateSession.mutateAsync({
           id,
           updates: {
@@ -408,9 +279,9 @@ const SessionRecord = () => {
     } finally {
       setIsAutoPipelineRunning(false);
     }
-  };
+  }, [transcript, id, session, context, template, updateSession]);
 
-  const handleFinishRecording = async () => {
+  const handleFinishRecording = useCallback(async () => {
     if (!generatedNote) {
       toast.error("Please generate a note before finishing");
       return;
@@ -418,7 +289,80 @@ const SessionRecord = () => {
     
     toast.success("Session saved!");
     navigate(`/session/${id}/review`);
-  };
+  }, [generatedNote, navigate, id]);
+
+  // EFFECTS LAST
+  useEffect(() => {
+    if (session) {
+      setPatientName(session.patient_name || "New Patient");
+      setGeneratedNote(session.generated_note || "");
+      setNoteJson(session.note_json || null);
+      if (session.scheduled_at) {
+        setSessionDate(new Date(session.scheduled_at));
+      }
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (!session || !id) return;
+    
+    const timeoutId = setTimeout(async () => {
+      if (patientName !== session.patient_name) {
+        await updateSession.mutateAsync({
+          id,
+          updates: { patient_name: patientName },
+        });
+      }
+    }, 1000);
+
+    return () => clearTimeout(timeoutId);
+  }, [patientName, session, id, updateSession]);
+
+  useEffect(() => {
+    orchestratorRef.current = new WorkflowOrchestrator((state) => {
+      setWorkflowState(state);
+      setIsAutoPipelineRunning(state.isRunning);
+    });
+    
+    return () => {
+      orchestratorRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const updateTimer = () => {
+      const now = new Date();
+      const diff = now.getTime() - startTimeRef.current.getTime();
+      const hours = Math.floor(diff / 3600000);
+      const minutes = Math.floor((diff % 3600000) / 60000);
+      const seconds = Math.floor((diff % 60000) / 1000);
+      setElapsedTime(
+        `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+      );
+    };
+
+    timerRef.current = window.setInterval(updateTimer, 1000);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (id) {
+      loadTranscripts();
+    }
+  }, [id, loadTranscripts]);
+
+  useEffect(() => {
+    const fullTranscript = getFullTranscript();
+    if (fullTranscript) {
+      setTranscript(fullTranscript);
+    }
+  }, [transcriptChunks, getFullTranscript]);
+
+  useTranscriptUpdates(id || '', (newTranscript) => {
+    loadTranscripts();
+  });
 
   if (isLoading) {
     return (
@@ -524,6 +468,22 @@ const SessionRecord = () => {
                 stats={stats}
                 isTranscribing={isTranscribing}
               />
+              
+              {/* Ultra-Advanced Voice Analytics Dashboard */}
+              <div className="mt-6">
+                <ExtremelyAdvancedVoiceVisualizationDashboard
+                  voiceAnalyzer={voiceAnalyzer}
+                  isActive={isRecording}
+                />
+              </div>
+              
+              {/* EXTREMELY ADVANCED Auto-Corrector Dashboard */}
+              <div className="mt-6">
+                <ExtremelyAdvancedAutoCorrectorDashboard
+                  autoCorrector={extremelyAdvancedAutoCorrector}
+                  isActive={isRecording}
+                />
+              </div>
             </TabsContent>
 
             <TabsContent value="context" className="flex-1 mt-0 overflow-auto">
@@ -549,8 +509,6 @@ const SessionRecord = () => {
 
         {/* Ask Heidi Bar */}
         <AskHeidiBar sessionId={id} transcript={transcript} context={context} />
-
-        
       </div>
     </AppLayout>
   );

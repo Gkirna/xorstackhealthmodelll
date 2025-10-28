@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useTranscriptUpdates } from './useRealtime';
+import { VoiceAnalyzer } from '@/utils/VoiceAnalyzer';
 
 interface TranscriptChunk {
   id: string;
@@ -31,7 +32,7 @@ interface TranscriptionStats {
   sessionDuration?: number;
 }
 
-export function useTranscription(sessionId: string) {
+export function useTranscription(sessionId: string, currentVoiceGender?: 'male' | 'female' | 'unknown') {
   const [transcriptChunks, setTranscriptChunks] = useState<TranscriptChunk[]>([]);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [stats, setStats] = useState<TranscriptionStats>({
@@ -61,6 +62,18 @@ export function useTranscription(sessionId: string) {
   const connectionHealthRef = useRef<'healthy' | 'degraded' | 'offline'>('healthy');
   const failedBatchesRef = useRef<any[]>([]);
   const memoryOptimizerTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Voice analysis for gender detection
+  const voiceAnalyzerRef = useRef<VoiceAnalyzer | null>(null);
+  const currentVoiceGenderRef = useRef<'male' | 'female' | 'unknown'>('unknown');
+  const genderHistoryRef = useRef<{ gender: 'male' | 'female', timestamp: number }[]>([]);
+  
+  // Update gender from external source (from audio recording)
+  useEffect(() => {
+    if (currentVoiceGender) {
+      currentVoiceGenderRef.current = currentVoiceGender;
+    }
+  }, [currentVoiceGender]);
   
   // Configuration for long sessions (5+ minutes continuous transcription)
   const BATCH_SIZE = 5; // Save every 5 chunks
@@ -109,9 +122,9 @@ export function useTranscription(sessionId: string) {
   const addChunkToUI = useCallback((text: string, speaker: string, tempId: string, timestamp: number) => {
     const tempChunk: TranscriptChunk = {
       id: tempId,
-      session_id: sessionId,
-      text: text.trim(),
-      speaker,
+          session_id: sessionId,
+          text: text.trim(),
+          speaker,
       timestamp_offset: timestamp,
       created_at: new Date().toISOString(),
       pending: true,
@@ -129,9 +142,39 @@ export function useTranscription(sessionId: string) {
     return tempChunk;
   }, [sessionId]);
 
+  // Gender-based speaker detection
+  const detectSpeakerByGender = useCallback((text: string): string | null => {
+    // Track gender history
+    const now = Date.now();
+    
+    // If we have voice analysis available, use gender detection
+    if (voiceAnalyzerRef.current && currentVoiceGenderRef.current !== 'unknown') {
+      // Update gender history
+      genderHistoryRef.current.push({
+        gender: currentVoiceGenderRef.current,
+        timestamp: now
+      });
+      
+      // Keep only last 10 gender detections
+      if (genderHistoryRef.current.length > 10) {
+        genderHistoryRef.current.shift();
+      }
+      
+      // Determine speaker based on gender
+      // Female = patient (typically), Male = provider (typically)
+      const speaker = currentVoiceGenderRef.current === 'female' ? 'patient' : 'provider';
+      
+      console.log(`🎭 Gender detected: ${currentVoiceGenderRef.current} → ${speaker}`);
+      return speaker;
+    }
+    
+    // No gender detection available
+    return null;
+  }, []);
+
   // STRATEGY 2: Enhanced Smart Speaker Detection
   // Handles clinical pauses, thinking time, and natural speech gaps intelligently
-  const determineSpeaker = useCallback((text: string): string => {
+  const determineSpeakerByGaps = useCallback((text: string): string => {
     const now = Date.now();
     const timeSinceLastChunk = now - lastChunkTimeRef.current;
     const timeSinceLastChange = now - lastSpeakerChangeTimeRef.current;
@@ -193,6 +236,22 @@ export function useTranscription(sessionId: string) {
     chunkCountPerSpeakerRef.current++;
     return lastSpeakerRef.current;
   }, []);
+
+  // Main speaker determination function
+  const determineSpeaker = useCallback((text: string): string => {
+    // Try gender detection first, fallback to gap detection
+    const genderSpeaker = detectSpeakerByGender(text);
+    
+    if (genderSpeaker) {
+      // Update last speaker if gender detection is available
+      lastSpeakerRef.current = genderSpeaker;
+      lastSpeakerChangeTimeRef.current = Date.now();
+      return genderSpeaker;
+    }
+    
+    // Fallback to gap-based detection
+    return determineSpeakerByGaps(text);
+  }, [detectSpeakerByGender, determineSpeakerByGaps]);
 
   // Batch insert to database
   const savePendingChunks = useCallback(async (chunks: PendingChunk[], retryCount = 0): Promise<any[] | null> => {
@@ -313,8 +372,8 @@ export function useTranscription(sessionId: string) {
       // Show error only on final failure
       if (retryCount === MAX_RETRIES) {
         toast.error('Failed to save transcripts after multiple attempts', {
-          description: 'Your transcript is cached locally and will be saved when connection is restored.'
-        });
+        description: 'Your transcript is cached locally and will be saved when connection is restored.'
+      });
       }
       
       return null;
@@ -453,7 +512,7 @@ export function useTranscription(sessionId: string) {
     
     // Add to queue
     pendingChunksRef.current.push({
-      text: text.trim(),
+        text: text.trim(),
       speaker: detectedSpeaker,
       timestamp,
       tempId,
