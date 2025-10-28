@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { RealTimeTranscription } from '@/utils/RealTimeTranscription';
-import { ExtremelyAdvancedVoiceAnalyzer } from '@/utils/ExtremelyAdvancedVoiceAnalyzer';
+import { VoiceAnalyzer } from '@/utils/VoiceAnalyzer';
 import { MedicalAutoCorrector } from '@/utils/MedicalAutoCorrector';
-import { ExtremelyAdvancedMedicalAutoCorrector } from '@/utils/ExtremelyAdvancedMedicalAutoCorrector';
 
 interface AudioRecordingOptions {
   onTranscriptUpdate?: (transcript: string, isFinal: boolean) => void;
@@ -60,24 +59,11 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const voiceAnalyzerRef = useRef<ExtremelyAdvancedVoiceAnalyzer | null>(null);
-  const currentVoiceGenderRef = useRef<'male' | 'female' | 'non-binary' | 'unknown'>('unknown');
+  const voiceAnalyzerRef = useRef<VoiceAnalyzer | null>(null);
+  const currentVoiceGenderRef = useRef<'male' | 'female' | 'unknown'>('unknown');
   const voiceAnalysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const currentVoiceCharacteristicsRef = useRef<any>(null);
   const autoCorrectorRef = useRef<MedicalAutoCorrector>(new MedicalAutoCorrector());
-  const extremelyAdvancedAutoCorrectorRef = useRef<ExtremelyAdvancedMedicalAutoCorrector>(
-    new ExtremelyAdvancedMedicalAutoCorrector({
-      enableAI: true,
-      enableML: true,
-      enableQuantum: true,
-      enableLearning: true,
-      enablePrediction: true,
-      enableMultiModal: true,
-      confidenceThreshold: 0.8,
-      learningRate: 0.01,
-      quantumBits: 16
-    })
-  );
 
   // Initialize transcription engine
   useEffect(() => {
@@ -96,28 +82,29 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         
         if (isFinal) {
           console.log('✅ Final transcript chunk received');
+          
+          // Apply medical auto-correction before sending to callback
+          const correctedTranscript = autoCorrectorRef.current.correctTranscript(
+            transcript, 
+            currentVoiceGenderRef.current === 'unknown' ? 'provider' : 
+            currentVoiceGenderRef.current === 'female' ? 'patient' : 'provider'
+          );
+          
           if (onFinalTranscriptChunk) {
-            onFinalTranscriptChunk(transcript);
+            onFinalTranscriptChunk(correctedTranscript);
           }
           setState(prev => ({ ...prev, interimTranscript: '' }));
+          
+          if (onTranscriptUpdate) {
+            onTranscriptUpdate(correctedTranscript, true);
+          }
         } else {
           console.log('⏳ Interim transcript update');
           setState(prev => ({ ...prev, interimTranscript: transcript }));
-        }
-        
-        // Apply EXTREMELY ADVANCED auto-correction before sending to callback
-        const correctedTranscript = await extremelyAdvancedAutoCorrectorRef.current.correctTranscriptExtremely(
-          transcript, 
-          currentVoiceGenderRef.current === 'unknown' ? 'provider' : 'patient',
-          {
-            voiceCharacteristics: currentVoiceCharacteristicsRef.current,
-            timestamp: Date.now(),
-            speaker: currentVoiceGenderRef.current
+          
+          if (onTranscriptUpdate) {
+            onTranscriptUpdate(transcript, false);
           }
-        );
-        
-        if (onTranscriptUpdate) {
-          onTranscriptUpdate(correctedTranscript, isFinal);
         }
       },
       onError: (error) => {
@@ -188,92 +175,54 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       source.connect(analyserRef.current);
       analyserRef.current.fftSize = 256;
       
-      // Initialize EXTREMELY ADVANCED voice analyzer
+      // Initialize advanced voice analyzer
       try {
-        console.log('🎤 Initializing EXTREMELY ADVANCED voice analyzer...');
+        console.log('🎤 Initializing advanced voice analyzer...');
         
-        // Initialize voice analyzer with all features
-        voiceAnalyzerRef.current = new ExtremelyAdvancedVoiceAnalyzer({
-          enableDeepLearning: true,
-          enableQuantumAnalysis: true,
-          enableBiometricAuth: true,
-          enableAntiSpoofing: true,
-          enablePersonalityAnalysis: true,
-          enableHealthMonitoring: true,
-          enableCulturalAnalysis: true,
-          enableDeceptionDetection: true,
-          enableEmotionalContagion: true,
-          enableMicroExpressions: true,
-          enableNeuralStyleTransfer: true,
-          enableVoiceSynthesis: true,
-          enableRealTimeEnhancement: true,
-          enablePredictiveAnalytics: true,
-          enableQuantumNeuralNetworks: true,
-          confidenceThreshold: 0.8,
-          emotionThreshold: 0.7,
-          stressThreshold: 0.6,
-          authenticityThreshold: 0.9,
-          spoofingThreshold: 0.3,
-        });
-        
+        voiceAnalyzerRef.current = new VoiceAnalyzer();
         const characteristics = await voiceAnalyzerRef.current.initialize(stream);
         currentVoiceCharacteristicsRef.current = characteristics;
         
         if (characteristics.gender !== 'unknown') {
           currentVoiceGenderRef.current = characteristics.gender;
-          console.log(`🎭 EXTREME Voice detected: ${characteristics.gender} (${characteristics.pitch.toFixed(0)}Hz, confidence: ${(characteristics.confidence * 100).toFixed(0)}%)`);
-          
-          if (characteristics.emotion) {
-            console.log(`😊 EXTREME Emotion: ${characteristics.emotion.primary} (${(characteristics.emotion.confidence * 100).toFixed(0)}% confidence)`);
-            console.log(`🎯 Emotional Dimensions: Valence=${characteristics.emotion.valence.toFixed(2)}, Arousal=${characteristics.emotion.arousal.toFixed(2)}, Dominance=${characteristics.emotion.dominance.toFixed(2)}`);
-          }
-          
-          if (characteristics.stressLevel) {
-            console.log(`😰 EXTREME Stress level: ${(characteristics.stressLevel * 100).toFixed(0)}%`);
-          }
-          
-          console.log(`🛡️ Authenticity Score: ${(characteristics.authenticityScore * 100).toFixed(0)}%`);
-          console.log(`⚠️ Spoofing Risk: ${(characteristics.spoofingRisk * 100).toFixed(0)}%`);
-          console.log(`🧠 Cognitive Load: ${(characteristics.cognitiveLoad * 100).toFixed(0)}%`);
-          console.log(`🎭 Deception Indicators: ${(characteristics.deceptionIndicators * 100).toFixed(0)}%`);
+          console.log(`🎭 Voice detected: ${characteristics.gender} (${characteristics.pitch.toFixed(0)}Hz, confidence: ${(characteristics.confidence * 100).toFixed(0)}%)`);
         }
         
-        // Start EXTREMELY ADVANCED real-time analysis
-        const stopAnalysis = voiceAnalyzerRef.current.startExtremelyAdvancedAnalysis((updatedCharacteristics) => {
-          currentVoiceCharacteristicsRef.current = updatedCharacteristics;
-          
-          if (updatedCharacteristics.gender !== 'unknown' && updatedCharacteristics.confidence > 0.6) {
-            currentVoiceGenderRef.current = updatedCharacteristics.gender;
-          }
-        });
-        
-        // Store cleanup function
-        voiceAnalysisIntervalRef.current = setInterval(() => {
+        // Start real-time voice analysis (every 500ms)
+        voiceAnalysisIntervalRef.current = setInterval(async () => {
           if (voiceAnalyzerRef.current) {
-            const stats = voiceAnalyzerRef.current.getExtremelyAdvancedStatistics();
-            if (stats.speakers && Object.keys(stats.speakers).length > 0) {
-              console.log('📊 EXTREMELY ADVANCED speaker statistics:', stats);
-              console.log('🧠 ML Status:', stats.mlStatus);
-              console.log('🎯 Biometric Accuracy:', stats.biometricAccuracy);
-              console.log('😊 Emotion Accuracy:', stats.emotionAccuracy);
-              console.log('🛡️ Spoofing Detection:', stats.spoofingDetection);
-              console.log('🧠 Personality Accuracy:', stats.personalityAccuracy);
-              console.log('❤️ Health Monitoring:', stats.healthMonitoring);
+            try {
+              const updated = await voiceAnalyzerRef.current.analyzeVoiceSample();
+              currentVoiceCharacteristicsRef.current = updated;
+              
+              if (updated.gender !== 'unknown' && updated.confidence > 0.7) {
+                currentVoiceGenderRef.current = updated.gender;
+              }
+            } catch (error) {
+              // Silently continue if analysis fails
             }
           }
-        }, 5000); // Log stats every 5 seconds
+        }, 500);
         
-        console.log('✅ EXTREMELY ADVANCED voice analyzer active with ALL FEATURES');
-        console.log('🚀 Neural Networks: ACTIVE');
-        console.log('🌌 Quantum Processing: ACTIVE');
-        console.log('🛡️ Anti-Spoofing: ACTIVE');
-        console.log('🧠 Personality Analysis: ACTIVE');
-        console.log('❤️ Health Monitoring: ACTIVE');
-        console.log('🎭 Deception Detection: ACTIVE');
-        console.log('🌍 Cultural Analysis: ACTIVE');
-        console.log('🔬 Biometric Authentication: ACTIVE');
+        // Log speaker statistics every 5 seconds
+        const statsInterval = setInterval(() => {
+          if (voiceAnalyzerRef.current) {
+            const stats = voiceAnalyzerRef.current.getSpeakerStatistics();
+            if (Object.keys(stats).length > 0) {
+              console.log('📊 Speaker statistics:', stats);
+            }
+          }
+        }, 5000);
+        
+        // Store cleanup function
+        const originalInterval = voiceAnalysisIntervalRef.current;
+        voiceAnalysisIntervalRef.current = setInterval(() => {
+          clearInterval(statsInterval);
+        }, 0) as any;
+        
+        console.log('✅ Advanced voice analyzer active');
       } catch (error) {
-        console.warn('⚠️ EXTREMELY ADVANCED voice analyzer initialization failed:', error);
+        console.warn('⚠️ Voice analyzer initialization failed:', error);
         // Continue without voice analysis
       }
       
@@ -451,11 +400,11 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         duration: 0 
       }));
       
-      // Stop EXTREMELY ADVANCED voice analyzer
+      // Stop voice analyzer
       if (voiceAnalyzerRef.current) {
-        console.log('🧹 Cleaning up EXTREMELY ADVANCED voice analyzer...');
-        const stats = voiceAnalyzerRef.current.getExtremelyAdvancedStatistics();
-        console.log('📊 Final EXTREMELY ADVANCED statistics:', stats);
+        console.log('🧹 Cleaning up voice analyzer...');
+        const stats = voiceAnalyzerRef.current.getSpeakerStatistics();
+        console.log('📊 Final voice statistics:', stats);
         
         voiceAnalyzerRef.current.cleanup();
         voiceAnalyzerRef.current = null;
@@ -486,7 +435,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       URL.revokeObjectURL(state.recordedUrl);
     }
     
-    // Clean up EXTREMELY ADVANCED voice analyzer if still active
+    // Clean up voice analyzer if still active
     if (voiceAnalyzerRef.current) {
       voiceAnalyzerRef.current.cleanup();
       voiceAnalyzerRef.current = null;
@@ -519,9 +468,9 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     stopRecording,
     clearRecording,
     formatDuration,
-    currentVoiceGender: currentVoiceGenderRef.current, // Expose current voice gender
-    currentVoiceCharacteristics: currentVoiceCharacteristicsRef.current, // Expose full characteristics
-    voiceAnalyzer: voiceAnalyzerRef.current, // Expose voice analyzer instance
-    extremelyAdvancedAutoCorrector: extremelyAdvancedAutoCorrectorRef.current, // Expose EXTREME auto-corrector
+    currentVoiceGender: currentVoiceGenderRef.current,
+    currentVoiceCharacteristics: currentVoiceCharacteristicsRef.current,
+    voiceAnalyzer: voiceAnalyzerRef.current,
+    autoCorrector: autoCorrectorRef.current,
   };
 }

@@ -139,7 +139,7 @@ export class VoiceAnalyzer {
     const voiceQuality = this.assessVoiceQuality(dataArray, pitch, volume);
     
     // Identify or create speaker
-    const speakerId = this.identifySpeaker(pitch, gender);
+    const speakerId = this.identifySpeaker(pitch, gender === 'unknown' ? 'male' : gender);
     
     return {
       gender,

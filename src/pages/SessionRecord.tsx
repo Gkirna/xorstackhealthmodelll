@@ -72,7 +72,7 @@ const SessionRecord = () => {
     currentVoiceGender,
     currentVoiceCharacteristics,
     voiceAnalyzer,
-    extremelyAdvancedAutoCorrector,
+    autoCorrector,
   } = useAudioRecording({
     continuous: true,
     onTranscriptUpdate: (text: string, isFinal: boolean) => {
@@ -473,14 +473,6 @@ const SessionRecord = () => {
               <div className="mt-6">
                 <ExtremelyAdvancedVoiceVisualizationDashboard
                   voiceAnalyzer={voiceAnalyzer}
-                  isActive={isRecording}
-                />
-              </div>
-              
-              {/* EXTREMELY ADVANCED Auto-Corrector Dashboard */}
-              <div className="mt-6">
-                <ExtremelyAdvancedAutoCorrectorDashboard
-                  autoCorrector={extremelyAdvancedAutoCorrector}
                   isActive={isRecording}
                 />
               </div>
