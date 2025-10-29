@@ -104,8 +104,8 @@ export function SessionTopBar({
             variant={isRecording ? "destructive" : "default"}
             className={`px-4 py-2 h-9 rounded-r-none flex items-center gap-2 transition-all ${
               isRecording 
-                ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground animate-pulse' 
-                : 'bg-primary hover:bg-primary/90'
+                ? 'bg-red-600 hover:bg-red-700 text-white animate-pulse border-red-600' 
+                : 'bg-green-600 hover:bg-green-700 text-white border-green-600'
             }`}
           >
             <Mic className="h-4 w-4" />
@@ -125,8 +125,12 @@ export function SessionTopBar({
             <DropdownMenuTrigger asChild>
               <Button 
                 disabled={isStartingRecording}
-                variant={isRecording ? "destructive" : "success"}
-                className="px-2 h-9 rounded-l-none border-l border-white/20"
+                variant={isRecording ? "destructive" : "default"}
+                className={`px-2 h-9 rounded-l-none border-l transition-all ${
+                  isRecording 
+                    ? 'bg-red-600 hover:bg-red-700 text-white border-l-white/20' 
+                    : 'bg-green-600 hover:bg-green-700 text-white border-l-white/20'
+                }`}
               >
                 <ChevronDown className="h-4 w-4" />
               </Button>
