@@ -134,9 +134,8 @@ const SessionRecord = () => {
         stopRecording();
       }
       
-      setTimeout(async () => {
-        await autoGenerateNote();
-      }, 1500);
+      // Immediately generate note after stopping
+      await autoGenerateNote();
       return;
     }
 
