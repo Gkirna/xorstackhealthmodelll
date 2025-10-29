@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -31,12 +32,15 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    const requestData = await req.json();
-    const { session_id, transcript_text, detail_level = 'medium', template = 'soap' } = requestData;
+    const inputSchema = z.object({
+      session_id: z.string().uuid(),
+      transcript_text: z.string().min(1).max(100000),
+      detail_level: z.enum(['low', 'medium', 'high']).default('medium'),
+      template: z.string().default('soap')
+    });
 
-    if (!session_id || !transcript_text) {
-      throw new Error('Missing required fields: session_id, transcript_text');
-    }
+    const requestData = await req.json();
+    const { session_id, transcript_text, detail_level, template } = inputSchema.parse(requestData);
 
     console.log(`Generating ${template} note with ${detail_level} detail level`);
 
@@ -210,12 +214,26 @@ Quality criteria:
     );
 
   } catch (error) {
-    console.error('Error in generate-note:', error);
+    console.error('Error in generate-note');
+    
+    if (error instanceof z.ZodError) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Invalid input parameters' },
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+    
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
       JSON.stringify({
         success: false,
-        error: { code: 'GENERATION_ERROR', message: errorMessage },
+        error: { code: 'GENERATION_ERROR', message: 'An error occurred processing your request' },
       }),
       {
         status: errorMessage.includes('Unauthorized') ? 401 : 500,

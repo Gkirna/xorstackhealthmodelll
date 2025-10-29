@@ -98,7 +98,7 @@ const SessionRecord = () => {
     onRecordingComplete: async (audioBlob: Blob, audioUrl?: string) => {
       // Real-time mode handles its own completion
       if (recordingMode !== 'transcribing') {
-        console.log('🎯 Recording complete, finalizing...');
+        console.log('Recording complete, finalizing');
       }
     },
     onError: (error: string) => {

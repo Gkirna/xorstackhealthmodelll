@@ -29,9 +29,9 @@ export function ExportOptions({ sessionId, noteContent }: ExportOptionsProps) {
   const handleDownloadPDF = async () => {
     try {
       setIsExporting(true);
-      console.log('Starting PDF export for session:', sessionId);
+      console.log('Starting PDF export');
       const result = await exportNote(sessionId, 'pdf');
-      console.log('Export result:', result);
+      console.log('Export completed');
       
       if (result.success && result.data?.url) {
         // Open in new tab for download

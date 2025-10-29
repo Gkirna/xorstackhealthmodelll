@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,11 +22,13 @@ serve(async (req) => {
   }
 
   try {
-    const { text, segments } = await req.json();
+    const inputSchema = z.object({
+      text: z.string().min(1).max(50000),
+      segments: z.any().optional()
+    });
 
-    if (!text) {
-      throw new Error('No text provided for entity extraction');
-    }
+    const body = await req.json();
+    const { text, segments } = inputSchema.parse(body);
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -155,15 +158,30 @@ Return entities with their exact position in text and confidence score (0-1).`;
     );
 
   } catch (error) {
-    console.error('❌ Medical entity extraction error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Medical entity extraction error');
+    
+    if (error instanceof z.ZodError) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Invalid input parameters',
+          },
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
     
     return new Response(
       JSON.stringify({
         success: false,
         error: {
           code: 'ENTITY_EXTRACTION_ERROR',
-          message: errorMessage,
+          message: 'An error occurred processing your request',
         },
       }),
       {

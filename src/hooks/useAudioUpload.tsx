@@ -169,7 +169,7 @@ export function useAudioUpload(options: AudioUploadOptions = {}) {
       const transcriptText = data?.text || '';
       
       if (transcriptText) {
-        console.log('✅ Transcription completed:', transcriptText.substring(0, 100) + '...');
+        console.log('Transcription completed, length:', transcriptText.length);
         toast.success('Transcription completed');
         
         if (onTranscriptGenerated) {

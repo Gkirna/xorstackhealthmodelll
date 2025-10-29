@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -42,11 +43,14 @@ serve(async (req) => {
   }
 
   try {
-    const { audio } = await req.json();
+    const MAX_AUDIO_SIZE = 25 * 1024 * 1024; // 25MB base64 limit
+    
+    const inputSchema = z.object({
+      audio: z.string().min(1).max(MAX_AUDIO_SIZE)
+    });
 
-    if (!audio) {
-      throw new Error('No audio data provided');
-    }
+    const body = await req.json();
+    const { audio } = inputSchema.parse(body);
 
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     if (!OPENAI_API_KEY) {
@@ -76,18 +80,13 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Whisper API error:', errorText);
-      throw new Error(`Transcription failed: ${response.status}`);
+      console.error('Whisper API error, status:', response.status);
+      throw new Error(`Transcription failed`);
     }
 
     const result = await response.json();
 
-    console.log('✅ Advanced transcription complete:', {
-      text_length: result.text?.length || 0,
-      segments: result.segments?.length || 0,
-      duration: result.duration
-    });
+    console.log('Advanced transcription complete, segments:', result.segments?.length || 0);
 
     // Extract segments and create speaker diarization
     const segments = (result.segments || []).map((seg: any, idx: number) => ({
@@ -123,15 +122,30 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('❌ Advanced transcription error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Advanced transcription error');
+    
+    if (error instanceof z.ZodError) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Invalid audio data',
+          },
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
     
     return new Response(
       JSON.stringify({
         success: false,
         error: {
           code: 'TRANSCRIPTION_ERROR',
-          message: errorMessage,
+          message: 'An error occurred processing your audio',
         },
       }),
       {
