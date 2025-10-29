@@ -525,6 +525,10 @@ const SessionRecord = () => {
                     onTranscriptUpdate={(text) => {
                       setTranscript(prev => prev + '\n' + text);
                     }}
+                    onNoteUpdate={(note, noteJson) => {
+                      setGeneratedNote(note);
+                      setNoteJson(noteJson);
+                    }}
                     onAnalysisUpdate={(analysis) => {
                       console.log('🧠 AI Analysis:', analysis);
                     }}
