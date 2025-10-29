@@ -101,8 +101,12 @@ export function SessionTopBar({
           <Button 
             onClick={onStartRecording} 
             disabled={isStartingRecording}
-            variant={isRecording ? "destructive" : "success"}
-            className="px-4 py-2 h-9 rounded-r-none flex items-center gap-2"
+            variant={isRecording ? "destructive" : "default"}
+            className={`px-4 py-2 h-9 rounded-r-none flex items-center gap-2 transition-all ${
+              isRecording 
+                ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground animate-pulse' 
+                : 'bg-primary hover:bg-primary/90'
+            }`}
           >
             <Mic className="h-4 w-4" />
             {isStartingRecording 
