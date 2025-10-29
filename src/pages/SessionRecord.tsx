@@ -516,14 +516,6 @@ const SessionRecord = () => {
                 isTranscribing={isTranscribing || realtimeAdvanced.isTranscribing}
               />
               
-              {/* Ultra-Advanced Voice Analytics Dashboard */}
-              <div className="mt-6">
-                <ExtremelyAdvancedVoiceVisualizationDashboard
-                  voiceAnalyzer={voiceAnalyzer}
-                  isActive={isRecording}
-                />
-              </div>
-              
               {/* Advanced Transcription Analysis */}
               {enhancedTranscriptionData && (
                 <div className="mt-6">
