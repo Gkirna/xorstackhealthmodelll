@@ -25,7 +25,6 @@ import { ExtremelyAdvancedVoiceVisualizationDashboard } from '@/components/Extre
 import { ExtremelyAdvancedAutoCorrectorDashboard } from '@/components/ExtremelyAdvancedAutoCorrectorDashboard';
 import { AdvancedTranscriptionDashboard } from '@/components/AdvancedTranscriptionDashboard';
 import { RealtimeTranscriptionStatus } from '@/components/session/RealtimeTranscriptionStatus';
-import { OpenAIRealtimeInterface } from '@/components/OpenAIRealtimeInterface';
 import { useAdvancedTranscription } from '@/hooks/useAdvancedTranscription';
 import { useRealtimeAdvancedTranscription } from '@/hooks/useRealtimeAdvancedTranscription';
 import type { EnhancedTranscriptionData } from '@/types/advancedTranscription';
@@ -517,24 +516,13 @@ const SessionRecord = () => {
                 isTranscribing={isTranscribing || realtimeAdvanced.isTranscribing}
               />
               
-              {/* OpenAI Realtime Voice Interface - Integrated */}
-              {isRecording && (
-                <div className="mt-6">
-                  <OpenAIRealtimeInterface
-                    sessionId={id}
-                    onTranscriptUpdate={(text) => {
-                      setTranscript(prev => prev + '\n' + text);
-                    }}
-                    onNoteUpdate={(note, noteJson) => {
-                      setGeneratedNote(note);
-                      setNoteJson(noteJson);
-                    }}
-                    onAnalysisUpdate={(analysis) => {
-                      console.log('🧠 AI Analysis:', analysis);
-                    }}
-                  />
-                </div>
-              )}
+              {/* Ultra-Advanced Voice Analytics Dashboard */}
+              <div className="mt-6">
+                <ExtremelyAdvancedVoiceVisualizationDashboard
+                  voiceAnalyzer={voiceAnalyzer}
+                  isActive={isRecording}
+                />
+              </div>
               
               {/* Advanced Transcription Analysis */}
               {enhancedTranscriptionData && (
