@@ -145,7 +145,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         transcriptionRef.current.destroy();
       }
     };
-  }, [continuous, onFinalTranscriptChunk, onTranscriptUpdate]);
+  }, []); // Run only once on mount
 
   const startRecording = useCallback(async () => {
     try {
