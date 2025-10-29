@@ -479,14 +479,6 @@ const SessionRecord = () => {
                 <PencilLine className="h-4 w-4" />
                 Note
               </TabsTrigger>
-              <div className="w-px h-6 bg-border self-center" />
-              <TabsTrigger
-                value="ai-realtime"
-                className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:border data-[state=active]:border-primary"
-              >
-                <span className="h-4 w-4">🧠</span>
-                AI Realtime
-              </TabsTrigger>
             </TabsList>
 
             {/* Tab Content */}
@@ -525,6 +517,21 @@ const SessionRecord = () => {
                 isTranscribing={isTranscribing || realtimeAdvanced.isTranscribing}
               />
               
+              {/* OpenAI Realtime Voice Interface - Integrated */}
+              {isRecording && (
+                <div className="mt-6">
+                  <OpenAIRealtimeInterface
+                    sessionId={id}
+                    onTranscriptUpdate={(text) => {
+                      setTranscript(prev => prev + '\n' + text);
+                    }}
+                    onAnalysisUpdate={(analysis) => {
+                      console.log('🧠 AI Analysis:', analysis);
+                    }}
+                  />
+                </div>
+              )}
+              
               {/* Advanced Transcription Analysis */}
               {enhancedTranscriptionData && (
                 <div className="mt-6">
@@ -549,18 +556,6 @@ const SessionRecord = () => {
                 onToggleFormatted={() => setShowFormattedNote(!showFormattedNote)}
                 selectedTemplate={template}
                 onTemplateChange={setTemplate}
-              />
-            </TabsContent>
-
-            <TabsContent value="ai-realtime" className="flex-1 mt-0 overflow-auto p-4">
-              <OpenAIRealtimeInterface
-                sessionId={id}
-                onTranscriptUpdate={(text) => {
-                  setTranscript(prev => prev + '\n' + text);
-                }}
-                onAnalysisUpdate={(analysis) => {
-                  console.log('🧠 AI Analysis:', analysis);
-                }}
               />
             </TabsContent>
           </Tabs>

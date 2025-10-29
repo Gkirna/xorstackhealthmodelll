@@ -125,10 +125,13 @@ Guidelines:
   };
 
   useEffect(() => {
+    // Auto-start when component mounts
+    startConversation();
+
     return () => {
       chatRef.current?.disconnect();
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Card className="p-6">
@@ -136,30 +139,11 @@ Guidelines:
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Brain className="h-5 w-5 text-primary" />
-            <h3 className="text-lg font-semibold">OpenAI Realtime AI</h3>
+            <h3 className="text-lg font-semibold">Live AI Assistant</h3>
             <Badge variant={isConnected ? "default" : "secondary"}>
-              {isConnected ? "Live" : "Offline"}
+              {isConnected ? "Connected" : "Connecting..."}
             </Badge>
           </div>
-          
-          {!isConnected ? (
-            <Button 
-              onClick={startConversation}
-              className="gap-2"
-            >
-              <Sparkles className="h-4 w-4" />
-              Start AI Session
-            </Button>
-          ) : (
-            <Button 
-              onClick={endConversation}
-              variant="destructive"
-              className="gap-2"
-            >
-              <MicOff className="h-4 w-4" />
-              End Session
-            </Button>
-          )}
         </div>
 
         {isConnected && (
