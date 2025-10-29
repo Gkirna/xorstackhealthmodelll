@@ -99,7 +99,7 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
 
   // Real-time subscription for instant updates
   useTranscriptUpdates(sessionId, (newTranscript) => {
-    console.log('Real-time update received');
+    console.log('📡 Real-time update received:', newTranscript);
     
     // Only add if it's a new chunk (not a temp one we already have)
     setTranscriptChunks(prev => {

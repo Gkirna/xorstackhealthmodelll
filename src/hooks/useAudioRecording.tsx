@@ -74,13 +74,14 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       interimResults: true,
       lang: 'en-US',
       onResult: async (transcript, isFinal) => {
-        console.log('Transcription result:', { 
+        console.log('📝 Transcription result:', { 
+          text: transcript.substring(0, 50) + '...', 
           isFinal,
           length: transcript.length 
         });
         
         if (isFinal) {
-          console.log('Final transcript chunk received');
+          console.log('✅ Final transcript chunk received');
           
           // Apply medical auto-correction before sending to callback
           const correctedTranscript = autoCorrectorRef.current.correctTranscript(
@@ -98,7 +99,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
             onTranscriptUpdate(correctedTranscript, true);
           }
         } else {
-          console.log('Interim transcript update');
+          console.log('⏳ Interim transcript update');
           setState(prev => ({ ...prev, interimTranscript: transcript }));
           
           if (onTranscriptUpdate) {
@@ -144,7 +145,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         transcriptionRef.current.destroy();
       }
     };
-  }, []); // Run only once on mount
+  }, [continuous, onFinalTranscriptChunk, onTranscriptUpdate]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -304,7 +305,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         // Stop transcription
         if (transcriptionRef.current) {
           const finalTranscript = transcriptionRef.current.stop();
-          console.log('Final transcript length:', finalTranscript?.length);
+          console.log('📝 Final transcript:', finalTranscript);
         }
         
         if (onRecordingComplete) {

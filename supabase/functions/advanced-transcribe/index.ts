@@ -1,40 +1,36 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Process base64 in chunks to prevent memory issues
-function processBase64Chunks(base64String: string, chunkSize = 32768) {
-  const chunks: Uint8Array[] = [];
-  let position = 0;
-  
-  while (position < base64String.length) {
-    const chunk = base64String.slice(position, position + chunkSize);
-    const binaryChunk = atob(chunk);
-    const bytes = new Uint8Array(binaryChunk.length);
-    
-    for (let i = 0; i < binaryChunk.length; i++) {
-      bytes[i] = binaryChunk.charCodeAt(i);
-    }
-    
-    chunks.push(bytes);
-    position += chunkSize;
-  }
+interface DeepgramWord {
+  word: string;
+  start: number;
+  end: number;
+  confidence: number;
+  speaker?: number;
+  punctuated_word?: string;
+}
 
-  const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-  const result = new Uint8Array(totalLength);
-  let offset = 0;
+interface DeepgramUtterance {
+  text: string;
+  start: number;
+  end: number;
+  confidence: number;
+  speaker: number;
+  words: DeepgramWord[];
+}
 
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  return result;
+interface TranscriptionSegment {
+  text: string;
+  speaker: number;
+  start: number;
+  end: number;
+  confidence: number;
+  words: DeepgramWord[];
 }
 
 serve(async (req) => {
@@ -43,76 +39,106 @@ serve(async (req) => {
   }
 
   try {
-    const MAX_AUDIO_SIZE = 25 * 1024 * 1024; // 25MB base64 limit
-    
-    const inputSchema = z.object({
-      audio: z.string().min(1).max(MAX_AUDIO_SIZE)
-    });
+    const { audio, session_id } = await req.json();
 
-    const body = await req.json();
-    const { audio } = inputSchema.parse(body);
-
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    if (!OPENAI_API_KEY) {
-      throw new Error('OpenAI API key not configured');
+    if (!audio) {
+      throw new Error('No audio data provided');
     }
 
-    console.log('🎙️ Starting advanced transcription with OpenAI Whisper...');
+    const DEEPGRAM_API_KEY = Deno.env.get('DEEPGRAM_API_KEY');
+    if (!DEEPGRAM_API_KEY) {
+      throw new Error('DEEPGRAM_API_KEY not configured');
+    }
 
-    // Process audio in chunks
-    const binaryAudio = processBase64Chunks(audio);
+    console.log('🎙️ Starting advanced transcription with Deepgram...');
+
+    // Convert base64 to binary
+    const binaryAudio = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
     
-    // Create form data
-    const formData = new FormData();
-    const audioBlob = new Blob([binaryAudio], { type: 'audio/webm' });
-    formData.append('file', audioBlob, 'audio.webm');
-    formData.append('model', 'whisper-1');
-    formData.append('response_format', 'verbose_json');
-    formData.append('timestamp_granularities[]', 'segment');
-
-    // Call OpenAI Whisper API
-    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    // Call Deepgram API with advanced features
+    const response = await fetch('https://api.deepgram.com/v1/listen', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Authorization': `Token ${DEEPGRAM_API_KEY}`,
+        'Content-Type': 'audio/webm',
       },
-      body: formData,
+      body: binaryAudio,
+      // Advanced Deepgram features
+      // @ts-ignore - URL params
+      ...{
+        searchParams: {
+          model: 'nova-2-medical',          // Medical-specific model
+          punctuate: 'true',                 // Auto-punctuation
+          diarize: 'true',                   // Speaker diarization
+          utterances: 'true',                // Group by speaker utterances
+          smart_format: 'true',              // Smart formatting
+          filler_words: 'true',              // Detect filler words
+          language: 'en-US',
+          tier: 'enhanced',                  // Enhanced accuracy
+        }
+      }
     });
 
-    if (!response.ok) {
-      console.error('Whisper API error, status:', response.status);
-      throw new Error(`Transcription failed`);
+    // Build URL with search params
+    const url = new URL('https://api.deepgram.com/v1/listen');
+    url.searchParams.set('model', 'nova-2-medical');
+    url.searchParams.set('punctuate', 'true');
+    url.searchParams.set('diarize', 'true');
+    url.searchParams.set('utterances', 'true');
+    url.searchParams.set('smart_format', 'true');
+    url.searchParams.set('filler_words', 'true');
+    url.searchParams.set('language', 'en-US');
+    url.searchParams.set('tier', 'enhanced');
+
+    const dgResponse = await fetch(url.toString(), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${DEEPGRAM_API_KEY}`,
+        'Content-Type': 'audio/webm',
+      },
+      body: binaryAudio,
+    });
+
+    if (!dgResponse.ok) {
+      const errorText = await dgResponse.text();
+      console.error('❌ Deepgram API error:', errorText);
+      throw new Error(`Transcription failed: ${dgResponse.status}`);
     }
 
-    const result = await response.json();
-
-    console.log('Advanced transcription complete, segments:', result.segments?.length || 0);
-
-    // Extract segments and create speaker diarization
-    const segments = (result.segments || []).map((seg: any, idx: number) => ({
-      text: seg.text,
-      speaker: idx % 2, // Simple alternating speaker detection
-      start: seg.start,
-      end: seg.end,
-      confidence: 0.95, // Whisper doesn't provide confidence scores
-      words: seg.tokens || []
+    const result = await dgResponse.json();
+    
+    // Extract utterances with speaker diarization
+    const utterances = result.results?.utterances || [];
+    const segments: TranscriptionSegment[] = utterances.map((utt: DeepgramUtterance) => ({
+      text: utt.text,
+      speaker: utt.speaker,
+      start: utt.start,
+      end: utt.end,
+      confidence: utt.confidence,
+      words: utt.words,
     }));
 
     // Calculate overall confidence
-    const overallConfidence = 0.95;
-    const speakerCount = new Set(segments.map((s: any) => s.speaker)).size;
+    const overallConfidence = segments.length > 0
+      ? segments.reduce((sum, seg) => sum + seg.confidence, 0) / segments.length
+      : 0;
+
+    // Get full transcript
+    const fullTranscript = result.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
+
+    console.log(`✅ Transcription successful - ${segments.length} segments, confidence: ${(overallConfidence * 100).toFixed(1)}%`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        text: result.text,
+        text: fullTranscript,
         segments,
         confidence: overallConfidence,
-        speaker_count: speakerCount,
+        speaker_count: new Set(segments.map(s => s.speaker)).size,
         metadata: {
-          model: 'whisper-1',
-          duration: result.duration || 0,
-          language: result.language,
+          model: 'nova-2-medical',
+          duration: result.metadata?.duration || 0,
+          processing_time: result.metadata?.duration || 0,
         }
       }),
       { 
@@ -122,30 +148,15 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Advanced transcription error');
-    
-    if (error instanceof z.ZodError) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid audio data',
-          },
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
+    console.error('❌ Advanced transcription error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     
     return new Response(
       JSON.stringify({
         success: false,
         error: {
           code: 'TRANSCRIPTION_ERROR',
-          message: 'An error occurred processing your audio',
+          message: errorMessage,
         },
       }),
       {
