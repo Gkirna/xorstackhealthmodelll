@@ -24,7 +24,9 @@ import { AskHeidiBar } from "@/components/session/AskHeidiBar";
 import { ExtremelyAdvancedVoiceVisualizationDashboard } from '@/components/ExtremelyAdvancedVoiceVisualizationDashboard';
 import { ExtremelyAdvancedAutoCorrectorDashboard } from '@/components/ExtremelyAdvancedAutoCorrectorDashboard';
 import { AdvancedTranscriptionDashboard } from '@/components/AdvancedTranscriptionDashboard';
+import { RealtimeTranscriptionStatus } from '@/components/session/RealtimeTranscriptionStatus';
 import { useAdvancedTranscription } from '@/hooks/useAdvancedTranscription';
+import { useRealtimeAdvancedTranscription } from '@/hooks/useRealtimeAdvancedTranscription';
 import type { EnhancedTranscriptionData } from '@/types/advancedTranscription';
 
 const SessionRecord = () => {
@@ -64,6 +66,7 @@ const SessionRecord = () => {
   // CUSTOM HOOKS NEXT
   const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats } = useTranscription(id || '', 'unknown');
   const { processAudioWithFullAnalysis, isProcessing } = useAdvancedTranscription();
+  const realtimeAdvanced = useRealtimeAdvancedTranscription(id || '');
 
   const {
     startRecording,
@@ -85,8 +88,6 @@ const SessionRecord = () => {
         const currentSpeaker = speakerRef.current;
         transcriptCountRef.current++;
         
-        console.log(`💬 Transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
-        
         const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
         setTranscript(prev => prev ? `${prev}\n\n**${speakerLabel}:** ${text}` : `**${speakerLabel}:** ${text}`);
         
@@ -94,56 +95,9 @@ const SessionRecord = () => {
       }
     },
     onRecordingComplete: async (audioBlob: Blob, audioUrl?: string) => {
-      console.log('🎯 Recording complete, starting advanced analysis...');
-      toast.info('Processing with advanced transcription and medical NER...');
-      
-      try {
-        // Validate blob before processing
-        if (!audioBlob || audioBlob.size === 0) {
-          console.error('Empty or invalid audio blob');
-          toast.error('No audio data to transcribe');
-          return;
-        }
-
-        // Convert blob to base64
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          const result = reader.result as string;
-          
-          if (!result || !result.includes(',')) {
-            console.error('Invalid audio data format');
-            toast.error('Failed to process audio data');
-            return;
-          }
-          
-          const base64Audio = result.split(',')[1];
-          
-          if (!base64Audio || base64Audio.length === 0) {
-            console.error('Empty base64 audio data');
-            toast.error('No audio content to transcribe');
-            return;
-          }
-
-          console.log(`🎙️ Processing audio: ${(base64Audio.length / 1024).toFixed(2)} KB`);
-          const enhancedData = await processAudioWithFullAnalysis(base64Audio);
-          
-          if (enhancedData) {
-            setEnhancedTranscriptionData(enhancedData);
-            console.log(`✅ Advanced analysis complete:`, {
-              speakers: enhancedData.speaker_count,
-              entities: enhancedData.entities.length,
-              confidence: (enhancedData.confidence * 100).toFixed(1) + '%'
-            });
-          }
-        };
-        reader.onerror = () => {
-          console.error('FileReader error');
-          toast.error('Failed to read audio file');
-        };
-        reader.readAsDataURL(audioBlob);
-      } catch (error) {
-        console.error('Advanced transcription error:', error);
-        toast.error('Failed to process audio');
+      // Real-time mode handles its own completion
+      if (recordingMode !== 'transcribing') {
+        console.log('🎯 Recording complete, finalizing...');
       }
     },
     onError: (error: string) => {
@@ -152,16 +106,33 @@ const SessionRecord = () => {
     },
   });
 
+  // Update enhanced data from real-time transcription
+  useEffect(() => {
+    if (realtimeAdvanced.currentText) {
+      setTranscript(realtimeAdvanced.currentText);
+    }
+    
+    if (realtimeAdvanced.currentSegments.length > 0 || realtimeAdvanced.currentEntities.length > 0) {
+      const enhancedData = realtimeAdvanced.getEnhancedData();
+      setEnhancedTranscriptionData(enhancedData);
+    }
+  }, [realtimeAdvanced.currentText, realtimeAdvanced.currentSegments, realtimeAdvanced.currentEntities, realtimeAdvanced.getEnhancedData]);
+
   // CALLBACKS AFTER HOOKS
   const handleStartTranscribing = useCallback(async () => {
     if (isStartingRecording) {
       return;
     }
 
-    if (isRecording) {
+    if (isRecording || realtimeAdvanced.isTranscribing) {
       toast.info('Stopping transcription and generating clinical note...');
-      await saveAllPendingChunks();
-      stopRecording();
+      
+      if (realtimeAdvanced.isTranscribing) {
+        await realtimeAdvanced.stopTranscription();
+      } else {
+        await saveAllPendingChunks();
+        stopRecording();
+      }
       
       setTimeout(async () => {
         await autoGenerateNote();
@@ -181,9 +152,15 @@ const SessionRecord = () => {
         setActiveTab('transcript');
         speakerRef.current = 'provider';
         transcriptCountRef.current = 0;
-        toast.success('Starting live transcription... Speak now!');
         
-        await startRecording();
+        if (recordingMode === 'transcribing') {
+          // Use advanced real-time transcription
+          toast.success('🚀 Starting ADVANCED real-time transcription with AI analysis...');
+          await realtimeAdvanced.startTranscription();
+        } else {
+          toast.success('Starting live transcription... Speak now!');
+          await startRecording();
+        }
       } catch (error) {
         console.error('Failed to start recording:', error);
         toast.error('Failed to start recording. Please try again.');
@@ -197,7 +174,7 @@ const SessionRecord = () => {
     if (hasManualInput) {
       await autoGenerateNote();
     }
-  }, [isStartingRecording, isRecording, recordingMode, transcript, context, saveAllPendingChunks, stopRecording, startRecording]);
+  }, [isStartingRecording, isRecording, realtimeAdvanced, recordingMode, transcript, context, saveAllPendingChunks, stopRecording, startRecording]);
 
   const autoGenerateNote = useCallback(async () => {
     if (!id || !orchestratorRef.current) return;
@@ -505,6 +482,18 @@ const SessionRecord = () => {
 
             {/* Tab Content */}
             <TabsContent value="transcript" className="flex-1 mt-0 overflow-auto space-y-4">
+              {/* Real-time Advanced Transcription Status */}
+              <RealtimeTranscriptionStatus
+                isTranscribing={realtimeAdvanced.isTranscribing}
+                processingStatus={realtimeAdvanced.processingStatus}
+                speakerCount={realtimeAdvanced.speakerCount}
+                segmentCount={realtimeAdvanced.currentSegments.length}
+                entityCount={realtimeAdvanced.currentEntities.length}
+                confidence={realtimeAdvanced.overallConfidence}
+                currentText={realtimeAdvanced.currentText}
+                interimText={realtimeAdvanced.interimText}
+              />
+              
               {recordingMode === 'dictating' && (
                 <DictatingPanel
                   sessionId={id}
@@ -524,7 +513,7 @@ const SessionRecord = () => {
                 transcript={transcript}
                 onTranscriptChange={setTranscript}
                 stats={stats}
-                isTranscribing={isTranscribing}
+                isTranscribing={isTranscribing || realtimeAdvanced.isTranscribing}
               />
               
               {/* Ultra-Advanced Voice Analytics Dashboard */}
