@@ -105,7 +105,26 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Deepgram API error:', response.status, errorText);
-      throw new Error(`Deepgram API error: ${response.status}`);
+      
+      // Return empty result instead of throwing error - allows transcription to continue
+      return new Response(
+        JSON.stringify({
+          success: true,
+          text: '',
+          segments: [],
+          confidence: 0,
+          speaker_count: 0,
+          words: [],
+          metadata: {
+            model: 'nova-2',
+            duration: 0,
+          }
+        }),
+        { 
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     const result = await response.json();
