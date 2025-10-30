@@ -221,14 +221,34 @@ const SessionRecord = () => {
       });
       
       if (result.success && result.note) {
-        setGeneratedNote(result.note);
+        // Parse the note if it's wrapped in markdown code fences
+        let parsedNoteJson = null;
+        let cleanNote = result.note;
+        
+        try {
+          // Check if the note is wrapped in ```json ... ```
+          const jsonMatch = result.note.match(/```json\s*([\s\S]*?)\s*```/);
+          if (jsonMatch) {
+            parsedNoteJson = JSON.parse(jsonMatch[1]);
+            cleanNote = jsonMatch[1]; // Store the JSON string without code fences
+          } else {
+            // Try to parse it directly
+            parsedNoteJson = JSON.parse(result.note);
+          }
+        } catch (e) {
+          console.log('Note is not JSON format, using as plaintext');
+        }
+        
+        setGeneratedNote(cleanNote);
+        setNoteJson(parsedNoteJson);
+        
         const { data: updatedSession } = await supabase
           .from('sessions')
           .select('note_json')
           .eq('id', id)
           .single();
         
-        if (updatedSession?.note_json) {
+        if (updatedSession?.note_json && !parsedNoteJson) {
           setNoteJson(updatedSession.note_json);
         }
         
@@ -298,7 +318,26 @@ const SessionRecord = () => {
       });
       
       if (result.success && result.note) {
-        setGeneratedNote(result.note);
+        // Parse the note if it's wrapped in markdown code fences
+        let parsedNoteJson = null;
+        let cleanNote = result.note;
+        
+        try {
+          // Check if the note is wrapped in ```json ... ```
+          const jsonMatch = result.note.match(/```json\s*([\s\S]*?)\s*```/);
+          if (jsonMatch) {
+            parsedNoteJson = JSON.parse(jsonMatch[1]);
+            cleanNote = jsonMatch[1]; // Store the JSON string without code fences
+          } else {
+            // Try to parse it directly
+            parsedNoteJson = JSON.parse(result.note);
+          }
+        } catch (e) {
+          console.log('Note is not JSON format, using as plaintext');
+        }
+        
+        setGeneratedNote(cleanNote);
+        setNoteJson(parsedNoteJson);
         
         const { data: updatedSession } = await supabase
           .from('sessions')
@@ -306,7 +345,7 @@ const SessionRecord = () => {
           .eq('id', id)
           .single();
         
-        if (updatedSession?.note_json) {
+        if (updatedSession?.note_json && !parsedNoteJson) {
           setNoteJson(updatedSession.note_json);
         }
         
@@ -353,8 +392,33 @@ const SessionRecord = () => {
   useEffect(() => {
     if (session) {
       setPatientName(session.patient_name || "New Patient");
-      setGeneratedNote(session.generated_note || "");
-      setNoteJson(session.note_json || null);
+      
+      // Parse generated_note if it's JSON wrapped in markdown
+      let parsedNote = session.generated_note || "";
+      let parsedJson = session.note_json || null;
+      
+      if (session.generated_note) {
+        try {
+          const jsonMatch = session.generated_note.match(/```json\s*([\s\S]*?)\s*```/);
+          if (jsonMatch) {
+            parsedNote = jsonMatch[1];
+            parsedJson = JSON.parse(jsonMatch[1]);
+          } else if (!session.note_json) {
+            // Try to parse directly if note_json doesn't exist
+            try {
+              parsedJson = JSON.parse(session.generated_note);
+            } catch (e) {
+              // It's plaintext, keep as is
+            }
+          }
+        } catch (e) {
+          console.log('Could not parse note as JSON, using as plaintext');
+        }
+      }
+      
+      setGeneratedNote(parsedNote);
+      setNoteJson(parsedJson);
+      
       if (session.scheduled_at) {
         setSessionDate(new Date(session.scheduled_at));
       }

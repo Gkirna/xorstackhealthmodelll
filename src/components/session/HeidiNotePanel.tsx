@@ -92,9 +92,14 @@ export function HeidiNotePanel({
 
   const formatNoteForExport = (json: any): string => {
     let formatted = '';
-    Object.entries(json).forEach(([key, value]) => {
+    
+    // Handle the case where JSON has a 'sections' property
+    const sections = json.sections || json;
+    
+    Object.entries(sections).forEach(([key, value]) => {
+      if (key === 'template_id' || key === 'plaintext') return;
       const sectionTitle = formatSectionKey(key);
-      formatted += `${sectionTitle}:\n\n`;
+      formatted += `${sectionTitle.toUpperCase()}:\n\n`;
       formatted += formatValue(value) + '\n\n';
     });
     return formatted;
@@ -200,9 +205,14 @@ export function HeidiNotePanel({
 
   const formatNoteForPrint = (json: any): string => {
     let html = '';
-    Object.entries(json).forEach(([key, value]) => {
+    
+    // Handle the case where JSON has a 'sections' property
+    const sections = json.sections || json;
+    
+    Object.entries(sections).forEach(([key, value]) => {
+      if (key === 'template_id' || key === 'plaintext') return;
       const sectionTitle = formatSectionKey(key);
-      html += `<div class="section"><h3>${sectionTitle}:</h3>`;
+      html += `<div class="section"><h3>${sectionTitle.toUpperCase()}:</h3>`;
       html += formatValueToPrintHtml(value);
       html += '</div>';
     });
