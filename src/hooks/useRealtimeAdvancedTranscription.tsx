@@ -142,6 +142,12 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
   // Start real-time transcription
   const startTranscription = useCallback(async () => {
     try {
+      console.log('🎤 Starting real-time advanced transcription...');
+      
+      // Reset state
+      accumulatedAudioRef.current = new Float32Array(0);
+      audioChunksRef.current = [];
+      
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -153,15 +159,22 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
         }
       });
 
+      console.log('🎤 Microphone access granted');
       streamRef.current = stream;
       audioContextRef.current = new AudioContext({ sampleRate: SAMPLE_RATE });
       
       const source = audioContextRef.current.createMediaStreamSource(stream);
       processorRef.current = audioContextRef.current.createScriptProcessor(4096, 1, 1);
 
+      let processCount = 0;
       processorRef.current.onaudioprocess = (e) => {
         const inputData = e.inputBuffer.getChannelData(0);
         const audioChunk = new Float32Array(inputData);
+
+        processCount++;
+        if (processCount % 100 === 0) {
+          console.log(`🎵 Processing audio chunk #${processCount}, accumulated: ${(accumulatedAudioRef.current.length / SAMPLE_RATE).toFixed(1)}s`);
+        }
 
         // Accumulate audio data
         const newBuffer = new Float32Array(accumulatedAudioRef.current.length + audioChunk.length);
@@ -187,15 +200,16 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
 
       // Start periodic processing
       processingTimerRef.current = setInterval(() => {
+        console.log(`⏰ Processing timer tick - Accumulated: ${(accumulatedAudioRef.current.length / SAMPLE_RATE).toFixed(1)}s`);
         processAudioChunks();
       }, CHUNK_DURATION_MS);
 
-      console.log('🎙️ Real-time advanced transcription started');
-      toast.success('Advanced real-time transcription started');
+      console.log('✅ Real-time advanced transcription started successfully');
+      toast.success('Real-time transcription active - speak now!');
 
     } catch (error) {
-      console.error('Failed to start transcription:', error);
-      toast.error('Microphone access denied');
+      console.error('❌ Failed to start transcription:', error);
+      toast.error('Microphone access denied or failed');
       throw error;
     }
   }, [processAudioChunks]);
