@@ -39,10 +39,10 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
   const processingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isProcessingRef = useRef(false);
 
-  // Real-time processing configuration
+  // Real-time processing configuration - optimized for live conversations
   const SAMPLE_RATE = 24000;
-  const CHUNK_DURATION_MS = 1000; // Process every 1 second for real-time feel
-  const MIN_AUDIO_LENGTH = SAMPLE_RATE * 1; // Minimum 1 second of audio
+  const CHUNK_DURATION_MS = 500; // Process every 500ms for ultra-low latency
+  const MIN_AUDIO_LENGTH = SAMPLE_RATE * 0.5; // Minimum 0.5 seconds of audio
   const MAX_BUFFER_SIZE = SAMPLE_RATE * 30; // Maximum 30 seconds buffered
 
   // Convert Float32Array to base64
@@ -83,8 +83,8 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
       // Show interim status
       setState(prev => ({ ...prev, interimText: 'Transcribing audio...' }));
 
-      // Step 1: Advanced transcription with speaker diarization
-      const { data: transcriptionData, error: transcriptionError } = await supabase.functions.invoke('advanced-transcribe', {
+      // Step 1: Real-time streaming transcription with Deepgram
+      const { data: transcriptionData, error: transcriptionError } = await supabase.functions.invoke('realtime-transcribe-stream', {
         body: { audio: base64Audio, session_id: sessionId }
       });
 
@@ -135,8 +135,8 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
         setState(prev => ({ ...prev, interimText: '' }));
       }
 
-      // Clear processed audio (keep last 5 seconds for context)
-      const keepSamples = SAMPLE_RATE * 5;
+      // Clear processed audio (keep last 2 seconds for context in live conversations)
+      const keepSamples = SAMPLE_RATE * 2;
       if (accumulatedAudioRef.current.length > keepSamples) {
         accumulatedAudioRef.current = accumulatedAudioRef.current.slice(-keepSamples);
       }
