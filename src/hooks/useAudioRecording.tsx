@@ -390,15 +390,17 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
 
   const stopRecording = useCallback(() => {
     console.log('⏹️ Stop recording called, current state:', mediaRecorderRef.current?.state);
+    
+    // Immediately update state to stop recording
+    setState(prev => ({ 
+      ...prev, 
+      isRecording: false, 
+      isPaused: false,
+      isTranscribing: false,
+    }));
+    
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
-      setState(prev => ({ 
-        ...prev, 
-        isRecording: false, 
-        isPaused: false,
-        isTranscribing: false,
-        duration: 0 
-      }));
       
       // Stop voice analyzer
       if (voiceAnalyzerRef.current) {
