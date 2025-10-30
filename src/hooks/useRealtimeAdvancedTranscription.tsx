@@ -79,6 +79,9 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
       const base64Audio = encodeAudioToBase64(audioData);
 
       console.log(`🎙️ Processing ${(audioData.length / SAMPLE_RATE).toFixed(1)}s of audio...`);
+      
+      // Show interim status
+      setState(prev => ({ ...prev, interimText: 'Transcribing audio...' }));
 
       // Step 1: Advanced transcription with speaker diarization
       const { data: transcriptionData, error: transcriptionError } = await supabase.functions.invoke('advanced-transcribe', {
@@ -96,10 +99,12 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
 
       console.log(`✅ Transcribed: ${segments.length} segments, ${speakerCount} speakers`);
 
+      // Show interim transcription immediately
       setState(prev => ({
         ...prev,
         currentSegments: [...prev.currentSegments, ...segments],
         currentText: prev.currentText ? `${prev.currentText}\n${fullText}` : fullText,
+        interimText: fullText, // Show the new text as interim
         overallConfidence: confidence,
         speakerCount,
         processingStatus: 'analyzing',
@@ -107,7 +112,7 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
 
       // Step 2: Extract medical entities (non-blocking)
       if (fullText.length > 10) {
-        setState(prev => ({ ...prev, processingStatus: 'analyzing' }));
+        setState(prev => ({ ...prev, processingStatus: 'analyzing', interimText: 'Analyzing medical terms...' }));
         
         const { data: entityData, error: entityError } = await supabase.functions.invoke('extract-medical-entities', {
           body: { text: fullText, segments }
@@ -121,8 +126,13 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
             ...prev,
             currentEntities: [...prev.currentEntities, ...entities],
             processingStatus: 'complete',
+            interimText: '', // Clear interim text when complete
           }));
+        } else {
+          setState(prev => ({ ...prev, interimText: '' }));
         }
+      } else {
+        setState(prev => ({ ...prev, interimText: '' }));
       }
 
       // Clear processed audio (keep last 5 seconds for context)
@@ -174,6 +184,14 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
         processCount++;
         if (processCount % 100 === 0) {
           console.log(`🎵 Processing audio chunk #${processCount}, accumulated: ${(accumulatedAudioRef.current.length / SAMPLE_RATE).toFixed(1)}s`);
+        }
+        
+        // Show listening status when capturing audio
+        if (processCount % 50 === 0) {
+          setState(prev => ({ 
+            ...prev, 
+            interimText: `Listening... (${(accumulatedAudioRef.current.length / SAMPLE_RATE).toFixed(1)}s captured)` 
+          }));
         }
 
         // Accumulate audio data
