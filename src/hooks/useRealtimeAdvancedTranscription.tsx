@@ -39,10 +39,10 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
   const processingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isProcessingRef = useRef(false);
 
-  // Real-time processing configuration
+  // Real-time processing configuration - optimized for live conversations
   const SAMPLE_RATE = 24000;
-  const CHUNK_DURATION_MS = 3000; // Process every 3 seconds for real-time feel
-  const MIN_AUDIO_LENGTH = SAMPLE_RATE * 2; // Minimum 2 seconds of audio
+  const CHUNK_DURATION_MS = 500; // Process every 500ms for ultra-low latency
+  const MIN_AUDIO_LENGTH = SAMPLE_RATE * 0.5; // Minimum 0.5 seconds of audio
   const MAX_BUFFER_SIZE = SAMPLE_RATE * 30; // Maximum 30 seconds buffered
 
   // Convert Float32Array to base64
@@ -79,9 +79,12 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
       const base64Audio = encodeAudioToBase64(audioData);
 
       console.log(`🎙️ Processing ${(audioData.length / SAMPLE_RATE).toFixed(1)}s of audio...`);
+      
+      // Show interim status
+      setState(prev => ({ ...prev, interimText: 'Transcribing audio...' }));
 
-      // Step 1: Advanced transcription with speaker diarization
-      const { data: transcriptionData, error: transcriptionError } = await supabase.functions.invoke('advanced-transcribe', {
+      // Step 1: Real-time streaming transcription with Deepgram
+      const { data: transcriptionData, error: transcriptionError } = await supabase.functions.invoke('realtime-transcribe-stream', {
         body: { audio: base64Audio, session_id: sessionId }
       });
 
@@ -96,10 +99,12 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
 
       console.log(`✅ Transcribed: ${segments.length} segments, ${speakerCount} speakers`);
 
+      // Show interim transcription immediately
       setState(prev => ({
         ...prev,
         currentSegments: [...prev.currentSegments, ...segments],
         currentText: prev.currentText ? `${prev.currentText}\n${fullText}` : fullText,
+        interimText: fullText, // Show the new text as interim
         overallConfidence: confidence,
         speakerCount,
         processingStatus: 'analyzing',
@@ -107,7 +112,7 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
 
       // Step 2: Extract medical entities (non-blocking)
       if (fullText.length > 10) {
-        setState(prev => ({ ...prev, processingStatus: 'analyzing' }));
+        setState(prev => ({ ...prev, processingStatus: 'analyzing', interimText: 'Analyzing medical terms...' }));
         
         const { data: entityData, error: entityError } = await supabase.functions.invoke('extract-medical-entities', {
           body: { text: fullText, segments }
@@ -121,12 +126,17 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
             ...prev,
             currentEntities: [...prev.currentEntities, ...entities],
             processingStatus: 'complete',
+            interimText: '', // Clear interim text when complete
           }));
+        } else {
+          setState(prev => ({ ...prev, interimText: '' }));
         }
+      } else {
+        setState(prev => ({ ...prev, interimText: '' }));
       }
 
-      // Clear processed audio (keep last 5 seconds for context)
-      const keepSamples = SAMPLE_RATE * 5;
+      // Clear processed audio (keep last 2 seconds for context in live conversations)
+      const keepSamples = SAMPLE_RATE * 2;
       if (accumulatedAudioRef.current.length > keepSamples) {
         accumulatedAudioRef.current = accumulatedAudioRef.current.slice(-keepSamples);
       }
@@ -142,6 +152,12 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
   // Start real-time transcription
   const startTranscription = useCallback(async () => {
     try {
+      console.log('🎤 Starting real-time advanced transcription...');
+      
+      // Reset state
+      accumulatedAudioRef.current = new Float32Array(0);
+      audioChunksRef.current = [];
+      
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -153,15 +169,30 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
         }
       });
 
+      console.log('🎤 Microphone access granted');
       streamRef.current = stream;
       audioContextRef.current = new AudioContext({ sampleRate: SAMPLE_RATE });
       
       const source = audioContextRef.current.createMediaStreamSource(stream);
       processorRef.current = audioContextRef.current.createScriptProcessor(4096, 1, 1);
 
+      let processCount = 0;
       processorRef.current.onaudioprocess = (e) => {
         const inputData = e.inputBuffer.getChannelData(0);
         const audioChunk = new Float32Array(inputData);
+
+        processCount++;
+        if (processCount % 100 === 0) {
+          console.log(`🎵 Processing audio chunk #${processCount}, accumulated: ${(accumulatedAudioRef.current.length / SAMPLE_RATE).toFixed(1)}s`);
+        }
+        
+        // Show listening status when capturing audio
+        if (processCount % 50 === 0) {
+          setState(prev => ({ 
+            ...prev, 
+            interimText: `Listening... (${(accumulatedAudioRef.current.length / SAMPLE_RATE).toFixed(1)}s captured)` 
+          }));
+        }
 
         // Accumulate audio data
         const newBuffer = new Float32Array(accumulatedAudioRef.current.length + audioChunk.length);
@@ -187,15 +218,16 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
 
       // Start periodic processing
       processingTimerRef.current = setInterval(() => {
+        console.log(`⏰ Processing timer tick - Accumulated: ${(accumulatedAudioRef.current.length / SAMPLE_RATE).toFixed(1)}s`);
         processAudioChunks();
       }, CHUNK_DURATION_MS);
 
-      console.log('🎙️ Real-time advanced transcription started');
-      toast.success('Advanced real-time transcription started');
+      console.log('✅ Real-time advanced transcription started successfully');
+      toast.success('Real-time transcription active - speak now!');
 
     } catch (error) {
-      console.error('Failed to start transcription:', error);
-      toast.error('Microphone access denied');
+      console.error('❌ Failed to start transcription:', error);
+      toast.error('Microphone access denied or failed');
       throw error;
     }
   }, [processAudioChunks]);

@@ -25,7 +25,6 @@ import { ExtremelyAdvancedVoiceVisualizationDashboard } from '@/components/Extre
 import { ExtremelyAdvancedAutoCorrectorDashboard } from '@/components/ExtremelyAdvancedAutoCorrectorDashboard';
 import { AdvancedTranscriptionDashboard } from '@/components/AdvancedTranscriptionDashboard';
 import { RealtimeTranscriptionStatus } from '@/components/session/RealtimeTranscriptionStatus';
-import { OpenAIRealtimeInterface } from '@/components/OpenAIRealtimeInterface';
 import { useAdvancedTranscription } from '@/hooks/useAdvancedTranscription';
 import { useRealtimeAdvancedTranscription } from '@/hooks/useRealtimeAdvancedTranscription';
 import type { EnhancedTranscriptionData } from '@/types/advancedTranscription';
@@ -135,9 +134,8 @@ const SessionRecord = () => {
         stopRecording();
       }
       
-      setTimeout(async () => {
-        await autoGenerateNote();
-      }, 1500);
+      // Immediately generate note after stopping
+      await autoGenerateNote();
       return;
     }
 
@@ -233,6 +231,25 @@ const SessionRecord = () => {
       setIsAutoPipelineRunning(false);
     }
   }, [id, transcript, context, template, updateSession]);
+
+  // Auto-generate note when real-time transcription completes
+  useEffect(() => {
+    if (!realtimeAdvanced.isTranscribing && 
+        realtimeAdvanced.processingStatus === 'complete' && 
+        realtimeAdvanced.currentText.trim().length > 0 &&
+        !isAutoPipelineRunning &&
+        id) {
+      console.log('✅ Real-time transcription complete, auto-generating clinical note...');
+      autoGenerateNote();
+    }
+  }, [
+    realtimeAdvanced.isTranscribing,
+    realtimeAdvanced.processingStatus,
+    realtimeAdvanced.currentText,
+    isAutoPipelineRunning,
+    id,
+    autoGenerateNote
+  ]);
 
   const handleRecordingModeChange = useCallback((mode: string) => {
     setRecordingMode(mode);
@@ -516,21 +533,6 @@ const SessionRecord = () => {
                 stats={stats}
                 isTranscribing={isTranscribing || realtimeAdvanced.isTranscribing}
               />
-              
-              {/* OpenAI Realtime Voice Interface - Integrated */}
-              {isRecording && (
-                <div className="mt-6">
-                  <OpenAIRealtimeInterface
-                    sessionId={id}
-                    onTranscriptUpdate={(text) => {
-                      setTranscript(prev => prev + '\n' + text);
-                    }}
-                    onAnalysisUpdate={(analysis) => {
-                      console.log('🧠 AI Analysis:', analysis);
-                    }}
-                  />
-                </div>
-              )}
               
               {/* Advanced Transcription Analysis */}
               {enhancedTranscriptionData && (

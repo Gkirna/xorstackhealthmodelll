@@ -42,10 +42,13 @@ serve(async (req) => {
 
     const startTime = Date.now();
 
-    // Call Lovable AI (Gemini 2.5 Flash)
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
+    // Use OpenAI GPT-5 for superior medical documentation
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+    if (!OPENAI_API_KEY) {
+      return new Response(
+        JSON.stringify({ error: { code: 'CONFIG_ERROR', message: 'Service temporarily unavailable' } }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const TEMPLATE_STRUCTURES = {
@@ -81,19 +84,20 @@ serve(async (req) => {
       .map(([key, desc]) => `    "${key}": "${desc}"`)
       .join(',\n');
 
-    const systemPrompt = `You are an expert medical scribe assistant with extensive knowledge of clinical documentation standards.
+    const systemPrompt = `You are an elite medical documentation specialist with board certification knowledge across all specialties. You have extensive experience with EHR systems, clinical decision support, and medical-legal documentation.
 
 Template: ${template.toUpperCase()}
 Detail level: ${detail_level}
 
 CRITICAL INSTRUCTIONS:
-1. Generate a comprehensive, accurate clinical note using the specified template
-2. Extract information from speaker-labeled transcript (Doctor: / Patient: prefixes)
-3. Use appropriate medical terminology and ICD-10 compatible language
-4. Include specific measurements, dosages, and clinical findings
-5. Maintain professional medical documentation standards
-6. Preserve patient safety information and critical alerts
-7. Structure the output as valid JSON
+1. Generate comprehensive, legally defensible clinical documentation using the ${template} template
+2. Extract and attribute information from speaker-labeled transcript (Doctor:/Patient:/Nurse: prefixes)
+3. Use precise medical terminology with ICD-10/CPT compatibility
+4. Include specific measurements, dosages, vital signs, and clinical findings with units
+5. Maintain SOAP/HIPAA compliance and professional medical standards
+6. Highlight patient safety information, allergies, and critical alerts
+7. Integrate clinical reasoning and differential diagnoses
+8. Structure output as valid JSON
 
 Output format (MUST be valid JSON):
 {
@@ -101,29 +105,41 @@ Output format (MUST be valid JSON):
   "sections": {
 ${sections}
   },
-  "plaintext": "Full formatted clinical note with proper section headers and content"
+  "plaintext": "Full formatted clinical note with proper section headers, bullet points, and medical formatting",
+  "metadata": {
+    "icd10_codes": ["suggested ICD-10 codes"],
+    "medications_mentioned": ["list of medications"],
+    "allergies": ["noted allergies"],
+    "vital_signs": {"bp": "120/80", "hr": "72", "temp": "98.6"},
+    "critical_flags": ["any safety concerns"]
+  }
 }
 
 Quality criteria:
-- Accuracy: All information from transcript included
-- Completeness: No critical details omitted
-- Clarity: Medical terminology used appropriately
-- Structure: Logical flow and organization
+- Medical Accuracy: Clinically sound with proper terminology
+- Completeness: All critical patient information captured
+- Legal Defensibility: Meets documentation standards for liability protection
+- Clinical Reasoning: Clear assessment and treatment rationale
 - Speaker Attribution: Correctly identify doctor vs patient statements
-- Compliance: Follows documentation standards`;
+- Actionability: Clear next steps and follow-up
+- Compliance: HIPAA-compliant, no unnecessary PHI exposure`;
 
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'gpt-5-2025-08-07',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Generate a clinical note from this transcript:\n\n${transcript_text}` }
+          { 
+            role: 'user', 
+            content: `Generate a ${detail_level} detail ${template} clinical note from this medical encounter transcript:\n\n${transcript_text}\n\nProvide comprehensive documentation with proper medical formatting, section headers, and metadata.` 
+          }
         ],
+        max_completion_tokens: detail_level === 'high' ? 16000 : detail_level === 'medium' ? 8000 : 4000,
       }),
     });
 
