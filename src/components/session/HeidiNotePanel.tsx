@@ -93,23 +93,35 @@ export function HeidiNotePanel({
   const formatNoteForExport = (json: any): string => {
     let formatted = '';
     Object.entries(json).forEach(([key, value]) => {
-      const sectionTitle = key.replace(/_/g, ' ').toUpperCase();
-      formatted += `\n${sectionTitle}\n${'='.repeat(sectionTitle.length)}\n\n`;
-      formatted += formatValue(value) + '\n';
+      const sectionTitle = formatSectionKey(key);
+      formatted += `${sectionTitle}:\n\n`;
+      formatted += formatValue(value) + '\n\n';
     });
     return formatted;
   };
 
+  const formatSectionKey = (key: string): string => {
+    return key
+      .replace(/_/g, ' ')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
   const formatValue = (value: any, indent: string = ''): string => {
     if (Array.isArray(value)) {
-      return value.map(item => `${indent}- ${formatValue(item, indent + '  ')}`).join('\n');
+      return value.map(item => `${indent}• ${formatValue(item, indent + '  ')}`).join('\n');
     }
     if (typeof value === 'object' && value !== null) {
       return Object.entries(value)
-        .map(([k, v]) => `${indent}${k.replace(/_/g, ' ')}:\n${formatValue(v, indent + '  ')}`)
-        .join('\n\n');
+        .map(([k, v]) => {
+          const label = formatSectionKey(k);
+          const formattedVal = formatValue(v, indent + '  ');
+          return `${indent}${label}: ${formattedVal}`;
+        })
+        .join('\n');
     }
-    return `${indent}${String(value)}`;
+    return String(value);
   };
 
   const escapeHtml = (unsafe: string) =>
@@ -124,21 +136,95 @@ export function HeidiNotePanel({
     const printable = window.open("", "_blank");
     if (!printable) return;
     
-    // Use plaintext if available, otherwise format the JSON
-    let content = note;
-    if (!content && noteJson) {
-      content = formatNoteForExport(noteJson);
+    // Format the note for printing
+    let htmlContent = '';
+    if (noteJson) {
+      htmlContent = formatNoteForPrint(noteJson);
+    } else if (note) {
+      htmlContent = `<div style="white-space: pre-wrap;">${escapeHtml(note)}</div>`;
     }
     
     printable.document.write(
-      `<!doctype html><html><head><title>Clinical Note</title><style>body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;white-space:pre-wrap;margin:2rem;line-height:1.6;}</style></head><body>${escapeHtml(
-        content || ""
-      )}</body></html>`
+      `<!doctype html>
+      <html>
+        <head>
+          <title>Clinical Note</title>
+          <style>
+            @media print {
+              @page { margin: 1in; }
+            }
+            body {
+              font-family: 'Arial', 'Helvetica', sans-serif;
+              line-height: 1.6;
+              color: #000;
+              margin: 0;
+              padding: 20px;
+            }
+            h3 {
+              font-size: 16px;
+              font-weight: bold;
+              margin: 20px 0 10px 0;
+            }
+            p {
+              margin: 8px 0;
+              font-size: 14px;
+            }
+            ul {
+              margin: 8px 0;
+              padding-left: 24px;
+            }
+            li {
+              margin: 6px 0;
+              font-size: 14px;
+            }
+            .section {
+              margin-bottom: 20px;
+            }
+            .subsection {
+              margin-left: 0;
+            }
+            .subsection-title {
+              font-weight: bold;
+              display: inline;
+            }
+          </style>
+        </head>
+        <body>${htmlContent}</body>
+      </html>`
     );
     printable.document.close();
     printable.focus();
     printable.print();
     printable.close();
+  };
+
+  const formatNoteForPrint = (json: any): string => {
+    let html = '';
+    Object.entries(json).forEach(([key, value]) => {
+      const sectionTitle = formatSectionKey(key);
+      html += `<div class="section"><h3>${sectionTitle}:</h3>`;
+      html += formatValueToPrintHtml(value);
+      html += '</div>';
+    });
+    return html;
+  };
+
+  const formatValueToPrintHtml = (value: any): string => {
+    if (Array.isArray(value)) {
+      return '<ul>' + value.map(item => 
+        `<li>${typeof item === 'string' ? escapeHtml(item) : formatValueToPrintHtml(item)}</li>`
+      ).join('') + '</ul>';
+    }
+    if (typeof value === 'object' && value !== null) {
+      return '<div class="subsection">' + Object.entries(value).map(([k, v]) => {
+        const label = formatSectionKey(k);
+        if (typeof v === 'string') {
+          return `<p><span class="subsection-title">${label}:</span> ${escapeHtml(v)}</p>`;
+        }
+        return `<div><span class="subsection-title">${label}:</span>${formatValueToPrintHtml(v)}</div>`;
+      }).join('') + '</div>';
+    }
+    return `<p>${escapeHtml(String(value))}</p>`;
   };
 
   return (
@@ -249,7 +335,7 @@ export function HeidiNotePanel({
       </div>
 
       {/* Note Display */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto bg-background">
         {showFormatted && noteJson ? (
           <ClinicalNoteDisplay 
             noteJson={noteJson} 
@@ -258,14 +344,16 @@ export function HeidiNotePanel({
             templateStructure={currentTemplate?.structure}
           />
         ) : (
-          <Textarea
-            ref={textareaRef}
-            spellCheck={spellcheckEnabled}
-            value={note}
-            onChange={(e) => onNoteChange(e.target.value)}
-            placeholder="Your clinical note will appear here after generation..."
-            className="w-full min-h-[500px] text-sm resize-none border bg-card focus-visible:ring-0 focus-visible:ring-offset-0"
-          />
+          <div className="bg-white p-8 rounded-lg">
+            <Textarea
+              ref={textareaRef}
+              spellCheck={spellcheckEnabled}
+              value={note}
+              onChange={(e) => onNoteChange(e.target.value)}
+              placeholder="Your clinical note will appear here after generation..."
+              className="w-full min-h-[500px] text-base resize-none border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 p-0"
+            />
+          </div>
         )}
       </div>
     </div>

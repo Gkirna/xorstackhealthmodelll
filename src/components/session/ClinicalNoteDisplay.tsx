@@ -20,12 +20,12 @@ const formatSectionKey = (key: string): string => {
 };
 
 const renderValue = (value: any, depth: number = 0): JSX.Element => {
-  // Handle arrays
+  // Handle arrays as bullet points
   if (Array.isArray(value)) {
     return (
-      <ul className="list-disc pl-5 space-y-1">
+      <ul className="list-disc pl-6 space-y-2 mt-2">
         {value.map((item, idx) => (
-          <li key={idx} className="text-sm text-foreground/90">
+          <li key={idx} className="text-base text-foreground leading-relaxed">
             {typeof item === 'string' ? item : renderValue(item, depth + 1)}
           </li>
         ))}
@@ -33,29 +33,48 @@ const renderValue = (value: any, depth: number = 0): JSX.Element => {
     );
   }
 
-  // Handle objects
+  // Handle objects with nested content
   if (typeof value === 'object' && value !== null) {
     return (
-      <div className={depth > 0 ? "ml-4 mt-2 space-y-2" : "space-y-2"}>
+      <div className={depth > 0 ? "ml-6 mt-3 space-y-3" : "space-y-3"}>
         {Object.entries(value).map(([subKey, subValue]) => (
           <div key={subKey}>
-            <h5 className="text-sm font-semibold text-foreground/80 mb-1">
+            <span className="font-bold text-foreground">
               {formatSectionKey(subKey)}:
-            </h5>
-            <div className="text-sm text-foreground/90 leading-relaxed">
-              {renderValue(subValue, depth + 1)}
-            </div>
+            </span>{' '}
+            {typeof subValue === 'string' ? (
+              <span className="text-base text-foreground leading-relaxed">
+                {subValue}
+              </span>
+            ) : (
+              <div className="mt-1">
+                {renderValue(subValue, depth + 1)}
+              </div>
+            )}
           </div>
         ))}
       </div>
     );
   }
 
-  // Handle strings and primitives
+  // Handle strings - check if it contains newlines for paragraph breaks
+  const stringValue = String(value);
+  if (stringValue.includes('\n')) {
+    return (
+      <div className="space-y-2">
+        {stringValue.split('\n').map((line, idx) => (
+          <p key={idx} className="text-base text-foreground leading-relaxed">
+            {line}
+          </p>
+        ))}
+      </div>
+    );
+  }
+
   return (
-    <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
-      {String(value)}
-    </div>
+    <p className="text-base text-foreground leading-relaxed">
+      {stringValue}
+    </p>
   );
 };
 
@@ -68,21 +87,21 @@ export function ClinicalNoteDisplay({
   // If we have structured data, display it formatted
   if (noteJson && typeof noteJson === 'object' && Object.keys(noteJson).length > 0) {
     return (
-      <div className="space-y-4">
+      <div className="bg-white p-8 rounded-lg space-y-6 print:p-0 print:bg-transparent">
         {Object.entries(noteJson).map(([key, value]) => {
           if (!value) return null;
           
-          const label = templateStructure?.[key] 
-            ? formatSectionKey(key)
-            : formatSectionKey(key);
+          const label = formatSectionKey(key);
           
           return (
-            <Card key={key} className="p-5 border border-border/50 bg-card/50">
-              <h3 className="text-base font-semibold mb-3 text-foreground border-b border-border/30 pb-2 uppercase">
-                {label}
+            <div key={key} className="space-y-3">
+              <h3 className="text-lg font-bold text-foreground">
+                {label}:
               </h3>
-              {renderValue(value)}
-            </Card>
+              <div className="pl-0">
+                {renderValue(value)}
+              </div>
+            </div>
           );
         })}
       </div>
@@ -92,11 +111,11 @@ export function ClinicalNoteDisplay({
   // Fallback to plaintext if available
   if (plaintext) {
     return (
-      <Card className="p-6">
-        <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
+      <div className="bg-white p-8 rounded-lg print:p-0 print:bg-transparent">
+        <div className="text-base text-foreground whitespace-pre-wrap leading-relaxed">
           {plaintext}
         </div>
-      </Card>
+      </div>
     );
   }
   
