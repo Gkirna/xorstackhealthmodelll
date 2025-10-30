@@ -72,7 +72,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     transcriptionRef.current = new RealTimeTranscription({
       continuous,
       interimResults: true,
-      lang: 'en-IN', // Indian English for better accent recognition
+      lang: 'en-US',
       onResult: async (transcript, isFinal) => {
         console.log('📝 Transcription result:', { 
           text: transcript.substring(0, 50) + '...', 
@@ -159,7 +159,6 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           autoGainControl: true,
           sampleRate: sampleRate,
           channelCount: 1,
-          // Enhanced noise suppression for Indian environments (traffic, fans, AC)
           ...(deviceId && { deviceId: { exact: deviceId } })
         }
       };

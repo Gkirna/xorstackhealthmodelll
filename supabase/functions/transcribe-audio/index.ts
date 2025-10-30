@@ -33,9 +33,6 @@ serve(async (req) => {
     const audioBlob = new Blob([binaryAudio], { type: 'audio/webm' });
     formData.append('file', audioBlob, 'audio.webm');
     formData.append('model', 'whisper-1');
-    formData.append('language', 'en'); // English language
-    // Add Indian medical context to improve accuracy
-    formData.append('prompt', 'Medical consultation in Indian English. Common terms: BP, blood pressure, sugar, diabetes, ayurveda, loose motions, diarrhea, thyroid, PCOD, PCOS, gastric, acidity, giddiness, paracetamol, Crocin, Dolo');
 
     // Call OpenAI Whisper API through Lovable AI Gateway
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {

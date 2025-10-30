@@ -55,11 +55,10 @@ export class VoiceAnalyzer {
   private readonly HISTORY_LIMIT = 100;
   private readonly MIN_CONFIDENCE = 0.6;
   private readonly VOICE_ACTIVITY_THRESHOLD = 0.02;
-  // Optimized for Indian voice patterns
   private readonly GENDER_PITCH_BOUNDARIES = {
-    male: { min: 95, max: 200 },      // Adjusted for Indian male voices
-    female: { min: 170, max: 300 },   // Adjusted for Indian female voices  
-    overlap: { start: 170, end: 200 } // Expanded overlap zone
+    male: { min: 85, max: 180 },
+    female: { min: 165, max: 255 },
+    overlap: { start: 165, end: 180 } // Overlap zone
   };
   
   // Advanced analysis parameters
@@ -510,23 +509,6 @@ export class VoiceAnalyzer {
    */
   getVoiceHistory(): VoiceActivityEvent[] {
     return [...this.voiceHistory];
-  }
-
-  /**
-   * Get all speaker profiles for manual speaker assignment
-   */
-  getAllSpeakerProfiles(): Map<string, SpeakerProfile> {
-    return new Map(this.speakerProfiles);
-  }
-
-  /**
-   * Manually assign speaker role (for user override)
-   */
-  assignSpeakerRole(speakerId: string, role: 'provider' | 'patient'): void {
-    const profile = this.speakerProfiles.get(speakerId);
-    if (profile) {
-      console.log(`👤 Manual speaker assignment: ${speakerId} -> ${role}`);
-    }
   }
 
   /**

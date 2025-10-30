@@ -29,37 +29,17 @@ export class MedicalAutoCorrector {
     this.corrections.set('lisinoprel', 'lisinopril');
     this.corrections.set('atorvastaten', 'atorvastatin');
     
-    // Indian common drug names
-    this.corrections.set('crocin', 'paracetamol');
-    this.corrections.set('dolo', 'paracetamol');
-    this.corrections.set('cipla', 'ciprofloxacin');
-    this.corrections.set('azithral', 'azithromycin');
-    
     // Conditions
     this.corrections.set('hipertension', 'hypertension');
     this.corrections.set('diabetis', 'diabetes');
     this.corrections.set('diabetus', 'diabetes');
     this.corrections.set('asma', 'asthma');
     
-    // Indian medical terms
-    this.corrections.set('bp', 'blood pressure');
-    this.corrections.set('sugar', 'diabetes');
-    this.corrections.set('sugar level', 'blood glucose');
-    this.corrections.set('loose motion', 'diarrhea');
-    this.corrections.set('loose motions', 'diarrhea');
-    this.corrections.set('motion', 'bowel movement');
-    this.corrections.set('thyroid problem', 'thyroid disorder');
-    this.corrections.set('pcod', 'PCOS');
-    this.corrections.set('ayurvedic', 'ayurvedic medicine');
-    
     // Symptoms
     this.corrections.set('feaver', 'fever');
     this.corrections.set('caugh', 'cough');
     this.corrections.set('shortness off breath', 'shortness of breath');
     this.corrections.set('chest pane', 'chest pain');
-    this.corrections.set('giddiness', 'dizziness');
-    this.corrections.set('gastric', 'gastritis');
-    this.corrections.set('acidity', 'acid reflux');
   }
 
   /**
