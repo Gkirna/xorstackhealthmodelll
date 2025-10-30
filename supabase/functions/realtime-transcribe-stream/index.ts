@@ -30,16 +30,39 @@ serve(async (req) => {
       );
     }
 
-    console.log(`🎙️ Processing streaming audio for session: ${session_id}`);
+    // Process base64 in chunks to prevent memory issues
+    const processBase64Chunks = (base64String: string, chunkSize = 32768) => {
+      const chunks: Uint8Array[] = [];
+      let position = 0;
+      
+      while (position < base64String.length) {
+        const chunk = base64String.slice(position, position + chunkSize);
+        const binaryChunk = atob(chunk);
+        const bytes = new Uint8Array(binaryChunk.length);
+        
+        for (let i = 0; i < binaryChunk.length; i++) {
+          bytes[i] = binaryChunk.charCodeAt(i);
+        }
+        
+        chunks.push(bytes);
+        position += chunkSize;
+      }
 
-    // Decode base64 audio to binary
-    const binaryString = atob(audio);
-    const audioBytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      audioBytes[i] = binaryString.charCodeAt(i);
-    }
+      const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+      const result = new Uint8Array(totalLength);
+      let offset = 0;
 
-    // Deepgram API with diarization and streaming features
+      for (const chunk of chunks) {
+        result.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      return result;
+    };
+
+    const audioBytes = processBase64Chunks(audio);
+
+    // Deepgram API with diarization - accept WebM format
     const deepgramUrl = 'https://api.deepgram.com/v1/listen?' + new URLSearchParams({
       model: 'nova-2',
       smart_format: 'true',
@@ -48,10 +71,6 @@ serve(async (req) => {
       utterances: 'true',
       detect_language: 'false',
       language: 'en-US',
-      interim_results: 'false',
-      encoding: 'linear16',
-      sample_rate: '48000',
-      channels: '1',
     });
 
     console.log('🚀 Sending to Deepgram API...');
@@ -60,7 +79,7 @@ serve(async (req) => {
       method: 'POST',
       headers: {
         'Authorization': `Token ${DEEPGRAM_API_KEY}`,
-        'Content-Type': 'audio/raw',
+        'Content-Type': 'audio/webm',
       },
       body: audioBytes,
     });
