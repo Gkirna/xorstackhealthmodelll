@@ -86,18 +86,21 @@ export function ClinicalNoteDisplay({
 }: ClinicalNoteDisplayProps) {
   // If we have structured data, display it formatted
   if (noteJson && typeof noteJson === 'object' && Object.keys(noteJson).length > 0) {
+    // Check if the noteJson has a 'sections' property (new format)
+    const sections = (noteJson as any).sections || noteJson;
+    
     return (
-      <div className="bg-white p-8 rounded-lg space-y-6 print:p-0 print:bg-transparent">
-        {Object.entries(noteJson).map(([key, value]) => {
-          if (!value) return null;
+      <div className="bg-white p-8 rounded-lg space-y-8 print:p-0 print:bg-transparent">
+        {Object.entries(sections).map(([key, value]) => {
+          if (!value || key === 'template_id' || key === 'plaintext') return null;
           
           const label = formatSectionKey(key);
           
           return (
             <div key={key} className="space-y-3">
-              <h3 className="text-lg font-bold text-foreground">
-                {label}:
-              </h3>
+              <h2 className="text-xl font-bold text-foreground uppercase border-b-2 border-foreground/20 pb-2">
+                {label}
+              </h2>
               <div className="pl-0">
                 {renderValue(value)}
               </div>
