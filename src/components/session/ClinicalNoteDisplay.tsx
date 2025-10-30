@@ -1,8 +1,7 @@
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 
 interface NoteSection {
-  [key: string]: string;
+  [key: string]: string | any;
 }
 
 interface ClinicalNoteDisplayProps {
@@ -12,39 +11,52 @@ interface ClinicalNoteDisplayProps {
   templateStructure?: NoteSection;
 }
 
-const SECTION_LABELS: Record<string, Record<string, string>> = {
-  soap: {
-    subjective: 'Subjective',
-    objective: 'Objective',
-    assessment: 'Assessment',
-    plan: 'Plan'
-  },
-  hpi: {
-    hpi: 'History of Present Illness',
-    physical_exam: 'Physical Examination',
-    assessment: 'Assessment',
-    plan: 'Plan'
-  },
-  progress: {
-    interval_history: 'Interval History',
-    current_status: 'Current Status',
-    assessment: 'Assessment',
-    plan: 'Plan'
-  },
-  discharge: {
-    admission_diagnosis: 'Admission Diagnosis',
-    hospital_course: 'Hospital Course',
-    discharge_diagnosis: 'Discharge Diagnosis',
-    discharge_medications: 'Discharge Medications',
-    follow_up: 'Follow-up Instructions'
-  }
+const formatSectionKey = (key: string): string => {
+  return key
+    .replace(/_/g, ' ')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 };
 
-const TEMPLATE_LABELS: Record<string, string> = {
-  soap: 'SOAP Note',
-  hpi: 'HPI + Assessment + Plan',
-  progress: 'Progress Note',
-  discharge: 'Discharge Summary'
+const renderValue = (value: any, depth: number = 0): JSX.Element => {
+  // Handle arrays
+  if (Array.isArray(value)) {
+    return (
+      <ul className="list-disc pl-5 space-y-1">
+        {value.map((item, idx) => (
+          <li key={idx} className="text-sm text-foreground/90">
+            {typeof item === 'string' ? item : renderValue(item, depth + 1)}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  // Handle objects
+  if (typeof value === 'object' && value !== null) {
+    return (
+      <div className={depth > 0 ? "ml-4 mt-2 space-y-2" : "space-y-2"}>
+        {Object.entries(value).map(([subKey, subValue]) => (
+          <div key={subKey}>
+            <h5 className="text-sm font-semibold text-foreground/80 mb-1">
+              {formatSectionKey(subKey)}:
+            </h5>
+            <div className="text-sm text-foreground/90 leading-relaxed">
+              {renderValue(subValue, depth + 1)}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Handle strings and primitives
+  return (
+    <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
+      {String(value)}
+    </div>
+  );
 };
 
 export function ClinicalNoteDisplay({ 
@@ -58,19 +70,18 @@ export function ClinicalNoteDisplay({
     return (
       <div className="space-y-4">
         {Object.entries(noteJson).map(([key, value]) => {
-          if (!value || typeof value !== 'string') return null;
+          if (!value) return null;
           
-          // Get label from template structure or fallback to formatted key
-          const label = templateStructure?.[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+          const label = templateStructure?.[key] 
+            ? formatSectionKey(key)
+            : formatSectionKey(key);
           
           return (
             <Card key={key} className="p-5 border border-border/50 bg-card/50">
-              <h3 className="text-base font-semibold mb-3 text-foreground border-b border-border/30 pb-2">
+              <h3 className="text-base font-semibold mb-3 text-foreground border-b border-border/30 pb-2 uppercase">
                 {label}
               </h3>
-              <div className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
-                {value}
-              </div>
+              {renderValue(value)}
             </Card>
           );
         })}

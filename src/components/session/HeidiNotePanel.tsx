@@ -74,7 +74,12 @@ export function HeidiNotePanel({
   };
 
   const handleDownloadTxt = () => {
-    const blob = new Blob([note || ""], { type: "text/plain;charset=utf-8" });
+    // Use plaintext if available, otherwise format the JSON
+    let content = note;
+    if (!content && noteJson) {
+      content = formatNoteForExport(noteJson);
+    }
+    const blob = new Blob([content || ""], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -83,6 +88,28 @@ export function HeidiNotePanel({
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
+  };
+
+  const formatNoteForExport = (json: any): string => {
+    let formatted = '';
+    Object.entries(json).forEach(([key, value]) => {
+      const sectionTitle = key.replace(/_/g, ' ').toUpperCase();
+      formatted += `\n${sectionTitle}\n${'='.repeat(sectionTitle.length)}\n\n`;
+      formatted += formatValue(value) + '\n';
+    });
+    return formatted;
+  };
+
+  const formatValue = (value: any, indent: string = ''): string => {
+    if (Array.isArray(value)) {
+      return value.map(item => `${indent}- ${formatValue(item, indent + '  ')}`).join('\n');
+    }
+    if (typeof value === 'object' && value !== null) {
+      return Object.entries(value)
+        .map(([k, v]) => `${indent}${k.replace(/_/g, ' ')}:\n${formatValue(v, indent + '  ')}`)
+        .join('\n\n');
+    }
+    return `${indent}${String(value)}`;
   };
 
   const escapeHtml = (unsafe: string) =>
@@ -96,9 +123,16 @@ export function HeidiNotePanel({
   const handlePrint = () => {
     const printable = window.open("", "_blank");
     if (!printable) return;
+    
+    // Use plaintext if available, otherwise format the JSON
+    let content = note;
+    if (!content && noteJson) {
+      content = formatNoteForExport(noteJson);
+    }
+    
     printable.document.write(
-      `<!doctype html><html><head><title>Clinical Note</title><style>body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;white-space:pre-wrap;margin:2rem;}</style></head><body>${escapeHtml(
-        note || ""
+      `<!doctype html><html><head><title>Clinical Note</title><style>body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;white-space:pre-wrap;margin:2rem;line-height:1.6;}</style></head><body>${escapeHtml(
+        content || ""
       )}</body></html>`
     );
     printable.document.close();
