@@ -232,6 +232,25 @@ const SessionRecord = () => {
     }
   }, [id, transcript, context, template, updateSession]);
 
+  // Auto-generate note when real-time transcription completes
+  useEffect(() => {
+    if (!realtimeAdvanced.isTranscribing && 
+        realtimeAdvanced.processingStatus === 'complete' && 
+        realtimeAdvanced.currentText.trim().length > 0 &&
+        !isAutoPipelineRunning &&
+        id) {
+      console.log('✅ Real-time transcription complete, auto-generating clinical note...');
+      autoGenerateNote();
+    }
+  }, [
+    realtimeAdvanced.isTranscribing,
+    realtimeAdvanced.processingStatus,
+    realtimeAdvanced.currentText,
+    isAutoPipelineRunning,
+    id,
+    autoGenerateNote
+  ]);
+
   const handleRecordingModeChange = useCallback((mode: string) => {
     setRecordingMode(mode);
     if (mode === 'dictating' || mode === 'upload' || mode === 'transcribing') {
