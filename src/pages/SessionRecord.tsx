@@ -25,6 +25,7 @@ import { ExtremelyAdvancedVoiceVisualizationDashboard } from '@/components/Extre
 import { ExtremelyAdvancedAutoCorrectorDashboard } from '@/components/ExtremelyAdvancedAutoCorrectorDashboard';
 import { AdvancedTranscriptionDashboard } from '@/components/AdvancedTranscriptionDashboard';
 import { RealtimeTranscriptionStatus } from '@/components/session/RealtimeTranscriptionStatus';
+import { RealtimeTranscriptionPanel } from '@/components/session/RealtimeTranscriptionPanel';
 import { useAdvancedTranscription } from '@/hooks/useAdvancedTranscription';
 import { useRealtimeAdvancedTranscription } from '@/hooks/useRealtimeAdvancedTranscription';
 import type { EnhancedTranscriptionData } from '@/types/advancedTranscription';
@@ -500,16 +501,12 @@ const SessionRecord = () => {
 
             {/* Tab Content */}
             <TabsContent value="transcript" className="flex-1 mt-0 overflow-auto space-y-4">
-              {/* Real-time Advanced Transcription Status */}
-              <RealtimeTranscriptionStatus
-                isTranscribing={realtimeAdvanced.isTranscribing}
-                processingStatus={realtimeAdvanced.processingStatus}
-                speakerCount={realtimeAdvanced.speakerCount}
-                segmentCount={realtimeAdvanced.currentSegments.length}
-                entityCount={realtimeAdvanced.currentEntities.length}
-                confidence={realtimeAdvanced.overallConfidence}
-                currentText={realtimeAdvanced.currentText}
-                interimText={realtimeAdvanced.interimText}
+              {/* WebSocket Real-Time Transcription - NEW STREAMING APPROACH */}
+              <RealtimeTranscriptionPanel
+                sessionId={id!}
+                onTranscriptUpdate={(text) => {
+                  setTranscript(text);
+                }}
               />
               
               {recordingMode === 'dictating' && (
