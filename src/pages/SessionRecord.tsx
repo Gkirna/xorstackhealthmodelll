@@ -526,21 +526,6 @@ const SessionRecord = () => {
                 stats={stats}
                 isTranscribing={isTranscribing}
               />
-              
-              {/* Ultra-Advanced Voice Analytics Dashboard */}
-              <div className="mt-6">
-                <ExtremelyAdvancedVoiceVisualizationDashboard
-                  voiceAnalyzer={voiceAnalyzer}
-                  isActive={isRecording}
-                />
-              </div>
-              
-              {/* Advanced Transcription Analysis */}
-              {enhancedTranscriptionData && (
-                <div className="mt-6">
-                  <AdvancedTranscriptionDashboard data={enhancedTranscriptionData} />
-                </div>
-              )}
             </TabsContent>
 
             <TabsContent value="context" className="flex-1 mt-0 overflow-auto">
