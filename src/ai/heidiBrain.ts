@@ -150,7 +150,8 @@ async function hashText(text: string): Promise<string> {
 export async function generateClinicalNote(
   session_id: string,
   transcript: string,
-  detail_level: 'low' | 'medium' | 'high' = 'medium'
+  detail_level: 'low' | 'medium' | 'high' = 'medium',
+  template_id?: string
 ): Promise<{
   success: boolean;
   note?: string;
@@ -167,7 +168,8 @@ export async function generateClinicalNote(
       body: {
         session_id,
         transcript_text: transcript,
-        detail_level
+        detail_level,
+        template_id
       }
     });
 

@@ -37,7 +37,7 @@ const SessionRecord = () => {
   const [transcript, setTranscript] = useState("");
   const [context, setContext] = useState("");
   const [generatedNote, setGeneratedNote] = useState("");
-  const [template, setTemplate] = useState<"soap" | "progress" | "discharge" | "goldilocks">("soap");
+  const [template, setTemplate] = useState<string>("");
   const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null);
   const [isAutoPipelineRunning, setIsAutoPipelineRunning] = useState(false);
   const [isStartingRecording, setIsStartingRecording] = useState(false);
@@ -217,7 +217,7 @@ const SessionRecord = () => {
       const result = await orchestratorRef.current.runCompletePipeline(id, transcript, {
         context,
         detailLevel: 'high',
-        template,
+        templateId: template,
       });
       
       if (result.success && result.note) {
@@ -294,7 +294,7 @@ const SessionRecord = () => {
       const result = await orchestratorRef.current.runCompletePipeline(id, transcript, {
         context,
         detailLevel: 'high',
-        template,
+        templateId: template,
       });
       
       if (result.success && result.note) {

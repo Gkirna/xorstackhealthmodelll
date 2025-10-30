@@ -4,6 +4,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Copy, Download, Mic, Undo, Redo, ChevronDown, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { ClinicalNoteDisplay } from "./ClinicalNoteDisplay";
+import { TemplateSelector } from "./TemplateSelector";
+import { useTemplates } from "@/hooks/useTemplates";
 import {
   Select,
   SelectContent,
@@ -24,8 +26,8 @@ interface HeidiNotePanelProps {
   onGenerate: () => void;
   isGenerating: boolean;
   sessionId?: string;
-  selectedTemplate?: "soap" | "progress" | "discharge" | "goldilocks";
-  onTemplateChange?: (value: "soap" | "progress" | "discharge" | "goldilocks") => void;
+  selectedTemplate?: string;
+  onTemplateChange?: (value: string) => void;
   onUndo?: () => void;
   onRedo?: () => void;
   canUndo?: boolean;
@@ -52,8 +54,11 @@ export function HeidiNotePanel({
   onToggleFormatted 
 }: HeidiNotePanelProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [selectedTemplate, setSelectedTemplate] = useState<"soap" | "progress" | "discharge" | "goldilocks">(selectedTemplateProp || "goldilocks");
+  const { data: templates } = useTemplates();
+  const [selectedTemplate, setSelectedTemplate] = useState<string>(selectedTemplateProp || "");
   const [spellcheckEnabled, setSpellcheckEnabled] = useState(true);
+
+  const currentTemplate = templates?.find(t => t.id === selectedTemplate);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(note);
@@ -108,25 +113,15 @@ export function HeidiNotePanel({
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           {/* Template Selector */}
-          <Select value={selectedTemplate} onValueChange={(v: "soap" | "progress" | "discharge" | "goldilocks") => { setSelectedTemplate(v); onTemplateChange && onTemplateChange(v); }}>
-            <SelectTrigger className="w-auto h-8 border-0 bg-transparent hover:bg-accent">
-              <div className="flex items-center gap-2">
-                <span className="text-sm">📋</span>
-                <span className="text-sm">Select a template</span>
-              </div>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="goldilocks">Goldilocks</SelectItem>
-              <SelectItem value="soap">SOAP Note</SelectItem>
-              <SelectItem value="progress">Progress Note</SelectItem>
-              <SelectItem value="discharge">Discharge Summary</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Template Name Display */}
-          <Button variant="outline" size="sm" className="h-8">
-            <span className="text-sm">✏️ {selectedTemplate.charAt(0).toUpperCase() + selectedTemplate.slice(1)}</span>
-          </Button>
+          <div className="flex-1">
+            <TemplateSelector 
+              value={selectedTemplate} 
+              onChange={(v) => { 
+                setSelectedTemplate(v); 
+                onTemplateChange && onTemplateChange(v); 
+              }} 
+            />
+          </div>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -222,7 +217,12 @@ export function HeidiNotePanel({
       {/* Note Display */}
       <div className="flex-1 overflow-auto">
         {showFormatted && noteJson ? (
-          <ClinicalNoteDisplay noteJson={noteJson} plaintext={note} />
+          <ClinicalNoteDisplay 
+            noteJson={noteJson} 
+            plaintext={note}
+            templateId={selectedTemplate}
+            templateStructure={currentTemplate?.structure}
+          />
         ) : (
           <Textarea
             ref={textareaRef}

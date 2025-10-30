@@ -8,7 +8,8 @@ interface NoteSection {
 interface ClinicalNoteDisplayProps {
   noteJson?: NoteSection | null;
   plaintext?: string;
-  template?: 'soap' | 'hpi' | 'progress' | 'discharge';
+  templateId?: string;
+  templateStructure?: NoteSection;
 }
 
 const SECTION_LABELS: Record<string, Record<string, string>> = {
@@ -46,24 +47,21 @@ const TEMPLATE_LABELS: Record<string, string> = {
   discharge: 'Discharge Summary'
 };
 
-export function ClinicalNoteDisplay({ noteJson, plaintext, template = 'soap' }: ClinicalNoteDisplayProps) {
-  const sectionLabels = SECTION_LABELS[template] || SECTION_LABELS.soap;
-  const templateLabel = TEMPLATE_LABELS[template];
-  
+export function ClinicalNoteDisplay({ 
+  noteJson, 
+  plaintext, 
+  templateId,
+  templateStructure 
+}: ClinicalNoteDisplayProps) {
   // If we have structured data, display it formatted
   if (noteJson && typeof noteJson === 'object' && Object.keys(noteJson).length > 0) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center gap-2 mb-4">
-          <Badge variant="outline" className="text-xs">
-            {templateLabel}
-          </Badge>
-        </div>
-        
         {Object.entries(noteJson).map(([key, value]) => {
           if (!value || typeof value !== 'string') return null;
           
-          const label = sectionLabels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+          // Get label from template structure or fallback to formatted key
+          const label = templateStructure?.[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
           
           return (
             <Card key={key} className="p-5 border border-border/50 bg-card/50">

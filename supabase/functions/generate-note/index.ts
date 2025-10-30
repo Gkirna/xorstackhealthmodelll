@@ -32,13 +32,30 @@ serve(async (req) => {
     }
 
     const requestData = await req.json();
-    const { session_id, transcript_text, detail_level = 'medium', template = 'soap' } = requestData;
+    const { session_id, transcript_text, detail_level = 'medium', template_id } = requestData;
 
     if (!session_id || !transcript_text) {
       throw new Error('Missing required fields: session_id, transcript_text');
     }
 
-    console.log(`Generating ${template} note with ${detail_level} detail level`);
+    // Fetch template from database
+    let templateStructure: any = {};
+    let templateName = 'Clinical Note';
+
+    if (template_id) {
+      const { data: template, error: templateError } = await supabase
+        .from('templates')
+        .select('name, structure')
+        .eq('id', template_id)
+        .single();
+
+      if (template && !templateError) {
+        templateStructure = template.structure || {};
+        templateName = template.name;
+      }
+    }
+
+    console.log(`Generating ${templateName} note with ${detail_level} detail level`);
 
     const startTime = Date.now();
 
@@ -48,42 +65,13 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
-    const TEMPLATE_STRUCTURES = {
-      soap: {
-        subjective: "Patient-reported symptoms, history, concerns",
-        objective: "Vital signs, physical exam findings, test results",
-        assessment: "Diagnosis, differential diagnoses, clinical impression",
-        plan: "Treatment plan, medications, follow-up, patient education"
-      },
-      hpi: {
-        hpi: "History of Present Illness with timeline",
-        physical_exam: "Physical examination findings",
-        assessment: "Clinical assessment and diagnoses",
-        plan: "Diagnostic workup, treatment, medications"
-      },
-      progress: {
-        interval_history: "Changes since last visit",
-        current_status: "Current symptoms and status",
-        assessment: "Updated clinical assessment",
-        plan: "Treatment changes and follow-up"
-      },
-      discharge: {
-        admission_diagnosis: "Reason for admission",
-        hospital_course: "Summary of hospital stay",
-        discharge_diagnosis: "Final diagnoses",
-        discharge_medications: "Medication list",
-        follow_up: "Follow-up instructions"
-      }
-    };
-
-    const templateStructure = TEMPLATE_STRUCTURES[template as keyof typeof TEMPLATE_STRUCTURES] || TEMPLATE_STRUCTURES.soap;
     const sections = Object.entries(templateStructure)
       .map(([key, desc]) => `    "${key}": "${desc}"`)
       .join(',\n');
 
     const systemPrompt = `You are an expert medical scribe assistant with extensive knowledge of clinical documentation standards.
 
-Template: ${template.toUpperCase()}
+Template: ${templateName}
 Detail level: ${detail_level}
 
 CRITICAL INSTRUCTIONS:
@@ -97,7 +85,7 @@ CRITICAL INSTRUCTIONS:
 
 Output format (MUST be valid JSON):
 {
-  "template": "${template}",
+  "template_id": "${template_id || 'default'}",
   "sections": {
 ${sections}
   },
@@ -150,12 +138,11 @@ Quality criteria:
       if (!noteData.sections && noteData.soap) {
         // Legacy format conversion
         noteData.sections = noteData.soap;
-        noteData.template = 'soap';
       }
     } catch {
       // Fallback for non-JSON responses
       noteData = {
-        template: template,
+        template_id: template_id,
         sections: {},
         plaintext: generatedContent
       };
@@ -203,7 +190,7 @@ Quality criteria:
         success: true,
         note: noteData.plaintext,
         note_json: noteData.sections || noteData.soap || {},
-        template: noteData.template || template,
+        template_id: noteData.template_id || template_id,
         warnings: [],
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

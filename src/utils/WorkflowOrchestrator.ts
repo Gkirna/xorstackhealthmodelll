@@ -57,7 +57,7 @@ export class WorkflowOrchestrator {
   public async runCompletePipeline(
     sessionId: string,
     transcript: string,
-    options?: { context?: string; detailLevel?: 'low' | 'medium' | 'high'; template?: string }
+    options?: { context?: string; detailLevel?: 'low' | 'medium' | 'high'; template?: string; templateId?: string }
   ): Promise<{
     success: boolean;
     note?: string;
@@ -140,18 +140,16 @@ export class WorkflowOrchestrator {
   private async generateNote(
     sessionId: string,
     transcript: string,
-    options?: { context?: string; detailLevel?: 'low' | 'medium' | 'high'; template?: string }
+    options?: { context?: string; detailLevel?: 'low' | 'medium' | 'high'; template?: string; templateId?: string }
   ) {
     try {
-      this.updateStep(1, { progress: 40, message: 'Generating SOAP note...' });
+      this.updateStep(1, { progress: 40, message: 'Generating clinical note...' });
       
       const combined = options?.context
         ? `${transcript}\n\nAdditional Context:\n${options.context}`
         : transcript;
       const detail = options?.detailLevel || 'high';
-      // Pass template choice inside the combined text to guide the model
-      const templateHint = options?.template ? `\n\nTemplate: ${options.template.toUpperCase()} (strict headings).` : '';
-      const result = await generateClinicalNote(sessionId, combined + templateHint, detail);
+      const result = await generateClinicalNote(sessionId, combined, detail, options?.templateId);
       
       this.updateStep(1, { progress: 80, message: 'Note almost ready...' });
       
