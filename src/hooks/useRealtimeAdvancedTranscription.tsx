@@ -41,8 +41,8 @@ export const useRealtimeAdvancedTranscription = (sessionId: string) => {
 
   // Real-time processing configuration
   const SAMPLE_RATE = 24000;
-  const CHUNK_DURATION_MS = 3000; // Process every 3 seconds for real-time feel
-  const MIN_AUDIO_LENGTH = SAMPLE_RATE * 2; // Minimum 2 seconds of audio
+  const CHUNK_DURATION_MS = 1000; // Process every 1 second for real-time feel
+  const MIN_AUDIO_LENGTH = SAMPLE_RATE * 1; // Minimum 1 second of audio
   const MAX_BUFFER_SIZE = SAMPLE_RATE * 30; // Maximum 30 seconds buffered
 
   // Convert Float32Array to base64
