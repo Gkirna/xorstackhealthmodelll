@@ -586,6 +586,50 @@ const SessionRecord = () => {
                   onTranscriptGenerated={(t) => setTranscript(prev => prev ? `${prev}\n\n${t}` : t)}
                 />
               )}
+              
+              {/* Manual Speaker Override Controls */}
+              {isRecording && (
+                <div className="bg-muted/30 rounded-lg p-4 border border-border">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <h3 className="text-sm font-medium mb-1">Speaker Control</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Current: <span className="font-medium text-foreground capitalize">{speakerRef.current}</span>
+                        {currentVoiceCharacteristics && currentVoiceCharacteristics.gender !== 'unknown' && (
+                          <span className="ml-2">
+                            (Detected: {currentVoiceCharacteristics.gender}, 
+                            {currentVoiceCharacteristics.pitch.toFixed(0)}Hz, 
+                            {(currentVoiceCharacteristics.confidence * 100).toFixed(0)}% confidence)
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant={speakerRef.current === 'provider' ? 'default' : 'outline'}
+                        onClick={() => {
+                          speakerRef.current = 'provider';
+                          toast.success('Next transcript will be assigned to Doctor');
+                        }}
+                      >
+                        👨‍⚕️ Doctor
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={speakerRef.current === 'patient' ? 'default' : 'outline'}
+                        onClick={() => {
+                          speakerRef.current = 'patient';
+                          toast.success('Next transcript will be assigned to Patient');
+                        }}
+                      >
+                        🧑 Patient
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <HeidiTranscriptPanel
                 transcript={transcript}
                 onTranscriptChange={setTranscript}
