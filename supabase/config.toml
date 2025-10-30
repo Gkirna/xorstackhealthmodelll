@@ -27,6 +27,3 @@ verify_jwt = true
 
 [functions.extract-medical-entities]
 verify_jwt = true
-
-[functions.realtime-transcribe-stream]
-verify_jwt = true

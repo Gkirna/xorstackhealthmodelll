@@ -27,58 +27,47 @@ serve(async (req) => {
       throw new Error('No text provided for entity extraction');
     }
 
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    if (!OPENAI_API_KEY) {
-      return new Response(
-        JSON.stringify({ success: false, error: { code: 'CONFIG_ERROR', message: 'Service temporarily unavailable' } }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      throw new Error('LOVABLE_API_KEY not configured');
     }
 
-    console.log('🏥 Extracting medical entities with GPT-5 ultra-advanced NER...');
+    console.log('🏥 Extracting medical entities from transcript...');
 
-    const systemPrompt = `You are an elite medical NER (Named Entity Recognition) system with extensive medical knowledge across all specialties. Extract all clinically relevant entities from medical transcripts with maximum precision and clinical context.
+    const systemPrompt = `You are an expert medical NER (Named Entity Recognition) system. Extract all medical entities from clinical transcripts with high precision.
 
 Entity types to identify:
-- medication: Drug names, prescriptions (include generic/brand names)
-- diagnosis: Diseases, conditions, disorders (with ICD-10 mapping when possible)
-- procedure: Medical procedures, surgeries, tests, interventions
-- symptom: Patient-reported symptoms and complaints
-- anatomy: Body parts, organs, systems, anatomical locations
-- dosage: Medication dosages, frequencies, routes of administration
-- vital_sign: Blood pressure, heart rate, temperature, SpO2, respiratory rate
-- allergy: Known allergies and adverse reactions
+- medication: Drug names, prescriptions
+- diagnosis: Diseases, conditions, disorders
+- procedure: Medical procedures, surgeries, tests
+- symptom: Patient-reported symptoms
+- anatomy: Body parts, organs, systems
+- dosage: Medication dosages and frequencies
+- vital_sign: Blood pressure, heart rate, temperature, etc.
+- allergy: Known allergies
 
-For each entity provide:
-- Exact text match from transcript
-- Entity type classification
-- Character position (start/end)
-- Confidence score (0-1) based on context clarity
-- Metadata with clinical context (severity, laterality, temporal info, etc.)
+Return entities with their exact position in text and confidence score (0-1).`;
 
-Return structured JSON with high-confidence entities only (>0.7).`;
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-5-2025-08-07',
+        model: 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: systemPrompt },
           { 
             role: 'user', 
-            content: `Extract all clinically relevant medical entities from this transcript. Focus on accuracy and completeness:\n\n${text}` 
+            content: `Extract all medical entities from this clinical transcript:\n\n${text}` 
           }
         ],
-        max_completion_tokens: 8000,
         tools: [{
           type: 'function',
           function: {
             name: 'extract_medical_entities',
-            description: 'Extract medical entities from clinical text with detailed metadata',
+            description: 'Extract medical entities from clinical text',
             parameters: {
               type: 'object',
               properties: {
@@ -87,18 +76,18 @@ Return structured JSON with high-confidence entities only (>0.7).`;
                   items: {
                     type: 'object',
                     properties: {
-                      text: { type: 'string', description: 'The exact entity text from transcript' },
+                      text: { type: 'string', description: 'The entity text' },
                       type: { 
                         type: 'string', 
                         enum: ['medication', 'diagnosis', 'procedure', 'symptom', 'anatomy', 'dosage', 'vital_sign', 'allergy'],
-                        description: 'Entity classification'
+                        description: 'Entity type'
                       },
-                      start: { type: 'number', description: 'Character start position' },
-                      end: { type: 'number', description: 'Character end position' },
+                      start: { type: 'number', description: 'Start position in text' },
+                      end: { type: 'number', description: 'End position in text' },
                       confidence: { type: 'number', description: 'Confidence score 0-1' },
                       metadata: { 
                         type: 'object',
-                        description: 'Clinical context (severity, laterality, timing, etc.)',
+                        description: 'Additional context',
                         additionalProperties: true
                       }
                     },
@@ -117,26 +106,31 @@ Return structured JSON with high-confidence entities only (>0.7).`;
     });
 
     if (!response.ok) {
-      console.error('OpenAI API error:', response.status);
-      return new Response(
-        JSON.stringify({ success: false, error: { code: 'EXTRACTION_ERROR', message: 'Entity extraction failed' } }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      if (response.status === 429) {
+        return new Response(
+          JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      if (response.status === 402) {
+        return new Response(
+          JSON.stringify({ error: 'Payment required. Please add credits to continue.' }),
+          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      throw new Error(`AI API error: ${response.status}`);
     }
 
     const result = await response.json();
     const toolCall = result.choices?.[0]?.message?.tool_calls?.[0];
     
     if (!toolCall) {
-      return new Response(
-        JSON.stringify({ success: false, error: { code: 'NO_ENTITIES', message: 'No entities found' } }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      throw new Error('No entities extracted from AI response');
     }
 
     const entities: MedicalEntity[] = JSON.parse(toolCall.function.arguments).entities;
 
-    console.log(`✅ Extracted ${entities.length} medical entities with GPT-5 ultra-advanced NER`);
+    console.log(`✅ Extracted ${entities.length} medical entities`);
 
     // Calculate entity statistics
     const entityStats = entities.reduce((acc, entity) => {
@@ -161,11 +155,21 @@ Return structured JSON with high-confidence entities only (>0.7).`;
     );
 
   } catch (error) {
-    console.error('❌ Ultra-advanced medical entity extraction error:', error);
+    console.error('❌ Medical entity extraction error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     
     return new Response(
-      JSON.stringify({ success: false, error: { code: 'ENTITY_EXTRACTION_ERROR', message: 'An error occurred during entity extraction' } }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({
+        success: false,
+        error: {
+          code: 'ENTITY_EXTRACTION_ERROR',
+          message: errorMessage,
+        },
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
     );
   }
 });
