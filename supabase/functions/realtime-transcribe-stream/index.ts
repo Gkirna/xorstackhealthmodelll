@@ -41,7 +41,7 @@ serve(async (req) => {
 
     // Deepgram API with diarization and streaming features
     const deepgramUrl = 'https://api.deepgram.com/v1/listen?' + new URLSearchParams({
-      model: 'nova-2-medical',
+      model: 'nova-2',
       smart_format: 'true',
       diarize: 'true',
       punctuate: 'true',
@@ -49,6 +49,9 @@ serve(async (req) => {
       detect_language: 'false',
       language: 'en-US',
       interim_results: 'false',
+      encoding: 'linear16',
+      sample_rate: '48000',
+      channels: '1',
     });
 
     console.log('🚀 Sending to Deepgram API...');
@@ -57,7 +60,7 @@ serve(async (req) => {
       method: 'POST',
       headers: {
         'Authorization': `Token ${DEEPGRAM_API_KEY}`,
-        'Content-Type': 'audio/webm',
+        'Content-Type': 'audio/raw',
       },
       body: audioBytes,
     });
@@ -106,10 +109,10 @@ serve(async (req) => {
         confidence: avgConfidence,
         speaker_count: speakerCount,
         words,
-        metadata: {
-          model: 'nova-2-medical',
-          duration: channel?.duration || 0,
-        }
+      metadata: {
+        model: 'nova-2',
+        duration: channel?.duration || 0,
+      }
       }),
       { 
         status: 200,
