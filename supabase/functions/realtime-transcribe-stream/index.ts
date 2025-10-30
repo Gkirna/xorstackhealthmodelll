@@ -30,6 +30,24 @@ serve(async (req) => {
       );
     }
 
+    // Validate audio data size - reject if too small (likely incomplete)
+    if (audio.length < 100) {
+      console.log(`⚠️ Audio chunk too small (${audio.length} bytes), skipping...`);
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          text: '',
+          segments: [],
+          confidence: 0,
+          speaker_count: 0,
+          words: []
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`🎙️ Processing audio chunk (${audio.length} base64 chars) for session: ${session_id}`);
+
     // Process base64 in chunks to prevent memory issues
     const processBase64Chunks = (base64String: string, chunkSize = 32768) => {
       const chunks: Uint8Array[] = [];
