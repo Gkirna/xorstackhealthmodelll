@@ -159,15 +159,13 @@ const SessionRecord = () => {
     }
 
     if (isRecording) {
-      toast.success('Stopping transcription...');
+      toast.info('Stopping transcription and generating clinical note...');
       await saveAllPendingChunks();
       stopRecording();
       
-      // Automatically generate clinical note after stopping
       setTimeout(async () => {
-        toast.info('Generating clinical note...');
         await autoGenerateNote();
-      }, 1000);
+      }, 1500);
       return;
     }
 
