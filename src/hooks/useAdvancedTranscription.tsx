@@ -28,7 +28,20 @@ export const useAdvancedTranscription = () => {
 
       if (!data.success) {
         console.error('Transcription unsuccessful:', data.error);
-        toast.error('Transcription failed: ' + data.error?.message);
+        
+        // Handle specific error codes
+        if (data.error?.code === 'NO_SPEECH_DETECTED') {
+          toast.error('No speech detected in the audio recording');
+        } else {
+          toast.error('Transcription failed: ' + data.error?.message);
+        }
+        return null;
+      }
+
+      // Additional validation
+      if (!data.text || data.text.trim().length === 0) {
+        console.error('Transcription returned empty text');
+        toast.error('No speech detected in the audio');
         return null;
       }
 

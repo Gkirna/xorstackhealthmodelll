@@ -81,6 +81,12 @@ serve(async (req) => {
 
     const result = await dgResponse.json();
     
+    console.log('📊 Deepgram response metadata:', {
+      channels: result.results?.channels?.length || 0,
+      utterances: result.results?.utterances?.length || 0,
+      duration: result.metadata?.duration || 0
+    });
+    
     // Extract utterances with speaker diarization
     const utterances = result.results?.utterances || [];
     const segments: TranscriptionSegment[] = utterances.map((utt: DeepgramUtterance) => ({
@@ -92,15 +98,33 @@ serve(async (req) => {
       words: utt.words,
     }));
 
+    // Get full transcript
+    const fullTranscript = result.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
+
+    // Validate transcription has content
+    if (!fullTranscript || fullTranscript.trim().length === 0) {
+      console.warn('⚠️ Deepgram returned empty transcript - audio may be silent or too short');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: {
+            code: 'NO_SPEECH_DETECTED',
+            message: 'No speech detected in audio. Please ensure the audio contains clear speech.',
+          },
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400,
+        }
+      );
+    }
+
     // Calculate overall confidence
     const overallConfidence = segments.length > 0
       ? segments.reduce((sum, seg) => sum + seg.confidence, 0) / segments.length
       : 0;
 
-    // Get full transcript
-    const fullTranscript = result.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
-
-    console.log(`✅ Transcription successful - ${segments.length} segments, confidence: ${(overallConfidence * 100).toFixed(1)}%`);
+    console.log(`✅ Transcription successful - ${segments.length} segments, ${fullTranscript.length} chars, confidence: ${(overallConfidence * 100).toFixed(1)}%`);
 
     return new Response(
       JSON.stringify({
