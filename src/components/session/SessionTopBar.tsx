@@ -113,8 +113,13 @@ export function SessionTopBar({
             <>
               <Button
                 onClick={() => {
-                  console.log('🔴 Pause button clicked directly');
-                  onPauseRecording?.();
+                  console.log('🔴 PAUSE BUTTON CLICKED - isRecording:', isRecording, 'isPaused:', isPaused);
+                  if (onPauseRecording) {
+                    console.log('🔴 Calling onPauseRecording handler');
+                    onPauseRecording();
+                  } else {
+                    console.error('❌ onPauseRecording is undefined!');
+                  }
                 }}
                 variant="ghost"
                 size="icon"
