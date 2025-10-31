@@ -136,7 +136,7 @@ export function SessionTopBar({
                 size="icon"
                 className="h-9 w-9"
               >
-                <Square className="h-4 w-4" />
+                <Square className="h-4 w-4 fill-current" />
               </Button>
               <Button
                 onClick={onResumeRecording}
