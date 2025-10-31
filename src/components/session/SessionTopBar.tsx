@@ -106,13 +106,13 @@ export function SessionTopBar({
 
         <div className="flex items-center gap-2">
           {!isRecording && !isPaused && (
-            <>
-              {/* Start Button with Dropdown */}
+            <div className="flex">
+              {/* Start Button */}
               <Button 
                 onClick={onStartRecording} 
                 disabled={isStartingRecording}
                 variant="success"
-                className="px-4 py-2 h-9 rounded-r-none flex items-center gap-2"
+                className="px-4 py-2 h-9 rounded-r-none border-r-0 flex items-center gap-2"
               >
                 <Mic className="h-4 w-4" />
                 {isStartingRecording 
@@ -123,12 +123,13 @@ export function SessionTopBar({
                 }
               </Button>
 
+              {/* Dropdown Chevron */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
                     disabled={isStartingRecording}
                     variant="success"
-                    className="px-2 h-9 rounded-l-none border-l border-white/20"
+                    className="px-2 h-9 rounded-l-none"
                   >
                     <ChevronDown className="h-4 w-4" />
                   </Button>
@@ -157,7 +158,7 @@ export function SessionTopBar({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </>
+            </div>
           )}
 
           {isRecording && !isPaused && (
@@ -175,7 +176,7 @@ export function SessionTopBar({
               {/* Stop Transcribing Button */}
               <Button 
                 onClick={onStopRecording}
-                variant="destructive"
+                variant="success"
                 className="px-4 py-2 h-9 flex items-center gap-2"
               >
                 <div className="h-2 w-2 rounded-full bg-white" />
