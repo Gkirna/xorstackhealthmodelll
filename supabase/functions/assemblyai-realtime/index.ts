@@ -58,6 +58,7 @@ serve(async (req) => {
 
     assemblyAISocket.onmessage = (event) => {
       try {
+        console.log('📨 Received from AssemblyAI:', event.data);
         const data = JSON.parse(event.data);
         
         // Handle SessionBegins - notify client that connection is ready
@@ -73,6 +74,17 @@ serve(async (req) => {
           }
         }
         
+        // Handle errors
+        if (data.error) {
+          console.error('❌ AssemblyAI error:', data.error);
+          if (clientSocket.readyState === WebSocket.OPEN) {
+            clientSocket.send(JSON.stringify({ 
+              type: 'error',
+              message: data.error 
+            }));
+          }
+        }
+        
         // Forward all messages to client
         if (clientSocket.readyState === WebSocket.OPEN) {
           clientSocket.send(event.data);
@@ -84,15 +96,16 @@ serve(async (req) => {
         } else if (data.message_type === 'PartialTranscript') {
           console.log('⏳ Partial:', data.text?.substring(0, 50));
         } else if (data.message_type === 'SessionInformation') {
-          console.log('ℹ️ Session info:', data);
+          console.log('ℹ️ Session info:', JSON.stringify(data));
         }
       } catch (error) {
-        console.error('Error processing AssemblyAI message:', error);
+        console.error('Error processing AssemblyAI message:', error, 'Raw data:', event.data);
       }
     };
 
     assemblyAISocket.onerror = (error) => {
       console.error('❌ AssemblyAI WebSocket error:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
       if (clientSocket.readyState === WebSocket.OPEN) {
         clientSocket.send(JSON.stringify({ 
           type: 'error',
@@ -101,8 +114,8 @@ serve(async (req) => {
       }
     };
 
-    assemblyAISocket.onclose = () => {
-      console.log('🔌 AssemblyAI connection closed');
+    assemblyAISocket.onclose = (event) => {
+      console.log('🔌 AssemblyAI connection closed. Code:', event.code, 'Reason:', event.reason, 'Clean:', event.wasClean);
       if (clientSocket.readyState === WebSocket.OPEN) {
         clientSocket.close();
       }
