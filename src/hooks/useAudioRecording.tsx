@@ -405,19 +405,33 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     console.log('⏸️ Pause recording called, current state:', mediaRecorderRef.current?.state);
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.pause();
-      setState(prev => ({ ...prev, isPaused: true, isTranscribing: false }));
       
-      // Pause transcription
+      // Pause transcription first
       if (transcriptionRef.current) {
         console.log('⏸️ Pausing transcription engine');
         transcriptionRef.current.pause();
       }
       
+      // Stop timer
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
+      
+      // Update state - force new object reference for React to detect change
+      setState(prev => {
+        const newState = { 
+          ...prev, 
+          isPaused: true, 
+          isTranscribing: false 
+        };
+        console.log('⏸️ State updated to paused:', newState.isPaused);
+        return newState;
+      });
+      
       toast.info('Recording paused');
+    } else {
+      console.warn('⏸️ Cannot pause - recorder state:', mediaRecorderRef.current?.state);
     }
   }, []);
 
@@ -425,7 +439,6 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     console.log('▶️ Resume recording called, current state:', mediaRecorderRef.current?.state);
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
       mediaRecorderRef.current.resume();
-      setState(prev => ({ ...prev, isPaused: false, isTranscribing: true }));
       
       // Resume transcription
       if (transcriptionRef.current) {
@@ -433,11 +446,25 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         transcriptionRef.current.resume();
       }
       
+      // Restart timer
       timerRef.current = setInterval(() => {
         setState(prev => ({ ...prev, duration: prev.duration + 1 }));
       }, 1000);
       
+      // Update state - force new object reference for React to detect change
+      setState(prev => {
+        const newState = { 
+          ...prev, 
+          isPaused: false, 
+          isTranscribing: true 
+        };
+        console.log('▶️ State updated to resumed:', { isPaused: newState.isPaused, isRecording: newState.isRecording });
+        return newState;
+      });
+      
       toast.success('Recording resumed');
+    } else {
+      console.warn('▶️ Cannot resume - recorder state:', mediaRecorderRef.current?.state);
     }
   }, []);
 
