@@ -554,9 +554,9 @@ const SessionRecord = () => {
           isStartingRecording={isStartingRecording}
         />
 
-        {/* Workflow Progress */}
+        {/* Workflow Progress - Hidden but still functional */}
         {workflowState && (
-          <div className="px-6 py-3">
+          <div className="hidden">
             <WorkflowProgress state={workflowState} />
           </div>
         )}
