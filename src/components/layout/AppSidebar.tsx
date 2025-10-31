@@ -87,29 +87,6 @@ export function AppSidebar() {
   const deleteSession = useDeleteSession();
   const { data: notifications = [] } = useNotifications();
 
-  // Real-time session updates
-  useEffect(() => {
-    const channel = supabase
-      .channel('session-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'sessions'
-        },
-        () => {
-          // Refetch sessions when any change occurs
-          window.dispatchEvent(new Event('session-updated'));
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
   const handleLogout = async () => {
     await supabase.auth.signOut();
     toast.success('Logged out successfully');
