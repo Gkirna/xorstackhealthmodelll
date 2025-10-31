@@ -3,7 +3,7 @@
  * Uses Web Audio API for real-time voice analysis with speaker diarization
  */
 
-interface VoiceCharacteristics {
+export interface VoiceCharacteristics {
   gender: 'male' | 'female' | 'unknown';
   pitch: number; // Hz
   confidence: number; // 0-1
@@ -12,7 +12,7 @@ interface VoiceCharacteristics {
   volume: number; // 0-100
 }
 
-interface SpeakerProfile {
+export interface SpeakerProfile {
   speakerId: string;
   gender: 'male' | 'female';
   avgPitch: number;
@@ -20,6 +20,10 @@ interface SpeakerProfile {
   voiceQuality: string;
   sampleCount: number;
   lastSeen: number;
+  pitchStats?: {
+    variance: number;
+    mean: number;
+  };
 }
 
 interface VoiceActivityEvent {
@@ -350,7 +354,7 @@ export class VoiceAnalyzer {
   /**
    * Identify or create speaker profile based on voice characteristics
    */
-  private identifySpeaker(pitch: number, gender: 'male' | 'female'): string {
+  public identifySpeaker(pitch: number, gender: 'male' | 'female'): string {
     const now = Date.now();
     
     // Look for existing speaker profile

@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { RealTimeTranscription } from '@/utils/RealTimeTranscription';
-import { VoiceAnalyzer } from '@/utils/VoiceAnalyzer';
+import { UltraAdvancedVoiceAnalyzer } from '@/utils/UltraAdvancedVoiceAnalyzer';
 import { MedicalAutoCorrector } from '@/utils/MedicalAutoCorrector';
+import { UltraAdvancedTranscriptionProcessor } from '@/utils/UltraAdvancedTranscriptionProcessor';
 
 interface AudioRecordingOptions {
   onTranscriptUpdate?: (transcript: string, isFinal: boolean) => void;
@@ -59,11 +60,12 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const voiceAnalyzerRef = useRef<VoiceAnalyzer | null>(null);
+  const voiceAnalyzerRef = useRef<UltraAdvancedVoiceAnalyzer | null>(null);
   const currentVoiceGenderRef = useRef<'male' | 'female' | 'unknown'>('unknown');
   const voiceAnalysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const currentVoiceCharacteristicsRef = useRef<any>(null);
   const autoCorrectorRef = useRef<MedicalAutoCorrector>(new MedicalAutoCorrector());
+  const ultraProcessorRef = useRef<UltraAdvancedTranscriptionProcessor>(new UltraAdvancedTranscriptionProcessor());
 
   // Initialize transcription engine
   useEffect(() => {
@@ -175,11 +177,11 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       source.connect(analyserRef.current);
       analyserRef.current.fftSize = 256;
       
-      // Initialize advanced voice analyzer
+      // Initialize ultra-advanced voice analyzer
       try {
-        console.log('🎤 Initializing advanced voice analyzer...');
+        console.log('🎤 Initializing ultra-advanced voice analyzer with ML...');
         
-        voiceAnalyzerRef.current = new VoiceAnalyzer();
+        voiceAnalyzerRef.current = new UltraAdvancedVoiceAnalyzer();
         const characteristics = await voiceAnalyzerRef.current.initialize(stream);
         currentVoiceCharacteristicsRef.current = characteristics;
         
@@ -188,11 +190,11 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           console.log(`🎭 Voice detected: ${characteristics.gender} (${characteristics.pitch.toFixed(0)}Hz, confidence: ${(characteristics.confidence * 100).toFixed(0)}%)`);
         }
         
-        // Start real-time voice analysis (every 500ms)
+        // Start ultra-advanced real-time analysis with temporal context (every 500ms)
         voiceAnalysisIntervalRef.current = setInterval(async () => {
           if (voiceAnalyzerRef.current) {
             try {
-              const updated = await voiceAnalyzerRef.current.analyzeVoiceSample();
+              const updated = await voiceAnalyzerRef.current.analyzeWithTemporalContext();
               currentVoiceCharacteristicsRef.current = updated;
               
               if (updated.gender !== 'unknown' && updated.confidence > 0.7) {
@@ -204,12 +206,18 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           }
         }, 500);
         
-        // Log speaker statistics every 5 seconds
+        // Log advanced analytics every 5 seconds
         const statsInterval = setInterval(() => {
           if (voiceAnalyzerRef.current) {
             const stats = voiceAnalyzerRef.current.getSpeakerStatistics();
+            const dynamics = voiceAnalyzerRef.current.analyzeConversationDynamics();
+            const lowConfidence = voiceAnalyzerRef.current.identifyLowConfidenceSegments();
+            
             if (Object.keys(stats).length > 0) {
-              console.log('📊 Speaker statistics:', stats);
+              console.log('📊 Ultra-Advanced Analytics:');
+              console.log('  - Speaker Stats:', stats);
+              console.log('  - Conversation Dynamics:', dynamics);
+              console.log('  - Low Confidence Segments:', lowConfidence.length);
             }
           }
         }, 5000);
@@ -220,10 +228,10 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           clearInterval(statsInterval);
         }, 0) as any;
         
-        console.log('✅ Advanced voice analyzer active');
+        console.log('✅ Ultra-advanced voice analyzer active with ML integration');
       } catch (error) {
-        console.warn('⚠️ Voice analyzer initialization failed:', error);
-        // Continue without voice analysis
+        console.warn('⚠️ Ultra-advanced analyzer initialization failed:', error);
+        // Continue without advanced analysis
       }
       
       const monitorAudioLevel = () => {
@@ -275,7 +283,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       };
 
       mediaRecorder.onstop = async () => {
-        console.log('🛑 Recording stopped, processing audio...');
+        console.log('🛑 Recording stopped, processing audio with ultra-advanced AI...');
         
         const audioBlob = new Blob(chunksRef.current, { type: mimeType });
         const url = URL.createObjectURL(audioBlob);
@@ -303,10 +311,34 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         });
         
         // Stop transcription
+        let finalTranscript = '';
         if (transcriptionRef.current) {
-          const finalTranscript = transcriptionRef.current.stop();
-          console.log('📝 Final transcript:', finalTranscript);
+          finalTranscript = transcriptionRef.current.stop();
+          console.log('📝 Browser transcript:', finalTranscript.substring(0, 100) + '...');
         }
+        
+        // Run ultra-advanced processing in background (no UI changes)
+        console.log('🚀 Starting ultra-advanced AI processing pipeline...');
+        ultraProcessorRef.current.processTranscription(audioBlob, finalTranscript)
+          .then(result => {
+            console.log('✅ Ultra-Advanced Processing Complete:');
+            console.log('  - Final Confidence:', (result.metadata.confidenceScore * 100).toFixed(1) + '%');
+            console.log('  - Re-analyzed Segments:', result.metadata.reanalyzedSegments);
+            console.log('  - Processing Time:', result.metadata.processingTime + 'ms');
+            console.log('  - Speaker Count:', result.metadata.speakerCount);
+            if (result.analysis.temporalPatterns) {
+              console.log('  - Temporal Patterns: Detected');
+            }
+            if (result.analysis.emotionAnalysis) {
+              console.log('  - Emotions:', result.analysis.emotionAnalysis);
+            }
+            if (result.analysis.conversationFlow) {
+              console.log('  - Conversation Flow:', result.analysis.conversationFlow);
+            }
+          })
+          .catch(error => {
+            console.error('❌ Ultra-advanced processing failed:', error);
+          });
         
         if (onRecordingComplete) {
           onRecordingComplete(audioBlob, url);
@@ -402,11 +434,14 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
       
-      // Stop voice analyzer
+      // Stop ultra-advanced voice analyzer
       if (voiceAnalyzerRef.current) {
-        console.log('🧹 Cleaning up voice analyzer...');
+        console.log('🧹 Cleaning up ultra-advanced analyzer...');
         const stats = voiceAnalyzerRef.current.getSpeakerStatistics();
-        console.log('📊 Final voice statistics:', stats);
+        const dynamics = voiceAnalyzerRef.current.analyzeConversationDynamics();
+        console.log('📊 Final Ultra-Advanced Analytics:');
+        console.log('  - Voice Stats:', stats);
+        console.log('  - Conversation Dynamics:', dynamics);
         
         voiceAnalyzerRef.current.cleanup();
         voiceAnalyzerRef.current = null;
