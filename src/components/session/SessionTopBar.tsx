@@ -1,4 +1,4 @@
-import { Trash2, Calendar, Languages, Clock, Mic, ChevronDown } from "lucide-react";
+import { Trash2, Calendar, Languages, Clock, Mic, ChevronDown, Pause, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
@@ -38,7 +38,11 @@ interface SessionTopBarProps {
   recordingMode: string;
   onRecordingModeChange: (mode: string) => void;
   onStartRecording?: () => void;
+  onPauseRecording?: () => void;
+  onResumeRecording?: () => void;
+  onStopRecording?: () => void;
   isRecording?: boolean;
+  isPaused?: boolean;
   isStartingRecording?: boolean;
 }
 
@@ -55,7 +59,11 @@ export function SessionTopBar({
   recordingMode,
   onRecordingModeChange,
   onStartRecording,
+  onPauseRecording,
+  onResumeRecording,
+  onStopRecording,
   isRecording = false,
+  isPaused = false,
   isStartingRecording = false,
 }: SessionTopBarProps) {
   const [isEditingName, setIsEditingName] = useState(false);
@@ -96,61 +104,109 @@ export function SessionTopBar({
           </Button>
         </div>
 
-        <div className="flex items-center">
-          {/* Main Button - Start/Stop Process */}
-          <Button 
-            onClick={onStartRecording} 
-            disabled={isStartingRecording}
-            variant={isRecording ? "destructive" : "success"}
-            className="px-4 py-2 h-9 rounded-r-none flex items-center gap-2"
-          >
-            <Mic className="h-4 w-4" />
-            {isStartingRecording 
-              ? 'Starting...'
-              : isRecording 
-                ? (recordingMode === 'transcribing' ? 'Stop transcribing' : 
-                   recordingMode === 'dictating' ? 'Stop dictating' : 'Stop')
-                : (recordingMode === 'transcribing' ? 'Start transcribing' : 
-                   recordingMode === 'dictating' ? 'Start dictating' : 
-                   recordingMode === 'upload' ? 'Upload session audio' : 'Start transcribing')
-            }
-          </Button>
-
-          {/* Chevron Down Dropdown - Mode Selection */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+        <div className="flex items-center gap-2">
+          {!isRecording && !isPaused && (
+            <>
+              {/* Start Button with Dropdown */}
               <Button 
+                onClick={onStartRecording} 
                 disabled={isStartingRecording}
-                variant={isRecording ? "destructive" : "success"}
-                className="px-2 h-9 rounded-l-none border-l border-white/20"
+                variant="success"
+                className="px-4 py-2 h-9 rounded-r-none flex items-center gap-2"
               >
-                <ChevronDown className="h-4 w-4" />
+                <Mic className="h-4 w-4" />
+                {isStartingRecording 
+                  ? 'Starting...'
+                  : (recordingMode === 'transcribing' ? 'Start transcribing' : 
+                     recordingMode === 'dictating' ? 'Start dictating' : 
+                     recordingMode === 'upload' ? 'Upload session audio' : 'Start transcribing')
+                }
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem
-                onClick={() => onRecordingModeChange('transcribing')}
-                className="flex items-center justify-between"
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    disabled={isStartingRecording}
+                    variant="success"
+                    className="px-2 h-9 rounded-l-none border-l border-white/20"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem
+                    onClick={() => onRecordingModeChange('transcribing')}
+                    className="flex items-center justify-between"
+                  >
+                    <span>Transcribing</span>
+                    {recordingMode === 'transcribing' && <Check className="h-4 w-4" />}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => onRecordingModeChange('dictating')}
+                    className="flex items-center justify-between"
+                  >
+                    <span>Dictating</span>
+                    {recordingMode === 'dictating' && <Check className="h-4 w-4" />}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => onRecordingModeChange('upload')}
+                    className="flex items-center justify-between"
+                  >
+                    <span>Upload session audio</span>
+                    {recordingMode === 'upload' && <Check className="h-4 w-4" />}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
+
+          {isRecording && !isPaused && (
+            <>
+              {/* Pause Button */}
+              <Button 
+                onClick={onPauseRecording}
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9"
               >
-                <span>Transcribing</span>
-                {recordingMode === 'transcribing' && <Check className="h-4 w-4" />}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onRecordingModeChange('dictating')}
-                className="flex items-center justify-between"
+                <Pause className="h-4 w-4" />
+              </Button>
+
+              {/* Stop Transcribing Button */}
+              <Button 
+                onClick={onStopRecording}
+                variant="destructive"
+                className="px-4 py-2 h-9 flex items-center gap-2"
               >
-                <span>Dictating</span>
-                {recordingMode === 'dictating' && <Check className="h-4 w-4" />}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onRecordingModeChange('upload')}
-                className="flex items-center justify-between"
+                <div className="h-2 w-2 rounded-full bg-white" />
+                Stop transcribing
+              </Button>
+            </>
+          )}
+
+          {isPaused && (
+            <>
+              {/* Stop Button (Filled Square) */}
+              <Button 
+                onClick={onStopRecording}
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9"
               >
-                <span>Upload session audio</span>
-                {recordingMode === 'upload' && <Check className="h-4 w-4" />}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <Square className="h-4 w-4 fill-current" />
+              </Button>
+
+              {/* Resume Transcribing Button */}
+              <Button 
+                onClick={onResumeRecording}
+                variant="success"
+                className="px-4 py-2 h-9 flex items-center gap-2"
+              >
+                <Mic className="h-4 w-4" />
+                Resume transcribing
+              </Button>
+            </>
+          )}
         </div>
       </div>
 

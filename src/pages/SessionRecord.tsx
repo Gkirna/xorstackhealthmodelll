@@ -278,6 +278,31 @@ const SessionRecord = () => {
     }
   }, [id, transcript, context, template, updateSession]);
 
+  const handlePauseRecording = useCallback(() => {
+    console.log('⏸️ Pausing recording...');
+    pauseRecording();
+    toast.info('Recording paused');
+  }, [pauseRecording]);
+
+  const handleResumeRecording = useCallback(() => {
+    console.log('▶️ Resuming recording...');
+    resumeRecording();
+    toast.success('Recording resumed');
+  }, [resumeRecording]);
+
+  const handleStopRecording = useCallback(async () => {
+    console.log('⏹️ Stopping recording...');
+    toast.success('Stopping transcription...');
+    await saveAllPendingChunks();
+    stopRecording();
+    
+    // Auto-generate clinical note after stopping
+    setTimeout(async () => {
+      toast.info('Generating clinical note...');
+      await autoGenerateNote();
+    }, 1000);
+  }, [saveAllPendingChunks, stopRecording, autoGenerateNote]);
+
   const handleRecordingModeChange = useCallback((mode: string) => {
     setRecordingMode(mode);
     if (mode === 'dictating' || mode === 'upload' || mode === 'transcribing') {
@@ -550,7 +575,11 @@ const SessionRecord = () => {
           recordingMode={recordingMode}
           onRecordingModeChange={handleRecordingModeChange}
           onStartRecording={handleStartTranscribing}
+          onPauseRecording={handlePauseRecording}
+          onResumeRecording={handleResumeRecording}
+          onStopRecording={handleStopRecording}
           isRecording={isRecording}
+          isPaused={isPaused}
           isStartingRecording={isStartingRecording}
         />
 
