@@ -127,14 +127,14 @@ export function SessionTopBar({
             </>
           )}
 
-          {/* Paused state: Show Stop + Resume buttons */}
+          {/* Paused state: Show filled Stop + Resume buttons */}
           {isRecording && isPaused && (
             <>
               <Button
                 onClick={onStopRecording}
-                variant="ghost"
+                variant="outline"
                 size="icon"
-                className="h-9 w-9"
+                className="h-9 w-9 border-border"
               >
                 <Square className="h-4 w-4 fill-current" />
               </Button>
