@@ -76,106 +76,103 @@ const Dashboard = () => {
 
   return (
     <AppLayout>
-      <div className="space-y-6 animate-fade-in">
+      <div className="space-y-4 animate-fade-in">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Dashboard</h1>
-            <p className="text-muted-foreground">Welcome back! Here's your clinical activity overview.</p>
+            <h1 className="text-2xl font-semibold">Dashboard</h1>
+            <p className="text-sm text-muted-foreground">Clinical activity overview</p>
           </div>
-          <Button onClick={() => navigate("/session/new")} size="lg" className="shadow-md hover:shadow-lg transition-shadow">
-            <PlusCircle className="mr-2 h-5 w-5" />
+          <Button onClick={() => navigate("/session/new")} size="sm">
+            <PlusCircle className="mr-1.5 h-4 w-4" />
             New Session
           </Button>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card className="transition-all hover:shadow-lg hover:-translate-y-1 duration-200">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Sessions</CardTitle>
-              <FolderOpen className="h-4 w-4 text-muted-foreground" />
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          <Card className="hover:border-primary/50 transition-colors">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-xs font-medium text-muted-foreground">Total Sessions</CardTitle>
+              <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalSessions}</div>
-              <p className="text-xs text-muted-foreground">All time</p>
+            <CardContent className="pt-1">
+              <div className="text-xl font-semibold">{stats.totalSessions}</div>
             </CardContent>
           </Card>
 
-          <Card className="transition-all hover:shadow-lg hover:-translate-y-1 duration-200">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Pending Tasks</CardTitle>
-              <CheckSquare className="h-4 w-4 text-muted-foreground" />
+          <Card className="hover:border-primary/50 transition-colors">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-xs font-medium text-muted-foreground">Pending Tasks</CardTitle>
+              <CheckSquare className="h-3.5 w-3.5 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.pendingTasks}</div>
-              <p className="text-xs text-muted-foreground">Need attention</p>
+            <CardContent className="pt-1">
+              <div className="text-xl font-semibold">{stats.pendingTasks}</div>
             </CardContent>
           </Card>
 
-          <Card className="transition-all hover:shadow-lg hover:-translate-y-1 duration-200">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Active Templates</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
+          <Card className="hover:border-primary/50 transition-colors">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-xs font-medium text-muted-foreground">Active Templates</CardTitle>
+              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.activeTemplates}</div>
-              <p className="text-xs text-muted-foreground">Ready to use</p>
+            <CardContent className="pt-1">
+              <div className="text-xl font-semibold">{stats.activeTemplates}</div>
             </CardContent>
           </Card>
 
-          <Card className="transition-all hover:shadow-lg hover:-translate-y-1 duration-200">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">This Week</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
+          <Card className="hover:border-primary/50 transition-colors">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-xs font-medium text-muted-foreground">This Week</CardTitle>
+              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.thisWeekSessions}</div>
-              <p className="text-xs text-muted-foreground">Sessions completed</p>
+            <CardContent className="pt-1">
+              <div className="text-xl font-semibold">{stats.thisWeekSessions}</div>
             </CardContent>
           </Card>
         </div>
 
         {/* Content Grid */}
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           {/* Recent Sessions */}
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Recent Sessions</CardTitle>
-                  <CardDescription>Your latest clinical encounters</CardDescription>
+                  <CardTitle className="text-base font-semibold">Recent Sessions</CardTitle>
+                  <CardDescription className="text-xs">Latest clinical encounters</CardDescription>
                 </div>
                 <Button 
                   variant="ghost" 
                   size="sm"
                   onClick={() => navigate("/sessions")}
+                  className="h-8 text-xs"
                 >
                   View all
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  <ArrowRight className="ml-1.5 h-3 w-3" />
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="space-y-2">
                 {sessionsLoading ? (
-                  <div className="text-center py-4 text-muted-foreground">Loading...</div>
+                  <div className="text-center py-3 text-sm text-muted-foreground">Loading...</div>
                 ) : (
                   recentSessions.map((session) => (
                     <div 
                       key={session.id}
-                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer transition-colors"
+                      className="flex items-center justify-between p-2.5 rounded-md border hover:bg-accent/50 cursor-pointer transition-colors"
                       onClick={() => navigate(`/session/${session.id}/review`)}
                     >
-                      <div className="space-y-1">
-                        <p className="font-medium">{session.patient_name}</p>
-                        <p className="text-sm text-muted-foreground">{session.chief_complaint || 'No complaint specified'}</p>
+                      <div className="space-y-0.5 min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{session.patient_name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{session.chief_complaint || 'No complaint specified'}</p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={getStatusColor(session.status) as any}>
+                      <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                        <Badge variant={getStatusColor(session.status) as any} className="text-xs px-2 py-0">
                           {session.status}
                         </Badge>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
                           {format(new Date(session.created_at), 'MMM d')}
                         </span>
                       </div>
@@ -183,12 +180,12 @@ const Dashboard = () => {
                   ))
                 )}
                 {recentSessions.length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <FileText className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                    <p>No sessions yet</p>
+                  <div className="text-center py-6 text-muted-foreground">
+                    <FileText className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                    <p className="text-sm">No sessions yet</p>
                     <Button 
                       variant="link" 
-                      className="mt-2"
+                      className="mt-1 text-xs h-auto p-0"
                       onClick={() => navigate("/session/new")}
                     >
                       Create your first session
@@ -201,49 +198,52 @@ const Dashboard = () => {
 
           {/* Upcoming Tasks */}
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Upcoming Tasks</CardTitle>
-                  <CardDescription>Pending follow-ups and actions</CardDescription>
+                  <CardTitle className="text-base font-semibold">Upcoming Tasks</CardTitle>
+                  <CardDescription className="text-xs">Pending follow-ups and actions</CardDescription>
                 </div>
                 <Button 
                   variant="ghost" 
                   size="sm"
                   onClick={() => navigate("/tasks")}
+                  className="h-8 text-xs"
                 >
                   View all
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  <ArrowRight className="ml-1.5 h-3 w-3" />
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="space-y-2">
                 {tasksLoading ? (
-                  <div className="text-center py-4 text-muted-foreground">Loading...</div>
+                  <div className="text-center py-3 text-sm text-muted-foreground">Loading...</div>
                 ) : (
                   upcomingTasks.map((task) => (
                     <div 
                       key={task.id}
-                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer transition-colors"
+                      className="flex items-center justify-between p-2.5 rounded-md border hover:bg-accent/50 cursor-pointer transition-colors"
                     >
-                      <div className="space-y-1">
-                        <p className="font-medium">{task.title}</p>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          {task.due_date ? format(new Date(task.due_date), 'MMM d, yyyy') : 'No due date'}
+                      <div className="space-y-0.5 min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{task.title}</p>
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Clock className="h-3 w-3 flex-shrink-0" />
+                          <span className="truncate">
+                            {task.due_date ? format(new Date(task.due_date), 'MMM d, yyyy') : 'No due date'}
+                          </span>
                         </div>
                       </div>
-                      <Badge variant={getPriorityColor(task.priority) as any}>
+                      <Badge variant={getPriorityColor(task.priority) as any} className="text-xs px-2 py-0 ml-2 flex-shrink-0">
                         {task.priority}
                       </Badge>
                     </div>
                   ))
                 )}
                 {upcomingTasks.length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <CheckSquare className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                    <p>All caught up!</p>
+                  <div className="text-center py-6 text-muted-foreground">
+                    <CheckSquare className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                    <p className="text-sm">All caught up!</p>
                   </div>
                 )}
               </div>

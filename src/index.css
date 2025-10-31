@@ -18,24 +18,24 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 20%;
 
-    /* Brown Primary for most buttons */
-    --primary: 25 35% 35%; /* #6B4E3D - Brown */
+    /* Professional Blue Primary */
+    --primary: 217 91% 60%; /* #3B82F6 - Professional Blue */
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 25 35% 28%;
+    --primary-hover: 217 91% 53%;
 
-    /* Green for action buttons */
+    /* Green for success actions */
     --success: 142 76% 36%; /* #16A34A - Green */
     --success-foreground: 0 0% 100%;
     --success-hover: 142 76% 30%;
 
     /* Muted backgrounds */
-    --muted: 40 15% 92%;
-    --muted-foreground: 0 0% 45%;
+    --muted: 215 16% 95%;
+    --muted-foreground: 215 10% 45%;
 
-    /* Secondary - kept for compatibility */
-    --secondary: 25 25% 50%;
+    /* Secondary - lighter blue */
+    --secondary: 215 20% 65%;
     --secondary-foreground: 0 0% 100%;
-    --secondary-hover: 25 25% 40%;
+    --secondary-hover: 215 20% 55%;
 
     /* Accent */
     --accent: 40 15% 92%;
@@ -89,17 +89,17 @@ All colors MUST be HSL.
     --popover: 0 0% 15%;
     --popover-foreground: 0 0% 95%;
 
-    --primary: 25 35% 35%;
+    --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 25 35% 42%;
+    --primary-hover: 217 91% 53%;
 
     --success: 142 76% 36%;
     --success-foreground: 0 0% 100%;
     --success-hover: 142 76% 42%;
 
-    --secondary: 25 25% 50%;
+    --secondary: 215 20% 65%;
     --secondary-foreground: 0 0% 100%;
-    --secondary-hover: 25 25% 60%;
+    --secondary-hover: 215 20% 55%;
 
     --muted: 0 0% 20%;
     --muted-foreground: 0 0% 65%;
