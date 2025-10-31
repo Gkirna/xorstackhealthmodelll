@@ -26,7 +26,6 @@ import { ExtremelyAdvancedAutoCorrectorDashboard } from '@/components/ExtremelyA
 import { AdvancedTranscriptionDashboard } from '@/components/AdvancedTranscriptionDashboard';
 import { useAdvancedTranscription } from '@/hooks/useAdvancedTranscription';
 import type { EnhancedTranscriptionData } from '@/types/advancedTranscription';
-import { AssemblyAIRecorder } from "@/components/AssemblyAIRecorder";
 
 const SessionRecord = () => {
   const { id } = useParams();
@@ -594,31 +593,6 @@ const SessionRecord = () => {
 
             {/* Tab Content */}
             <TabsContent value="transcript" className="flex-1 mt-0 overflow-auto space-y-4">
-              {recordingMode === 'transcribing' && (
-                <AssemblyAIRecorder
-                  sessionId={id || ''}
-                  onTranscriptUpdate={(text, isFinal) => {
-                    if (isFinal && text.trim()) {
-                      const currentSpeaker = speakerRef.current;
-                      transcriptCountRef.current++;
-                      
-                      console.log(`💬 Transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
-                      
-                      const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
-                      setTranscript(prev => prev ? `${prev}\n\n${speakerLabel} : ${text}` : `${speakerLabel} : ${text}`);
-                      
-                      // Add to transcript chunks for saving to database
-                      addTranscriptChunk(text, speakerLabel.toLowerCase());
-                      
-                      // Toggle speaker for next chunk
-                      speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
-                    }
-                  }}
-                  onFinalTranscript={(text) => {
-                    console.log('✅ Final transcript received:', text.substring(0, 100));
-                  }}
-                />
-              )}
               {recordingMode === 'dictating' && (
                 <DictatingPanel
                   sessionId={id}
