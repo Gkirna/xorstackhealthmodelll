@@ -279,15 +279,13 @@ const SessionRecord = () => {
   }, [id, transcript, context, template, updateSession]);
 
   const handlePauseRecording = useCallback(() => {
-    console.log('⏸️ Pausing recording...');
+    console.log('🎯 PAUSE BUTTON CLICKED - Calling pauseRecording()');
     pauseRecording();
-    toast.info('Recording paused');
   }, [pauseRecording]);
 
   const handleResumeRecording = useCallback(() => {
-    console.log('▶️ Resuming recording...');
+    console.log('🎯 RESUME BUTTON CLICKED - Calling resumeRecording()');
     resumeRecording();
-    toast.success('Recording resumed');
   }, [resumeRecording]);
 
   const handleStopRecording = useCallback(async () => {
