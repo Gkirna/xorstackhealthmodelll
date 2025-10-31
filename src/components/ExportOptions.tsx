@@ -34,9 +34,16 @@ export function ExportOptions({ sessionId, noteContent }: ExportOptionsProps) {
       console.log('Export result:', result);
       
       if (result.success && result.data?.url) {
-        // Open in new tab for download
-        window.open(result.data.url, '_blank');
-        toast.success('Note exported as PDF');
+        // Create a temporary link element to trigger download
+        const link = document.createElement('a');
+        link.href = result.data.url;
+        link.download = `clinical-note-${sessionId}.html`;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        toast.success('Clinical note exported successfully');
       } else {
         const errorMsg = result.error?.message || 'Export failed';
         console.error('Export error:', errorMsg);
@@ -44,7 +51,7 @@ export function ExportOptions({ sessionId, noteContent }: ExportOptionsProps) {
       }
     } catch (error) {
       console.error('PDF export exception:', error);
-      toast.error('Failed to export PDF: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      toast.error('Failed to export: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsExporting(false);
     }
