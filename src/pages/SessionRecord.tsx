@@ -403,44 +403,6 @@ const SessionRecord = () => {
   }, [generatedNote, navigate, id]);
 
   // EFFECTS LAST
-  // Real-time session updates
-  useEffect(() => {
-    if (!id) return;
-
-    const channel = supabase
-      .channel(`session-${id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'sessions',
-          filter: `id=eq.${id}`,
-        },
-        (payload) => {
-          console.log('Real-time session update:', payload);
-          if (payload.new) {
-            const updatedSession = payload.new as any;
-            
-            // Update patient name in real-time
-            if (updatedSession.patient_name) {
-              setPatientName(updatedSession.patient_name);
-            }
-            
-            // Update other fields if needed
-            if (updatedSession.scheduled_at) {
-              setSessionDate(new Date(updatedSession.scheduled_at));
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [id]);
-
   useEffect(() => {
     if (session) {
       setPatientName(session.patient_name || "New Patient");
