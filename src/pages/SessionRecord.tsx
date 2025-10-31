@@ -26,6 +26,7 @@ import { ExtremelyAdvancedAutoCorrectorDashboard } from '@/components/ExtremelyA
 import { AdvancedTranscriptionDashboard } from '@/components/AdvancedTranscriptionDashboard';
 import { useAdvancedTranscription } from '@/hooks/useAdvancedTranscription';
 import type { EnhancedTranscriptionData } from '@/types/advancedTranscription';
+import { TemplateSelectionDialog } from "@/components/session/TemplateSelectionDialog";
 
 const SessionRecord = () => {
   const { id } = useParams();
@@ -53,6 +54,7 @@ const SessionRecord = () => {
   const [activeTab, setActiveTab] = useState<string>("transcript");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [enhancedTranscriptionData, setEnhancedTranscriptionData] = useState<EnhancedTranscriptionData | null>(null);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   
   // ALL REFS NEXT
   const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
@@ -154,54 +156,43 @@ const SessionRecord = () => {
 
   // CALLBACKS AFTER HOOKS
   const handleStartTranscribing = useCallback(async () => {
-    if (isStartingRecording) {
-      return;
+    if (isStartingRecording) return;
+    
+    console.log('🎙️ Starting transcription session...');
+    setIsStartingRecording(true);
+    try {
+      await startRecording();
+      console.log('✅ Transcription started successfully');
+    } catch (error) {
+      console.error('❌ Failed to start recording:', error);
+      toast.error('Failed to start recording. Please check microphone permissions.');
+    } finally {
+      setIsStartingRecording(false);
     }
+  }, [isStartingRecording, startRecording]);
 
-    if (isRecording) {
-      toast.success('Stopping transcription...');
-      await saveAllPendingChunks();
-      stopRecording();
-      
-      // Auto-generate clinical note after stopping
-      setTimeout(async () => {
-        toast.info('Generating clinical note...');
-        await autoGenerateNote();
-      }, 1000);
-      return;
-    }
+  const handlePauseRecording = useCallback(() => {
+    console.log('⏸️ Pausing recording...');
+    pauseRecording();
+  }, [pauseRecording]);
 
-    if (recordingMode === 'upload') {
-      toast.info('Upload flow coming soon. Please use Dictating or Transcribing for now.');
-      return;
-    }
+  const handleResumeRecording = useCallback(() => {
+    console.log('▶️ Resuming recording...');
+    resumeRecording();
+  }, [resumeRecording]);
 
-    if (recordingMode === 'dictating' || recordingMode === 'transcribing') {
-      setIsStartingRecording(true);
-      
-      try {
-        setActiveTab('transcript');
-        speakerRef.current = 'provider';
-        transcriptCountRef.current = 0;
-        toast.success('Starting live transcription... Speak now!');
-        
-        await startRecording();
-      } catch (error) {
-        console.error('Failed to start recording:', error);
-        toast.error('Failed to start recording. Please try again.');
-      } finally {
-        setIsStartingRecording(false);
-      }
-      return;
-    }
+  const handleStopRecording = useCallback(async () => {
+    console.log('🛑 Stopping recording...');
+    await saveAllPendingChunks();
+    stopRecording();
+    
+    // Show template selection dialog
+    setTemplateDialogOpen(true);
+  }, [saveAllPendingChunks, stopRecording]);
 
-    const hasManualInput = transcript.trim().length > 0 || context.trim().length > 0;
-    if (hasManualInput) {
-      await autoGenerateNote();
-    }
-  }, [isStartingRecording, isRecording, recordingMode, transcript, context, saveAllPendingChunks, stopRecording, startRecording]);
-
-  const autoGenerateNote = useCallback(async () => {
+  const handleTemplateSelect = useCallback(async (templateId: string) => {
+    setTemplate(templateId);
+    
     if (!id || !orchestratorRef.current) return;
     
     if (!transcript.trim()) {
@@ -213,28 +204,25 @@ const SessionRecord = () => {
       setIsAutoPipelineRunning(true);
       setActiveTab('note');
       
-      toast.info(`Generating ${template.toUpperCase()} clinical documentation...`);
+      toast.info('Generating clinical documentation...');
       setSaveStatus('saving');
       
       const result = await orchestratorRef.current.runCompletePipeline(id, transcript, {
         context,
         detailLevel: 'high',
-        templateId: template,
+        templateId,
       });
       
       if (result.success && result.note) {
-        // Parse the note if it's wrapped in markdown code fences
         let parsedNoteJson = null;
         let cleanNote = result.note;
         
         try {
-          // Check if the note is wrapped in ```json ... ```
           const jsonMatch = result.note.match(/```json\s*([\s\S]*?)\s*```/);
           if (jsonMatch) {
             parsedNoteJson = JSON.parse(jsonMatch[1]);
-            cleanNote = jsonMatch[1]; // Store the JSON string without code fences
+            cleanNote = jsonMatch[1];
           } else {
-            // Try to parse it directly
             parsedNoteJson = JSON.parse(result.note);
           }
         } catch (e) {
@@ -276,7 +264,7 @@ const SessionRecord = () => {
     } finally {
       setIsAutoPipelineRunning(false);
     }
-  }, [id, transcript, context, template, updateSession]);
+  }, [id, transcript, context, updateSession]);
 
   const handleRecordingModeChange = useCallback((mode: string) => {
     setRecordingMode(mode);
@@ -460,20 +448,17 @@ const SessionRecord = () => {
     if (isRecording && duration >= MAX_DURATION) {
       console.log('⏱️ Maximum session duration reached (10 minutes)');
       toast.warning('Maximum session duration reached (10 minutes)', {
-        description: 'Automatically stopping and generating note...'
+        description: 'Automatically stopping and showing template selection...'
       });
       
-      // Auto-stop and generate note
+      // Auto-stop and show template dialog
       (async () => {
         await saveAllPendingChunks();
         stopRecording();
-        
-        setTimeout(async () => {
-          await autoGenerateNote();
-        }, 1000);
+        setTemplateDialogOpen(true);
       })();
     }
-  }, [isRecording, duration, saveAllPendingChunks, stopRecording, autoGenerateNote]);
+  }, [isRecording, duration, saveAllPendingChunks, stopRecording]);
 
   useEffect(() => {
     const updateTimer = () => {
@@ -550,8 +535,20 @@ const SessionRecord = () => {
           recordingMode={recordingMode}
           onRecordingModeChange={handleRecordingModeChange}
           onStartRecording={handleStartTranscribing}
+          onPauseRecording={handlePauseRecording}
+          onResumeRecording={handleResumeRecording}
+          onStopRecording={handleStopRecording}
           isRecording={isRecording}
+          isPaused={isPaused}
           isStartingRecording={isStartingRecording}
+        />
+
+        {/* Template Selection Dialog */}
+        <TemplateSelectionDialog
+          open={templateDialogOpen}
+          onOpenChange={setTemplateDialogOpen}
+          onSelectTemplate={handleTemplateSelect}
+          onCancel={() => setTemplateDialogOpen(false)}
         />
 
         {/* Workflow Progress - Hidden but still functional */}
