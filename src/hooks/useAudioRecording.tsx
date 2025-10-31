@@ -65,7 +65,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const currentVoiceCharacteristicsRef = useRef<any>(null);
   const autoCorrectorRef = useRef<MedicalAutoCorrector>(new MedicalAutoCorrector());
 
-  // Initialize AssemblyAI transcription engine
+  // Initialize AssemblyAI transcription engine (only once on mount)
   useEffect(() => {
     console.log('🎙️ Initializing AssemblyAI real-time transcription...');
     
@@ -137,7 +137,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         transcriptionRef.current.disconnect();
       }
     };
-  }, [continuous, onFinalTranscriptChunk, onTranscriptUpdate]);
+  }, []); // Empty deps - only initialize once
 
   const startRecording = useCallback(async () => {
     try {

@@ -32,40 +32,31 @@ serve(async (req) => {
   try {
     console.log('🔌 Establishing WebSocket connection to AssemblyAI...');
     
-    // Get temporary token from AssemblyAI
-    const tokenResponse = await fetch('https://api.assemblyai.com/v2/realtime/token', {
-      method: 'POST',
-      headers: {
-        'authorization': ASSEMBLYAI_API_KEY,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ expires_in: 3600 })
-    });
-
-    if (!tokenResponse.ok) {
-      const error = await tokenResponse.text();
-      console.error('Failed to get AssemblyAI token:', error);
-      return new Response(`Failed to authenticate: ${error}`, { 
-        status: 500,
-        headers: corsHeaders 
-      });
-    }
-
-    const { token } = await tokenResponse.json();
-    console.log('✅ AssemblyAI token obtained');
-
-    // Upgrade client connection
+    // Upgrade client connection first
     const { socket: clientSocket, response } = Deno.upgradeWebSocket(req);
     
-    // Connect to AssemblyAI
+    // Connect to AssemblyAI Universal Streaming (new API)
     const assemblyAISocket = new WebSocket(
-      `wss://api.assemblyai.com/v2/realtime/ws?sample_rate=16000&token=${token}`
+      'wss://api.assemblyai.com/v2/realtime/ws',
+      {
+        headers: {
+          'Authorization': ASSEMBLYAI_API_KEY
+        }
+      }
     );
 
     console.log('🔗 Connecting to AssemblyAI WebSocket...');
 
     assemblyAISocket.onopen = () => {
       console.log('✅ Connected to AssemblyAI');
+      
+      // Configure session with Universal Streaming parameters
+      assemblyAISocket.send(JSON.stringify({
+        sample_rate: 16000,
+        encoding: 'pcm_s16le',
+        language_code: 'en_us'
+      }));
+      
       clientSocket.send(JSON.stringify({ 
         type: 'connection_established',
         message: 'Connected to AssemblyAI real-time transcription' 
@@ -81,11 +72,15 @@ serve(async (req) => {
           clientSocket.send(event.data);
         }
 
-        // Log transcription results
+        // Log transcription results for debugging
         if (data.message_type === 'FinalTranscript') {
-          console.log('📝 Final:', data.text);
+          console.log('📝 Final:', data.text?.substring(0, 100));
         } else if (data.message_type === 'PartialTranscript') {
           console.log('⏳ Partial:', data.text?.substring(0, 50));
+        } else if (data.message_type === 'SessionBegins') {
+          console.log('🎙️ Session started');
+        } else if (data.message_type === 'SessionInformation') {
+          console.log('ℹ️ Session info:', data);
         }
       } catch (error) {
         console.error('Error processing AssemblyAI message:', error);
@@ -109,9 +104,9 @@ serve(async (req) => {
       }
     };
 
-    // Handle client messages (audio data)
+    // Handle client messages (audio data - expecting base64 strings)
     clientSocket.onmessage = (event) => {
-      // Forward audio data to AssemblyAI
+      // Forward audio data to AssemblyAI (Universal Streaming expects raw base64)
       if (assemblyAISocket.readyState === WebSocket.OPEN) {
         assemblyAISocket.send(event.data);
       }
@@ -120,8 +115,7 @@ serve(async (req) => {
     clientSocket.onclose = () => {
       console.log('👋 Client disconnected');
       if (assemblyAISocket.readyState === WebSocket.OPEN) {
-        // Send terminate message to AssemblyAI
-        assemblyAISocket.send(JSON.stringify({ terminate_session: true }));
+        // Universal Streaming: just close the connection
         assemblyAISocket.close();
       }
     };

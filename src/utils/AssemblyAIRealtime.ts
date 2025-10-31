@@ -12,12 +12,13 @@ interface AssemblyAIOptions {
 }
 
 interface AssemblyAIMessage {
-  message_type?: 'SessionBegins' | 'PartialTranscript' | 'FinalTranscript' | 'SessionTerminated';
+  message_type?: 'SessionBegins' | 'PartialTranscript' | 'FinalTranscript' | 'SessionTerminated' | 'SessionInformation';
   type?: string;
   text?: string;
   confidence?: number;
   audio_start?: number;
   audio_end?: number;
+  error?: string;
 }
 
 export class AssemblyAIRealtime {
@@ -75,6 +76,7 @@ export class AssemblyAIRealtime {
               return;
             }
 
+            // Handle Universal Streaming API message types
             if (data.message_type === 'SessionBegins') {
               console.log('🎙️ AssemblyAI session started');
               return;
@@ -91,6 +93,12 @@ export class AssemblyAIRealtime {
 
             if (data.message_type === 'SessionTerminated') {
               console.log('🔌 AssemblyAI session terminated');
+            }
+            
+            // Handle error messages
+            if (data.message_type === 'SessionInformation' && data.error) {
+              console.error('❌ AssemblyAI error:', data.error);
+              this.options.onError(data.error);
             }
           } catch (error) {
             console.error('Error parsing message:', error);
@@ -154,18 +162,19 @@ export class AssemblyAIRealtime {
 
         const inputData = event.inputBuffer.getChannelData(0);
         
-        // Convert Float32Array to Int16Array (PCM16)
+        // Convert Float32Array to Int16Array (PCM16 little-endian for Universal Streaming)
         const pcmData = new Int16Array(inputData.length);
         for (let i = 0; i < inputData.length; i++) {
           const s = Math.max(-1, Math.min(1, inputData[i]));
           pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
         }
 
-        // Convert to base64 and send
+        // Convert to base64 and send (Universal Streaming uses base64 PCM)
         const base64Audio = btoa(String.fromCharCode(...new Uint8Array(pcmData.buffer)));
         
         try {
-          this.socket!.send(JSON.stringify({ audio_data: base64Audio }));
+          // Send audio data - Universal Streaming expects just base64 string, not wrapped in object
+          this.socket!.send(base64Audio);
         } catch (error) {
           console.error('Error sending audio:', error);
         }
@@ -196,12 +205,7 @@ export class AssemblyAIRealtime {
     }
 
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      // Send termination message
-      try {
-        this.socket.send(JSON.stringify({ terminate_session: true }));
-      } catch (error) {
-        console.error('Error sending termination:', error);
-      }
+      // Universal Streaming: just close the connection, no termination message needed
       this.socket.close();
     }
 
