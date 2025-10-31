@@ -25,7 +25,7 @@ export class RealTimeTranscription {
     this.config = {
       continuous: true,
       interimResults: true,
-      lang: 'en-US',
+      lang: 'en-IN', // Indian English for better accuracy
       ...config
     };
 
@@ -50,7 +50,7 @@ export class RealTimeTranscription {
     this.recognition.continuous = this.config.continuous;
     this.recognition.interimResults = this.config.interimResults;
     this.recognition.lang = this.config.lang;
-    this.recognition.maxAlternatives = 1;
+    this.recognition.maxAlternatives = 3; // Get multiple alternatives for better accuracy
 
     this.recognition.onstart = () => {
       console.log('Speech recognition started');
@@ -66,15 +66,32 @@ export class RealTimeTranscription {
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
-        const transcript = result[0].transcript;
-        const confidence = result[0].confidence;
         
-        console.log(`📝 Result ${i}: ${result.isFinal ? 'Final' : 'Interim'} (confidence: ${confidence?.toFixed(2) || 'N/A'}) - "${transcript.substring(0, 50)}..."`);
+        // Advanced: Select best alternative based on confidence
+        let bestTranscript = result[0].transcript;
+        let bestConfidence = result[0].confidence || 0;
+        
+        // Check alternatives for medical terms and higher confidence
+        for (let j = 1; j < result.length && j < 3; j++) {
+          const altConfidence = result[j].confidence || 0;
+          const altTranscript = result[j].transcript;
+          
+          // Prefer alternatives with medical keywords or higher confidence
+          if (altConfidence > bestConfidence * 1.1 || 
+              (altTranscript.toLowerCase().includes('diabetes') || 
+               altTranscript.toLowerCase().includes('hypertension') ||
+               altTranscript.toLowerCase().includes('medication'))) {
+            bestTranscript = altTranscript;
+            bestConfidence = altConfidence;
+          }
+        }
+        
+        console.log(`📝 Result ${i}: ${result.isFinal ? 'Final' : 'Interim'} (confidence: ${bestConfidence?.toFixed(2) || 'N/A'}) - "${bestTranscript.substring(0, 50)}..."`);
         
         if (result.isFinal) {
-          finalTranscript += transcript + ' ';
+          finalTranscript += bestTranscript + ' ';
         } else {
-          interimTranscript += transcript;
+          interimTranscript += bestTranscript;
         }
       }
 

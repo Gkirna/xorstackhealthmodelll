@@ -159,6 +159,18 @@ const SessionRecord = () => {
     }
 
     if (isRecording) {
+      // Enforce minimum 10-second session length
+      const MIN_DURATION = 10;
+      const MAX_DURATION = 600; // 10 minutes
+      
+      if (duration < MIN_DURATION) {
+        const remaining = MIN_DURATION - duration;
+        toast.error(`Session too short!`, {
+          description: `Please record at least ${remaining} more second(s)`
+        });
+        return;
+      }
+      
       toast.success('Stopping transcription...');
       await saveAllPendingChunks();
       stopRecording();
@@ -452,6 +464,28 @@ const SessionRecord = () => {
       orchestratorRef.current = null;
     };
   }, []);
+
+  // Auto-stop recording at 10 minutes maximum
+  useEffect(() => {
+    const MAX_DURATION = 600; // 10 minutes
+    
+    if (isRecording && duration >= MAX_DURATION) {
+      console.log('⏱️ Maximum session duration reached (10 minutes)');
+      toast.warning('Maximum session duration reached (10 minutes)', {
+        description: 'Automatically stopping and generating note...'
+      });
+      
+      // Auto-stop and generate note
+      (async () => {
+        await saveAllPendingChunks();
+        stopRecording();
+        
+        setTimeout(async () => {
+          await autoGenerateNote();
+        }, 1000);
+      })();
+    }
+  }, [isRecording, duration, saveAllPendingChunks, stopRecording, autoGenerateNote]);
 
   useEffect(() => {
     const updateTimer = () => {

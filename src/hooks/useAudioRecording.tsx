@@ -72,7 +72,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     transcriptionRef.current = new RealTimeTranscription({
       continuous,
       interimResults: true,
-      lang: 'en-US',
+      lang: 'en-IN', // Indian English for optimized accuracy
       onResult: async (transcript, isFinal) => {
         console.log('📝 Transcription result:', { 
           text: transcript.substring(0, 50) + '...', 
@@ -154,9 +154,9 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       const constraints: MediaStreamConstraints = {
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: { ideal: true },
+          noiseSuppression: { ideal: true }, // Enhanced for Indian environments
+          autoGainControl: { ideal: true },
           sampleRate: sampleRate,
           channelCount: 1,
           ...(deviceId && { deviceId: { exact: deviceId } })
