@@ -32,9 +32,10 @@ interface TranscriptionStats {
   sessionDuration?: number;
 }
 
-export function useTranscription(sessionId: string, currentVoiceGender?: 'male' | 'female' | 'unknown') {
+export function useTranscription(sessionId: string, currentVoiceGender?: 'male' | 'female' | 'unknown', useAssemblyAI: boolean = true) {
   const [transcriptChunks, setTranscriptChunks] = useState<TranscriptChunk[]>([]);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcriptionEngine, setTranscriptionEngine] = useState<'assemblyai' | 'webspeech'>(useAssemblyAI ? 'assemblyai' : 'webspeech');
   const [stats, setStats] = useState<TranscriptionStats>({
     totalChunks: 0,
     savedChunks: 0,
