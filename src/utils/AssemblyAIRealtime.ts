@@ -19,6 +19,7 @@ interface AssemblyAIMessage {
   audio_start?: number;
   audio_end?: number;
   error?: string;
+  message?: string;
 }
 
 export class AssemblyAIRealtime {
@@ -42,7 +43,7 @@ export class AssemblyAIRealtime {
       const wsUrl = import.meta.env.VITE_SUPABASE_URL.replace('https://', 'wss://');
       const socketUrl = `${wsUrl}/functions/v1/assemblyai-realtime`;
       
-      console.log('🔌 Connecting to AssemblyAI via edge function...');
+      console.log('🔌 Connecting to AssemblyAI via:', socketUrl);
       
       this.socket = new WebSocket(socketUrl);
 
@@ -53,13 +54,14 @@ export class AssemblyAIRealtime {
         }
 
         const timeout = setTimeout(() => {
+          console.error('⏱️ Connection timeout after 15s');
+          this.options.onError('Connection timeout - please check your network');
           reject(new Error('Connection timeout'));
           this.socket?.close();
-        }, 10000);
+        }, 15000); // Increased to 15s
 
         this.socket.onopen = () => {
-          clearTimeout(timeout);
-          console.log('✅ WebSocket connected');
+          console.log('✅ WebSocket connection opened');
         };
 
         this.socket.onmessage = (event) => {
@@ -67,7 +69,7 @@ export class AssemblyAIRealtime {
             const data: AssemblyAIMessage = JSON.parse(event.data);
             
             if (data.type === 'connection_established') {
-              console.log('✅ Connected to AssemblyAI');
+              console.log('✅ Connected to AssemblyAI successfully');
               this.isConnected = true;
               this.reconnectAttempts = 0;
               this.options.onConnect?.();
@@ -87,7 +89,7 @@ export class AssemblyAIRealtime {
             }
 
             if (data.message_type === 'FinalTranscript' && data.text) {
-              console.log('📝 Final transcript:', data.text);
+              console.log('📝 Final transcript:', data.text.substring(0, 100));
               this.options.onTranscript(data.text, true);
             }
 
@@ -99,6 +101,16 @@ export class AssemblyAIRealtime {
             if (data.message_type === 'SessionInformation' && data.error) {
               console.error('❌ AssemblyAI error:', data.error);
               this.options.onError(data.error);
+              clearTimeout(timeout);
+              reject(new Error(data.error));
+            }
+            
+            // Handle connection errors
+            if (data.type === 'error') {
+              console.error('❌ Connection error:', data.message);
+              this.options.onError(data.message || 'Connection error');
+              clearTimeout(timeout);
+              reject(new Error(data.message || 'Connection error'));
             }
           } catch (error) {
             console.error('Error parsing message:', error);
@@ -108,18 +120,18 @@ export class AssemblyAIRealtime {
         this.socket.onerror = (error) => {
           console.error('❌ WebSocket error:', error);
           clearTimeout(timeout);
-          this.options.onError('Connection error');
+          this.options.onError('WebSocket connection failed');
           reject(error);
         };
 
-        this.socket.onclose = () => {
-          console.log('🔌 WebSocket closed');
+        this.socket.onclose = (event) => {
+          console.log('🔌 WebSocket closed:', event.code, event.reason);
           this.isConnected = false;
           this.cleanup();
           this.options.onDisconnect?.();
           
           // Auto-reconnect if continuous mode and not manually closed
-          if (this.options.continuous && this.reconnectAttempts < this.maxReconnectAttempts) {
+          if (this.options.continuous && this.reconnectAttempts < this.maxReconnectAttempts && event.code !== 1000) {
             this.reconnectAttempts++;
             console.log(`🔄 Reconnecting... (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
             this.reconnectTimeout = window.setTimeout(() => {

@@ -316,21 +316,35 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         try {
           const connected = await transcriptionRef.current.connect();
           if (connected) {
+            console.log('✅ Connected to AssemblyAI, starting audio stream...');
             const audioStarted = await transcriptionRef.current.startAudio(stream);
             if (audioStarted) {
               setState(prev => ({ ...prev, isTranscribing: true }));
               console.log('✅ AssemblyAI transcription started successfully');
+              toast.success('Real-time transcription active');
             } else {
               console.warn('⚠️ Failed to start audio streaming');
               toast.warning('Transcription may not be available. Recording will continue.');
             }
           } else {
             console.warn('⚠️ Failed to connect to AssemblyAI');
-            toast.warning('Transcription not available. Recording will continue.');
+            toast.error('Failed to connect to transcription service. Please try again.');
+            // Stop recording if transcription fails
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+              mediaRecorderRef.current.stop();
+            }
+            stream.getTracks().forEach(track => track.stop());
+            setState(prev => ({ ...prev, isRecording: false }));
           }
         } catch (error) {
           console.error('AssemblyAI startup error:', error);
-          toast.warning('Transcription not available. Recording will continue.');
+          toast.error('Transcription service unavailable. Please try again.');
+          // Stop recording if transcription fails
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+          }
+          stream.getTracks().forEach(track => track.stop());
+          setState(prev => ({ ...prev, isRecording: false }));
         }
       }
       

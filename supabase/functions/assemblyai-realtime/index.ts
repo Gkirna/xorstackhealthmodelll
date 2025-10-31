@@ -35,32 +35,33 @@ serve(async (req) => {
     // Upgrade client connection first
     const { socket: clientSocket, response } = Deno.upgradeWebSocket(req);
     
-    // Connect to AssemblyAI Universal Streaming (new API)
-    const assemblyAISocket = new WebSocket(
-      'wss://api.assemblyai.com/v2/realtime/ws',
-      {
-        headers: {
-          'Authorization': ASSEMBLYAI_API_KEY
-        }
-      }
-    );
+    // Connect to AssemblyAI Universal Streaming - send API key in first message
+    const assemblyAISocket = new WebSocket('wss://api.assemblyai.com/v2/realtime/ws');
 
     console.log('🔗 Connecting to AssemblyAI WebSocket...');
 
+    let sessionConfigured = false;
+
     assemblyAISocket.onopen = () => {
-      console.log('✅ Connected to AssemblyAI');
+      console.log('✅ Connected to AssemblyAI, configuring session...');
       
-      // Configure session with Universal Streaming parameters
+      // Send configuration with API key and audio settings
       assemblyAISocket.send(JSON.stringify({
+        audio_encoding: 'pcm_s16le',
         sample_rate: 16000,
-        encoding: 'pcm_s16le',
-        language_code: 'en_us'
+        word_boost: ['medical', 'doctor', 'patient', 'diagnosis', 'treatment'],
+        token: ASSEMBLYAI_API_KEY
       }));
       
-      clientSocket.send(JSON.stringify({ 
-        type: 'connection_established',
-        message: 'Connected to AssemblyAI real-time transcription' 
-      }));
+      sessionConfigured = true;
+      
+      // Notify client of successful connection
+      if (clientSocket.readyState === WebSocket.OPEN) {
+        clientSocket.send(JSON.stringify({ 
+          type: 'connection_established',
+          message: 'Connected to AssemblyAI real-time transcription' 
+        }));
+      }
     };
 
     assemblyAISocket.onmessage = (event) => {
