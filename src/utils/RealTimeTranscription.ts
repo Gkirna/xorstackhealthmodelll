@@ -11,6 +11,14 @@ export interface TranscriptionConfig {
   onError?: (error: string) => void;
   onStart?: () => void;
   onEnd?: () => void;
+  onSpeakerChange?: (speaker: 'Doctor' | 'Patient') => void;
+}
+
+interface ConversationTurn {
+  speaker: 'Doctor' | 'Patient';
+  text: string;
+  timestamp: number;
+  confidence: number;
 }
 
 export class RealTimeTranscription {
@@ -20,6 +28,12 @@ export class RealTimeTranscription {
   private config: TranscriptionConfig;
   private fullTranscript: string = '';
   private interimTranscript: string = '';
+  private conversationTurns: ConversationTurn[] = [];
+  private currentSpeaker: 'Doctor' | 'Patient' = 'Doctor';
+  private lastSpeechTimestamp: number = 0;
+  private pauseThreshold: number = 2000; // 2 seconds pause indicates speaker change
+  private consecutiveSentences: number = 0;
+  private sentenceCountBeforeSwitch: number = 2; // Switch speaker after 2-3 sentences
 
   constructor(config: TranscriptionConfig = {}) {
     this.config = {
@@ -50,7 +64,7 @@ export class RealTimeTranscription {
     this.recognition.continuous = this.config.continuous;
     this.recognition.interimResults = this.config.interimResults;
     this.recognition.lang = this.config.lang;
-    this.recognition.maxAlternatives = 3; // Get multiple alternatives for better accuracy
+    this.recognition.maxAlternatives = 5; // Increased for better accuracy in medical context
 
     this.recognition.onstart = () => {
       console.log('Speech recognition started');
@@ -63,24 +77,38 @@ export class RealTimeTranscription {
     this.recognition.onresult = (event: any) => {
       let interimTranscript = '';
       let finalTranscript = '';
+      let finalConfidence = 0;
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         
-        // Advanced: Select best alternative based on confidence
+        // Advanced: Select best alternative based on confidence and medical context
         let bestTranscript = result[0].transcript;
         let bestConfidence = result[0].confidence || 0;
         
-        // Check alternatives for medical terms and higher confidence
-        for (let j = 1; j < result.length && j < 3; j++) {
+        // Enhanced medical terminology detection
+        const medicalTerms = [
+          'diabetes', 'hypertension', 'medication', 'prescription', 'diagnosis',
+          'symptoms', 'treatment', 'patient', 'doctor', 'blood pressure',
+          'temperature', 'heart rate', 'pulse', 'fever', 'pain', 'allergy',
+          'tablet', 'capsule', 'injection', 'test', 'report', 'scan',
+          'x-ray', 'mri', 'ct', 'ultrasound', 'ecg', 'lab', 'blood test'
+        ];
+        
+        // Check all alternatives (up to 5 now)
+        for (let j = 1; j < result.length && j < 5; j++) {
           const altConfidence = result[j].confidence || 0;
           const altTranscript = result[j].transcript;
+          const altLower = altTranscript.toLowerCase();
           
-          // Prefer alternatives with medical keywords or higher confidence
-          if (altConfidence > bestConfidence * 1.1 || 
-              (altTranscript.toLowerCase().includes('diabetes') || 
-               altTranscript.toLowerCase().includes('hypertension') ||
-               altTranscript.toLowerCase().includes('medication'))) {
+          // Count medical terms in alternative
+          let medicalTermCount = 0;
+          medicalTerms.forEach(term => {
+            if (altLower.includes(term)) medicalTermCount++;
+          });
+          
+          // Prefer alternatives with medical terms or significantly higher confidence
+          if (altConfidence > bestConfidence * 1.15 || medicalTermCount > 0) {
             bestTranscript = altTranscript;
             bestConfidence = altConfidence;
           }
@@ -90,6 +118,7 @@ export class RealTimeTranscription {
         
         if (result.isFinal) {
           finalTranscript += bestTranscript + ' ';
+          finalConfidence = bestConfidence;
         } else {
           interimTranscript += bestTranscript;
         }
@@ -97,17 +126,64 @@ export class RealTimeTranscription {
 
       if (finalTranscript) {
         const trimmedFinal = finalTranscript.trim();
-        this.fullTranscript += (this.fullTranscript ? ' ' : '') + trimmedFinal;
-        console.log('✅ Final transcript chunk:', trimmedFinal);
-        console.log('📊 Total transcript length:', this.fullTranscript.length, 'characters');
+        
+        // Advanced speaker change detection
+        const currentTime = Date.now();
+        const timeSinceLastSpeech = currentTime - this.lastSpeechTimestamp;
+        
+        // Detect speaker change based on:
+        // 1. Long pause (> 2 seconds)
+        // 2. Sentence patterns (questions vs statements)
+        // 3. Consecutive sentences from same speaker
+        let shouldSwitchSpeaker = false;
+        
+        if (timeSinceLastSpeech > this.pauseThreshold) {
+          shouldSwitchSpeaker = true;
+          console.log('🔄 Speaker change detected (long pause)');
+        } else if (this.detectQuestionPattern(trimmedFinal) && this.currentSpeaker === 'Patient') {
+          shouldSwitchSpeaker = true;
+          console.log('🔄 Speaker change detected (question from patient -> doctor)');
+        } else if (this.consecutiveSentences >= this.sentenceCountBeforeSwitch) {
+          shouldSwitchSpeaker = true;
+          this.consecutiveSentences = 0;
+          console.log('🔄 Speaker change detected (consecutive sentences limit)');
+        }
+        
+        if (shouldSwitchSpeaker) {
+          this.currentSpeaker = this.currentSpeaker === 'Doctor' ? 'Patient' : 'Doctor';
+          this.consecutiveSentences = 0;
+          if (this.config.onSpeakerChange) {
+            this.config.onSpeakerChange(this.currentSpeaker);
+          }
+        }
+        
+        this.consecutiveSentences++;
+        this.lastSpeechTimestamp = currentTime;
+        
+        // Store conversation turn
+        this.conversationTurns.push({
+          speaker: this.currentSpeaker,
+          text: trimmedFinal,
+          timestamp: currentTime,
+          confidence: finalConfidence
+        });
+        
+        // Format with speaker label
+        const formattedTranscript = `**${this.currentSpeaker}:** ${trimmedFinal}`;
+        this.fullTranscript += (this.fullTranscript ? '\n\n' : '') + formattedTranscript;
+        
+        console.log(`✅ Final transcript chunk (${this.currentSpeaker}):`, trimmedFinal);
+        console.log(`📊 Total turns: ${this.conversationTurns.length}, Total length: ${this.fullTranscript.length} characters`);
+        
         if (this.config.onResult) {
-          this.config.onResult(trimmedFinal, true);
+          this.config.onResult(formattedTranscript, true);
         }
       }
 
       if (interimTranscript && this.config.onResult) {
         console.log('⏳ Interim update:', interimTranscript.substring(0, 50), '...');
-        this.config.onResult(interimTranscript, false);
+        const formattedInterim = `**${this.currentSpeaker}:** ${interimTranscript}`;
+        this.config.onResult(formattedInterim, false);
       }
 
       this.interimTranscript = interimTranscript;
@@ -183,6 +259,16 @@ export class RealTimeTranscription {
     };
   }
 
+  private detectQuestionPattern(text: string): boolean {
+    const questionIndicators = [
+      'what', 'how', 'when', 'where', 'why', 'which',
+      'can you', 'could you', 'would you', 'do you',
+      'is it', 'are you', 'have you', 'did you'
+    ];
+    const lowerText = text.toLowerCase();
+    return questionIndicators.some(q => lowerText.includes(q)) || text.trim().endsWith('?');
+  }
+
   public start(): boolean {
     if (!this.isSupported) {
       if (this.config.onError) {
@@ -199,6 +285,11 @@ export class RealTimeTranscription {
     try {
       this.fullTranscript = '';
       this.interimTranscript = '';
+      this.conversationTurns = [];
+      this.currentSpeaker = 'Doctor'; // Always start with doctor
+      this.lastSpeechTimestamp = Date.now();
+      this.consecutiveSentences = 0;
+      console.log('🎙️ Starting transcription - Initial speaker: Doctor');
       this.recognition.start();
       return true;
     } catch (error) {
@@ -268,10 +359,23 @@ export class RealTimeTranscription {
     return this.isSupported;
   }
 
+  public getConversationTurns(): ConversationTurn[] {
+    return this.conversationTurns;
+  }
+
+  public getTurnCount(): number {
+    return this.conversationTurns.length;
+  }
+
+  public getCurrentSpeaker(): 'Doctor' | 'Patient' {
+    return this.currentSpeaker;
+  }
+
   public destroy() {
     if (this.recognition) {
       this.stop();
       this.recognition = null;
     }
+    this.conversationTurns = [];
   }
 }
