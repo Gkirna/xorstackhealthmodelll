@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { RealTimeTranscription } from '@/utils/RealTimeTranscription';
-import { UltraAdvancedVoiceAnalyzer } from '@/utils/UltraAdvancedVoiceAnalyzer';
+import { VoiceAnalyzer } from '@/utils/VoiceAnalyzer';
 import { MedicalAutoCorrector } from '@/utils/MedicalAutoCorrector';
-import { UltraAdvancedTranscriptionProcessor } from '@/utils/UltraAdvancedTranscriptionProcessor';
 
 interface AudioRecordingOptions {
   onTranscriptUpdate?: (transcript: string, isFinal: boolean) => void;
@@ -60,22 +59,11 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const voiceAnalyzerRef = useRef<UltraAdvancedVoiceAnalyzer | null>(null);
+  const voiceAnalyzerRef = useRef<VoiceAnalyzer | null>(null);
   const currentVoiceGenderRef = useRef<'male' | 'female' | 'unknown'>('unknown');
   const voiceAnalysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const currentVoiceCharacteristicsRef = useRef<any>(null);
-  const autoCorrectorRef = useRef<MedicalAutoCorrector | null>(null);
-  const ultraProcessorRef = useRef<UltraAdvancedTranscriptionProcessor | null>(null);
-
-  // Initialize advanced systems once
-  useEffect(() => {
-    if (!autoCorrectorRef.current) {
-      autoCorrectorRef.current = new MedicalAutoCorrector();
-    }
-    if (!ultraProcessorRef.current) {
-      ultraProcessorRef.current = new UltraAdvancedTranscriptionProcessor();
-    }
-  }, []);
+  const autoCorrectorRef = useRef<MedicalAutoCorrector>(new MedicalAutoCorrector());
 
   // Initialize transcription engine
   useEffect(() => {
@@ -96,13 +84,11 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           console.log('✅ Final transcript chunk received');
           
           // Apply medical auto-correction before sending to callback
-          const correctedTranscript = autoCorrectorRef.current 
-            ? autoCorrectorRef.current.correctTranscript(
-                transcript, 
-                currentVoiceGenderRef.current === 'unknown' ? 'provider' : 
-                currentVoiceGenderRef.current === 'female' ? 'patient' : 'provider'
-              )
-            : transcript;
+          const correctedTranscript = autoCorrectorRef.current.correctTranscript(
+            transcript, 
+            currentVoiceGenderRef.current === 'unknown' ? 'provider' : 
+            currentVoiceGenderRef.current === 'female' ? 'patient' : 'provider'
+          );
           
           if (onFinalTranscriptChunk) {
             onFinalTranscriptChunk(correctedTranscript);
@@ -189,14 +175,11 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       source.connect(analyserRef.current);
       analyserRef.current.fftSize = 256;
       
-      // Initialize ultra-advanced voice analyzer (reuse if exists)
+      // Initialize advanced voice analyzer
       try {
-        console.log('🎤 Initializing ultra-advanced voice analyzer with ML...');
+        console.log('🎤 Initializing advanced voice analyzer...');
         
-        if (!voiceAnalyzerRef.current) {
-          voiceAnalyzerRef.current = new UltraAdvancedVoiceAnalyzer();
-        }
-        
+        voiceAnalyzerRef.current = new VoiceAnalyzer();
         const characteristics = await voiceAnalyzerRef.current.initialize(stream);
         currentVoiceCharacteristicsRef.current = characteristics;
         
@@ -205,11 +188,11 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           console.log(`🎭 Voice detected: ${characteristics.gender} (${characteristics.pitch.toFixed(0)}Hz, confidence: ${(characteristics.confidence * 100).toFixed(0)}%)`);
         }
         
-        // Start ultra-advanced real-time analysis with temporal context (every 500ms)
+        // Start real-time voice analysis (every 500ms)
         voiceAnalysisIntervalRef.current = setInterval(async () => {
           if (voiceAnalyzerRef.current) {
             try {
-              const updated = await voiceAnalyzerRef.current.analyzeWithTemporalContext();
+              const updated = await voiceAnalyzerRef.current.analyzeVoiceSample();
               currentVoiceCharacteristicsRef.current = updated;
               
               if (updated.gender !== 'unknown' && updated.confidence > 0.7) {
@@ -221,18 +204,12 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           }
         }, 500);
         
-        // Log advanced analytics every 5 seconds
+        // Log speaker statistics every 5 seconds
         const statsInterval = setInterval(() => {
           if (voiceAnalyzerRef.current) {
             const stats = voiceAnalyzerRef.current.getSpeakerStatistics();
-            const dynamics = voiceAnalyzerRef.current.analyzeConversationDynamics();
-            const lowConfidence = voiceAnalyzerRef.current.identifyLowConfidenceSegments();
-            
             if (Object.keys(stats).length > 0) {
-              console.log('📊 Ultra-Advanced Analytics:');
-              console.log('  - Speaker Stats:', stats);
-              console.log('  - Conversation Dynamics:', dynamics);
-              console.log('  - Low Confidence Segments:', lowConfidence.length);
+              console.log('📊 Speaker statistics:', stats);
             }
           }
         }, 5000);
@@ -243,10 +220,10 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           clearInterval(statsInterval);
         }, 0) as any;
         
-        console.log('✅ Ultra-advanced voice analyzer active with ML integration');
+        console.log('✅ Advanced voice analyzer active');
       } catch (error) {
-        console.warn('⚠️ Ultra-advanced analyzer initialization failed:', error);
-        // Continue without advanced analysis
+        console.warn('⚠️ Voice analyzer initialization failed:', error);
+        // Continue without voice analysis
       }
       
       const monitorAudioLevel = () => {
@@ -298,7 +275,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       };
 
       mediaRecorder.onstop = async () => {
-        console.log('🛑 Recording stopped, processing audio with ultra-advanced AI...');
+        console.log('🛑 Recording stopped, processing audio...');
         
         const audioBlob = new Blob(chunksRef.current, { type: mimeType });
         const url = URL.createObjectURL(audioBlob);
@@ -326,39 +303,9 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         });
         
         // Stop transcription
-        let finalTranscript = '';
         if (transcriptionRef.current) {
-          finalTranscript = transcriptionRef.current.stop();
-          console.log('📝 Browser transcript:', finalTranscript.substring(0, 100) + '...');
-        }
-        
-        // Run ultra-advanced processing in background (no UI changes)
-        if (audioBlob && audioBlob.size > 0 && ultraProcessorRef.current) {
-          console.log('🚀 Starting ultra-advanced AI processing pipeline...');
-          console.log(`📊 Audio blob size: ${(audioBlob.size / 1024).toFixed(2)} KB`);
-          
-          ultraProcessorRef.current.processTranscription(audioBlob, finalTranscript)
-            .then(result => {
-              console.log('✅ Ultra-Advanced Processing Complete:');
-              console.log('  - Final Confidence:', (result.metadata.confidenceScore * 100).toFixed(1) + '%');
-              console.log('  - Re-analyzed Segments:', result.metadata.reanalyzedSegments);
-              console.log('  - Processing Time:', result.metadata.processingTime + 'ms');
-              console.log('  - Speaker Count:', result.metadata.speakerCount);
-              if (result.analysis.temporalPatterns) {
-                console.log('  - Temporal Patterns: Detected');
-              }
-              if (result.analysis.emotionAnalysis) {
-                console.log('  - Emotions:', result.analysis.emotionAnalysis);
-              }
-              if (result.analysis.conversationFlow) {
-                console.log('  - Conversation Flow:', result.analysis.conversationFlow);
-              }
-            })
-            .catch(error => {
-              console.error('❌ Ultra-advanced processing failed:', error);
-            });
-        } else {
-          console.warn('⚠️ No valid audio data to process with ultra-advanced pipeline');
+          const finalTranscript = transcriptionRef.current.stop();
+          console.log('📝 Final transcript:', finalTranscript);
         }
         
         if (onRecordingComplete) {
@@ -405,33 +352,19 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     console.log('⏸️ Pause recording called, current state:', mediaRecorderRef.current?.state);
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.pause();
+      setState(prev => ({ ...prev, isPaused: true, isTranscribing: false }));
       
-      // Pause transcription first
+      // Pause transcription
       if (transcriptionRef.current) {
         console.log('⏸️ Pausing transcription engine');
         transcriptionRef.current.pause();
       }
       
-      // Stop timer
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
-      
-      // Update state - force new object reference for React to detect change
-      setState(prev => {
-        const newState = { 
-          ...prev, 
-          isPaused: true, 
-          isTranscribing: false 
-        };
-        console.log('⏸️ State updated to paused:', newState.isPaused);
-        return newState;
-      });
-      
       toast.info('Recording paused');
-    } else {
-      console.warn('⏸️ Cannot pause - recorder state:', mediaRecorderRef.current?.state);
     }
   }, []);
 
@@ -439,6 +372,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     console.log('▶️ Resume recording called, current state:', mediaRecorderRef.current?.state);
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
       mediaRecorderRef.current.resume();
+      setState(prev => ({ ...prev, isPaused: false, isTranscribing: true }));
       
       // Resume transcription
       if (transcriptionRef.current) {
@@ -446,25 +380,11 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         transcriptionRef.current.resume();
       }
       
-      // Restart timer
       timerRef.current = setInterval(() => {
         setState(prev => ({ ...prev, duration: prev.duration + 1 }));
       }, 1000);
       
-      // Update state - force new object reference for React to detect change
-      setState(prev => {
-        const newState = { 
-          ...prev, 
-          isPaused: false, 
-          isTranscribing: true 
-        };
-        console.log('▶️ State updated to resumed:', { isPaused: newState.isPaused, isRecording: newState.isRecording });
-        return newState;
-      });
-      
       toast.success('Recording resumed');
-    } else {
-      console.warn('▶️ Cannot resume - recorder state:', mediaRecorderRef.current?.state);
     }
   }, []);
 
@@ -482,14 +402,14 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
       
-      // Stop ultra-advanced voice analyzer interval but keep instance
+      // Stop voice analyzer
       if (voiceAnalyzerRef.current) {
-        console.log('📊 Collecting ultra-advanced analytics...');
+        console.log('🧹 Cleaning up voice analyzer...');
         const stats = voiceAnalyzerRef.current.getSpeakerStatistics();
-        const dynamics = voiceAnalyzerRef.current.analyzeConversationDynamics();
-        console.log('  - Voice Stats:', stats);
-        console.log('  - Conversation Dynamics:', dynamics);
-        // Don't null it out - reuse on next recording
+        console.log('📊 Final voice statistics:', stats);
+        
+        voiceAnalyzerRef.current.cleanup();
+        voiceAnalyzerRef.current = null;
       }
       
       if (voiceAnalysisIntervalRef.current) {
@@ -515,6 +435,12 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const clearRecording = useCallback(() => {
     if (state.recordedUrl) {
       URL.revokeObjectURL(state.recordedUrl);
+    }
+    
+    // Clean up voice analyzer if still active
+    if (voiceAnalyzerRef.current) {
+      voiceAnalyzerRef.current.cleanup();
+      voiceAnalyzerRef.current = null;
     }
     
     currentVoiceGenderRef.current = 'unknown';

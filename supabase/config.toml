@@ -30,6 +30,3 @@ verify_jwt = true
 
 [functions.assemblyai-realtime]
 verify_jwt = true
-
-[functions.ultra-advanced-analysis]
-verify_jwt = true
