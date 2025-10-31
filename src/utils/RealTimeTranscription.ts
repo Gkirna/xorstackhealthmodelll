@@ -176,14 +176,13 @@ export class RealTimeTranscription {
         console.log(`📊 Total turns: ${this.conversationTurns.length}, Total length: ${this.fullTranscript.length} characters`);
         
         if (this.config.onResult) {
-          this.config.onResult(formattedTranscript, true);
+          this.config.onResult(trimmedFinal, true);
         }
       }
 
       if (interimTranscript && this.config.onResult) {
         console.log('⏳ Interim update:', interimTranscript.substring(0, 50), '...');
-        const formattedInterim = `**${this.currentSpeaker}:** ${interimTranscript}`;
-        this.config.onResult(formattedInterim, false);
+        this.config.onResult(interimTranscript, false);
       }
 
       this.interimTranscript = interimTranscript;

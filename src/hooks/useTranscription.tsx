@@ -571,7 +571,7 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
       .filter(chunk => !chunk.temp) // Exclude temporary chunks
       .map(chunk => {
         const speakerLabel = chunk.speaker === 'provider' ? 'Doctor' : 'Patient';
-        return `**${speakerLabel}:** ${chunk.text}`;
+        return `${speakerLabel} : ${chunk.text}`;
       })
       .join('\n\n');
   }, [transcriptChunks]);
