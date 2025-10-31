@@ -29,28 +29,22 @@ export function ExportOptions({ sessionId, noteContent }: ExportOptionsProps) {
   const handleDownloadPDF = async () => {
     try {
       setIsExporting(true);
-      console.log('Starting PDF export for session:', sessionId);
       const result = await exportNote(sessionId, 'pdf');
-      console.log('Export result:', result);
       
       if (result.success && result.data?.url) {
-        // Create a temporary link element to trigger download
+        // Trigger immediate download
         const link = document.createElement('a');
         link.href = result.data.url;
         link.download = `clinical-note-${sessionId}.html`;
-        link.target = '_blank';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         
-        toast.success('Clinical note exported successfully');
+        toast.success('Clinical note downloaded');
       } else {
-        const errorMsg = result.error?.message || 'Export failed';
-        console.error('Export error:', errorMsg);
-        toast.error(errorMsg);
+        toast.error(result.error?.message || 'Export failed');
       }
     } catch (error) {
-      console.error('PDF export exception:', error);
       toast.error('Failed to export: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsExporting(false);
