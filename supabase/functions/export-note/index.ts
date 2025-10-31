@@ -43,7 +43,7 @@ serve(async (req) => {
     console.log('Fetching session:', session_id);
     const { data: session, error: sessionError } = await supabase
       .from('sessions')
-      .select('generated_note, patient_name, patient_id, scheduled_at, created_at, template_id')
+      .select('generated_note, patient_name, patient_id, scheduled_at, created_at')
       .eq('id', session_id)
       .eq('user_id', user.id)
       .maybeSingle();
@@ -92,21 +92,7 @@ serve(async (req) => {
     let fileName: string;
 
     const sessionDate = session.scheduled_at || session.created_at;
-    
-    // Parse the generated note if it's JSON
-    let noteObject: any = null;
-    try {
-      noteObject = JSON.parse(session.generated_note);
-    } catch {
-      // If parsing fails, use as plain text
-      noteObject = null;
-    }
-    
-    console.log('Note content prepared, is JSON:', !!noteObject);
-
-    switch (format) {
-      case 'txt':
-        const txtContent = `
+    const noteContent = `
 Clinical Note Export
 ===================
 Patient: ${session.patient_name || 'N/A'}
@@ -114,186 +100,86 @@ MRN: ${session.patient_id || 'N/A'}
 Date: ${new Date(sessionDate).toLocaleDateString()}
 
 ${session.generated_note}
-        `.trim();
-        fileContent = new Blob([txtContent], { type: 'text/plain' });
+    `.trim();
+    
+    console.log('Note content prepared, length:', noteContent.length);
+
+    switch (format) {
+      case 'txt':
+        fileContent = new Blob([noteContent], { type: 'text/plain' });
         contentType = 'text/plain';
         fileName = `clinical-note-${session_id}.txt`;
         break;
       
       case 'pdf':
-        // Create HTML for better formatting with SOAP structure
-        const formatSectionKey = (key: string): string => {
-          return key
-            .replace(/_/g, ' ')
-            .split(' ')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
-        };
-
-        const renderValue = (value: any, depth: number = 0): string => {
-          if (Array.isArray(value)) {
-            return '<ul style="margin: 10px 0; padding-left: 30px;">' +
-              value.map(item => `<li style="margin: 5px 0; line-height: 1.6;">${typeof item === 'string' ? item : renderValue(item, depth + 1)}</li>`).join('') +
-              '</ul>';
-          }
-          
-          if (typeof value === 'object' && value !== null) {
-            return '<div style="margin-left: ' + (depth > 0 ? '20px' : '0') + '; margin-top: 10px;">' +
-              Object.entries(value).map(([subKey, subValue]) => {
-                const label = formatSectionKey(subKey);
-                return `<div style="margin: 8px 0;"><strong>${label}:</strong> ${typeof subValue === 'string' ? subValue : '<div>' + renderValue(subValue, depth + 1) + '</div>'}</div>`;
-              }).join('') +
-              '</div>';
-          }
-          
-          const stringValue = String(value);
-          if (stringValue.includes('\n')) {
-            return stringValue.split('\n').map(line => `<p style="margin: 5px 0; line-height: 1.6;">${line}</p>`).join('');
-          }
-          
-          return stringValue;
-        };
-
-        let contentHtml = '';
-        
-        if (noteObject && typeof noteObject === 'object') {
-          const sections = noteObject.sections || noteObject;
-          contentHtml = Object.entries(sections)
-            .filter(([key, value]) => value && key !== 'template_id' && key !== 'plaintext')
-            .map(([key, value]) => {
-              const label = formatSectionKey(key);
-              return `
-                <div style="margin: 30px 0;">
-                  <h2 style="
-                    font-size: 18px;
-                    font-weight: bold;
-                    text-transform: uppercase;
-                    border-bottom: 2px solid #2563eb;
-                    padding-bottom: 8px;
-                    margin-bottom: 15px;
-                    color: #1e40af;
-                  ">${label}</h2>
-                  <div style="padding-left: 0;">
-                    ${renderValue(value)}
-                  </div>
-                </div>
-              `;
-            }).join('');
-        } else {
-          contentHtml = `<div style="white-space: pre-wrap; line-height: 1.6;">${session.generated_note}</div>`;
-        }
-
+        // Create HTML for better formatting
         const htmlContent = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Clinical Note - ${session.patient_name || 'Patient'}</title>
   <style>
-    @media print {
-      body { padding: 20px; }
-      .no-print { display: none; }
-    }
     body { 
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      font-family: Arial, sans-serif; 
       padding: 40px;
-      max-width: 900px;
+      max-width: 800px;
       margin: 0 auto;
       line-height: 1.6;
-      color: #1f2937;
-      background: #ffffff;
     }
     h1 { 
-      color: #1e40af; 
-      border-bottom: 3px solid #2563eb;
-      padding-bottom: 15px;
-      margin-bottom: 30px;
-      font-size: 28px;
-      font-weight: 700;
+      color: #2563eb; 
+      border-bottom: 2px solid #2563eb;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
     }
     .meta {
-      background: #f9fafb;
-      padding: 20px;
+      background: #f3f4f6;
+      padding: 15px;
       border-radius: 8px;
-      margin-bottom: 30px;
-      border: 1px solid #e5e7eb;
+      margin-bottom: 20px;
     }
-    .meta-row {
-      display: flex;
-      margin: 8px 0;
-    }
-    .meta-label {
-      font-weight: 700;
-      min-width: 120px;
-      color: #374151;
-    }
-    .meta-value {
-      color: #1f2937;
+    .meta p {
+      margin: 5px 0;
     }
     .content { 
+      white-space: pre-wrap; 
       background: #ffffff;
       padding: 20px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
     }
     .footer {
-      margin-top: 50px;
+      margin-top: 40px;
       padding-top: 20px;
-      border-top: 2px solid #e5e7eb;
+      border-top: 1px solid #e5e7eb;
       color: #6b7280;
       font-size: 12px;
-      text-align: center;
-    }
-    strong {
-      color: #374151;
-      font-weight: 600;
     }
   </style>
 </head>
 <body>
   <h1>Clinical Note</h1>
   <div class="meta">
-    <div class="meta-row">
-      <span class="meta-label">Patient Name:</span>
-      <span class="meta-value">${session.patient_name || 'N/A'}</span>
-    </div>
-    <div class="meta-row">
-      <span class="meta-label">Medical Record #:</span>
-      <span class="meta-value">${session.patient_id || 'N/A'}</span>
-    </div>
-    <div class="meta-row">
-      <span class="meta-label">Visit Date:</span>
-      <span class="meta-value">${new Date(sessionDate).toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })}</span>
-    </div>
-    <div class="meta-row">
-      <span class="meta-label">Document Type:</span>
-      <span class="meta-value">Clinical Documentation</span>
-    </div>
+    <p><strong>Patient:</strong> ${session.patient_name || 'N/A'}</p>
+    <p><strong>MRN:</strong> ${session.patient_id || 'N/A'}</p>
+    <p><strong>Date:</strong> ${new Date(sessionDate).toLocaleDateString()}</p>
   </div>
-  <div class="content">
-    ${contentHtml}
-  </div>
+  <div class="content">${noteContent.replace(/\n/g, '<br>')}</div>
   <div class="footer">
-    <strong>Generated by Xorstack Health Model</strong><br>
-    AI-assisted clinical documentation - Verify all information for accuracy before clinical use<br>
-    This document contains confidential patient information - Handle in accordance with HIPAA regulations
+    Generated by Xorstack Health Model<br>
+    AI-assisted documentation - Verify accuracy before clinical use
   </div>
 </body>
 </html>
         `;
         fileContent = new Blob([htmlContent], { type: 'text/html' });
         contentType = 'text/html';
-        fileName = `clinical-note-${session.patient_name?.replace(/\s+/g, '-') || session_id}-${new Date().toISOString().split('T')[0]}.html`;
+        fileName = `clinical-note-${session_id}.html`;
         break;
       
       case 'docx':
         // DOCX - use simple text for now
-        const docxContent = `Clinical Note Export\n\nPatient: ${session.patient_name || 'N/A'}\nMRN: ${session.patient_id || 'N/A'}\nDate: ${new Date(sessionDate).toLocaleDateString()}\n\n${session.generated_note}`;
-        fileContent = new Blob([docxContent], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        fileContent = new Blob([noteContent], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
         contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
         fileName = `clinical-note-${session_id}.docx`;
         break;
