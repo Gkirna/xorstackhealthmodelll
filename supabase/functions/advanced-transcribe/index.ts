@@ -54,41 +54,15 @@ serve(async (req) => {
 
     // Convert base64 to binary
     const binaryAudio = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
-    
-    // Call Deepgram API with advanced features
-    const response = await fetch('https://api.deepgram.com/v1/listen', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${DEEPGRAM_API_KEY}`,
-        'Content-Type': 'audio/webm',
-      },
-      body: binaryAudio,
-      // Advanced Deepgram features
-      // @ts-ignore - URL params
-      ...{
-        searchParams: {
-          model: 'nova-2-medical',          // Medical-specific model
-          punctuate: 'true',                 // Auto-punctuation
-          diarize: 'true',                   // Speaker diarization
-          utterances: 'true',                // Group by speaker utterances
-          smart_format: 'true',              // Smart formatting
-          filler_words: 'true',              // Detect filler words
-          language: 'en-US',
-          tier: 'enhanced',                  // Enhanced accuracy
-        }
-      }
-    });
 
-    // Build URL with search params
+    // Build URL with search params - using accessible model
     const url = new URL('https://api.deepgram.com/v1/listen');
-    url.searchParams.set('model', 'nova-2-medical');
+    url.searchParams.set('model', 'nova-2');  // Standard model available to all users
     url.searchParams.set('punctuate', 'true');
     url.searchParams.set('diarize', 'true');
     url.searchParams.set('utterances', 'true');
     url.searchParams.set('smart_format', 'true');
-    url.searchParams.set('filler_words', 'true');
     url.searchParams.set('language', 'en-US');
-    url.searchParams.set('tier', 'enhanced');
 
     const dgResponse = await fetch(url.toString(), {
       method: 'POST',
@@ -136,7 +110,7 @@ serve(async (req) => {
         confidence: overallConfidence,
         speaker_count: new Set(segments.map(s => s.speaker)).size,
         metadata: {
-          model: 'nova-2-medical',
+          model: 'nova-2',
           duration: result.metadata?.duration || 0,
           processing_time: result.metadata?.duration || 0,
         }
