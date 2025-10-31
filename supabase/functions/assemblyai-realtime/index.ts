@@ -43,7 +43,7 @@ serve(async (req) => {
     let sessionConfigured = false;
 
     assemblyAISocket.onopen = () => {
-      console.log('✅ Connected to AssemblyAI, configuring session...');
+      console.log('✅ Connected to AssemblyAI, sending configuration...');
       
       // Send configuration with API key and audio settings
       assemblyAISocket.send(JSON.stringify({
@@ -53,20 +53,25 @@ serve(async (req) => {
         token: ASSEMBLYAI_API_KEY
       }));
       
-      sessionConfigured = true;
-      
-      // Notify client of successful connection
-      if (clientSocket.readyState === WebSocket.OPEN) {
-        clientSocket.send(JSON.stringify({ 
-          type: 'connection_established',
-          message: 'Connected to AssemblyAI real-time transcription' 
-        }));
-      }
+      console.log('📤 Configuration sent, waiting for SessionBegins...');
     };
 
     assemblyAISocket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        
+        // Handle SessionBegins - notify client that connection is ready
+        if (data.message_type === 'SessionBegins') {
+          console.log('🎙️ Session started - notifying client');
+          sessionConfigured = true;
+          
+          if (clientSocket.readyState === WebSocket.OPEN) {
+            clientSocket.send(JSON.stringify({ 
+              type: 'connection_established',
+              message: 'Connected to AssemblyAI real-time transcription' 
+            }));
+          }
+        }
         
         // Forward all messages to client
         if (clientSocket.readyState === WebSocket.OPEN) {
@@ -78,8 +83,6 @@ serve(async (req) => {
           console.log('📝 Final:', data.text?.substring(0, 100));
         } else if (data.message_type === 'PartialTranscript') {
           console.log('⏳ Partial:', data.text?.substring(0, 50));
-        } else if (data.message_type === 'SessionBegins') {
-          console.log('🎙️ Session started');
         } else if (data.message_type === 'SessionInformation') {
           console.log('ℹ️ Session info:', data);
         }
