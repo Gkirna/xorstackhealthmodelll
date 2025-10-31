@@ -13,8 +13,12 @@ export const useAdvancedTranscription = () => {
 
   const transcribeAudio = useCallback(async (audioBase64: string): Promise<AdvancedTranscriptionResult | null> => {
     setIsTranscribing(true);
+    
+    // Show progress toast
+    const toastId = toast.loading('Processing audio with medical AI...');
+    
     try {
-      console.log('🎙️ Calling advanced transcription...');
+      console.log('🎙️ Calling advanced transcription with AssemblyAI...');
 
       const { data, error } = await supabase.functions.invoke('advanced-transcribe', {
         body: { audio: audioBase64 }
@@ -22,22 +26,46 @@ export const useAdvancedTranscription = () => {
 
       if (error) {
         console.error('Transcription error:', error);
-        toast.error('Transcription failed: ' + error.message);
+        toast.error('Transcription failed: ' + error.message, { id: toastId });
         return null;
       }
 
+      // Handle specific error codes
       if (!data.success) {
-        console.error('Transcription unsuccessful:', data.error);
-        toast.error('Transcription failed: ' + data.error?.message);
+        const errorCode = data.error?.code || 'UNKNOWN_ERROR';
+        const errorMessage = data.error?.message || 'Transcription failed';
+
+        console.error('Transcription unsuccessful:', errorCode, errorMessage);
+
+        if (errorCode === 'NO_SPEECH_DETECTED') {
+          toast.error('No speech detected in audio. Please try again.', { id: toastId });
+        } else if (errorCode === 'API_KEY_MISSING') {
+          toast.error('API configuration error. Please contact support.', { id: toastId });
+        } else if (errorCode === 'INVALID_AUDIO_FORMAT') {
+          toast.error('Invalid audio format. Please use mp3, wav, or m4a.', { id: toastId });
+        } else if (errorCode === 'PROCESSING_TIMEOUT') {
+          toast.error('Processing took too long. Audio may be too large.', { id: toastId });
+        } else {
+          toast.error(errorMessage, { id: toastId });
+        }
+        
+        return null;
+      }
+
+      // Validate transcript text
+      if (!data.text || data.text.trim() === '') {
+        console.warn('⚠️ Empty transcript received');
+        toast.error('No speech detected in audio.', { id: toastId });
         return null;
       }
 
       console.log(`✅ Transcription complete: ${data.segments.length} segments, ${data.speaker_count} speakers, confidence: ${(data.confidence * 100).toFixed(1)}%`);
+      toast.success(`Transcribed with ${(data.confidence * 100).toFixed(0)}% confidence`, { id: toastId });
 
       return data as AdvancedTranscriptionResult;
     } catch (error) {
       console.error('Transcription exception:', error);
-      toast.error('Transcription error: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      toast.error('Transcription error: ' + (error instanceof Error ? error.message : 'Unknown error'), { id: toastId });
       return null;
     } finally {
       setIsTranscribing(false);
@@ -49,6 +77,9 @@ export const useAdvancedTranscription = () => {
     segments?: any[]
   ): Promise<MedicalEntityExtractionResult | null> => {
     setIsExtractingEntities(true);
+    
+    const toastId = toast.loading('Analyzing medical entities...');
+    
     try {
       console.log('🏥 Extracting medical entities...');
 
@@ -58,23 +89,43 @@ export const useAdvancedTranscription = () => {
 
       if (error) {
         console.error('Entity extraction error:', error);
-        toast.error('Entity extraction failed: ' + error.message);
+        toast.error('Entity extraction failed: ' + error.message, { id: toastId });
         return null;
       }
 
       if (!data.success) {
         console.error('Entity extraction unsuccessful:', data.error);
-        toast.error('Entity extraction failed: ' + data.error?.message);
-        return null;
+        // Don't show error toast - just log it (entity extraction is optional)
+        console.warn('Entity extraction returned no results, continuing without entities');
+        toast.dismiss(toastId);
+        return {
+          success: true,
+          entities: [],
+          statistics: {
+            total_entities: 0,
+            by_type: {},
+            avg_confidence: 0,
+          },
+        };
       }
 
       console.log(`✅ Extracted ${data.entities.length} medical entities`);
+      toast.success(`Found ${data.entities.length} medical entities`, { id: toastId });
 
       return data as MedicalEntityExtractionResult;
     } catch (error) {
       console.error('Entity extraction exception:', error);
-      toast.error('Entity extraction error: ' + (error instanceof Error ? error.message : 'Unknown error'));
-      return null;
+      // Don't fail the entire process if entity extraction fails
+      toast.dismiss(toastId);
+      return {
+        success: true,
+        entities: [],
+        statistics: {
+          total_entities: 0,
+          by_type: {},
+          avg_confidence: 0,
+        },
+      };
     } finally {
       setIsExtractingEntities(false);
     }

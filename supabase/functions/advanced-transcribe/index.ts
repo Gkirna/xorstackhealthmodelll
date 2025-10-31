@@ -6,22 +6,21 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface DeepgramWord {
-  word: string;
-  start: number;
-  end: number;
-  confidence: number;
-  speaker?: number;
-  punctuated_word?: string;
-}
-
-interface DeepgramUtterance {
+interface AssemblyAIWord {
   text: string;
   start: number;
   end: number;
   confidence: number;
-  speaker: number;
-  words: DeepgramWord[];
+  speaker?: string;
+}
+
+interface AssemblyAIUtterance {
+  text: string;
+  start: number;
+  end: number;
+  confidence: number;
+  speaker: string;
+  words: AssemblyAIWord[];
 }
 
 interface TranscriptionSegment {
@@ -30,7 +29,13 @@ interface TranscriptionSegment {
   start: number;
   end: number;
   confidence: number;
-  words: DeepgramWord[];
+  words: {
+    word: string;
+    start: number;
+    end: number;
+    confidence: number;
+    speaker: number;
+  }[];
 }
 
 serve(async (req) => {
@@ -45,100 +50,182 @@ serve(async (req) => {
       throw new Error('No audio data provided');
     }
 
-    const DEEPGRAM_API_KEY = Deno.env.get('DEEPGRAM_API_KEY');
-    if (!DEEPGRAM_API_KEY) {
-      throw new Error('DEEPGRAM_API_KEY not configured');
+    const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
+    if (!ASSEMBLYAI_API_KEY) {
+      throw new Error('ASSEMBLYAI_API_KEY not configured');
     }
 
-    console.log('🎙️ Starting advanced transcription with Deepgram...');
+    console.log('🎙️ Starting advanced transcription with AssemblyAI...');
 
     // Convert base64 to binary
     const binaryAudio = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
     
-    // Call Deepgram API with advanced features
-    const response = await fetch('https://api.deepgram.com/v1/listen', {
+    // Step 1: Upload audio to AssemblyAI
+    console.log('📤 Uploading audio to AssemblyAI...');
+    const uploadResponse = await fetch('https://api.assemblyai.com/v2/upload', {
       method: 'POST',
       headers: {
-        'Authorization': `Token ${DEEPGRAM_API_KEY}`,
-        'Content-Type': 'audio/webm',
-      },
-      body: binaryAudio,
-      // Advanced Deepgram features
-      // @ts-ignore - URL params
-      ...{
-        searchParams: {
-          model: 'nova-2-medical',          // Medical-specific model
-          punctuate: 'true',                 // Auto-punctuation
-          diarize: 'true',                   // Speaker diarization
-          utterances: 'true',                // Group by speaker utterances
-          smart_format: 'true',              // Smart formatting
-          filler_words: 'true',              // Detect filler words
-          language: 'en-US',
-          tier: 'enhanced',                  // Enhanced accuracy
-        }
-      }
-    });
-
-    // Build URL with search params
-    const url = new URL('https://api.deepgram.com/v1/listen');
-    url.searchParams.set('model', 'nova-2-medical');
-    url.searchParams.set('punctuate', 'true');
-    url.searchParams.set('diarize', 'true');
-    url.searchParams.set('utterances', 'true');
-    url.searchParams.set('smart_format', 'true');
-    url.searchParams.set('filler_words', 'true');
-    url.searchParams.set('language', 'en-US');
-    url.searchParams.set('tier', 'enhanced');
-
-    const dgResponse = await fetch(url.toString(), {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${DEEPGRAM_API_KEY}`,
-        'Content-Type': 'audio/webm',
+        'authorization': ASSEMBLYAI_API_KEY,
+        'content-type': 'application/octet-stream',
       },
       body: binaryAudio,
     });
 
-    if (!dgResponse.ok) {
-      const errorText = await dgResponse.text();
-      console.error('❌ Deepgram API error:', errorText);
-      throw new Error(`Transcription failed: ${dgResponse.status}`);
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      console.error('❌ Upload error:', errorText);
+      throw new Error(`Upload failed: ${uploadResponse.status}`);
     }
 
-    const result = await dgResponse.json();
+    const { upload_url } = await uploadResponse.json();
+    console.log('✅ Audio uploaded successfully');
+
+    // Step 2: Submit transcription job with medical configuration
+    console.log('🔄 Submitting transcription job with slam-1 medical model...');
+    const transcriptResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
+      method: 'POST',
+      headers: {
+        'authorization': ASSEMBLYAI_API_KEY,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        audio_url: upload_url,
+        speech_model: 'slam-1',           // Medical-optimized model
+        speaker_labels: true,              // Enable speaker diarization
+        speakers_expected: 2,              // Doctor + Patient
+        format_text: true,                 // Auto-formatting
+        punctuate: true,                   // Auto-punctuation
+        language_code: 'en',               // English
+        word_boost: [                      // Boost medical terminology
+          'diabetes', 'hypertension', 'medication', 'prescription',
+          'diagnosis', 'symptoms', 'treatment', 'allergy', 'tablet',
+          'dosage', 'patient', 'doctor', 'blood pressure', 'heart rate'
+        ],
+        boost_param: 'high',               // High boost for medical terms
+      }),
+    });
+
+    if (!transcriptResponse.ok) {
+      const errorText = await transcriptResponse.text();
+      console.error('❌ Transcription submission error:', errorText);
+      throw new Error(`Transcription submission failed: ${transcriptResponse.status}`);
+    }
+
+    const { id: transcriptId } = await transcriptResponse.json();
+    console.log(`✅ Transcription job submitted: ${transcriptId}`);
+
+    // Step 3: Poll for completion with exponential backoff
+    console.log('⏳ Polling for transcription completion...');
+    let transcript: any;
+    let pollAttempts = 0;
+    const maxPollAttempts = 300; // 5 minutes timeout
+    let delay = 1000; // Start with 1 second
+
+    while (pollAttempts < maxPollAttempts) {
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+      const statusResponse = await fetch(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, {
+        headers: { 
+          'authorization': ASSEMBLYAI_API_KEY 
+        },
+      });
+
+      if (!statusResponse.ok) {
+        const errorText = await statusResponse.text();
+        console.error('❌ Status check error:', errorText);
+        throw new Error(`Status check failed: ${statusResponse.status}`);
+      }
+
+      transcript = await statusResponse.json();
+      pollAttempts++;
+
+      // Log progress every 10 polls
+      if (pollAttempts % 10 === 0) {
+        console.log(`⏳ Still processing... (attempt ${pollAttempts}/${maxPollAttempts})`);
+      }
+
+      if (transcript.status === 'completed') {
+        console.log('✅ Transcription completed successfully');
+        break;
+      }
+      
+      if (transcript.status === 'error') {
+        console.error('❌ Transcription failed:', transcript.error);
+        throw new Error(`Transcription error: ${transcript.error}`);
+      }
+
+      // Exponential backoff: 1s → 2s → 3s → 5s → 5s (cap at 5s)
+      delay = Math.min(delay + 1000, 5000);
+    }
+
+    if (pollAttempts >= maxPollAttempts) {
+      throw new Error('Transcription timeout - audio may be too long');
+    }
+
+    // Check if transcript has any text
+    if (!transcript.text || transcript.text.trim() === '') {
+      console.warn('⚠️ No speech detected in audio');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: {
+            code: 'NO_SPEECH_DETECTED',
+            message: 'No speech detected in audio. Please try again.',
+          },
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Step 4: Format response to match expected schema
+    const utterances: AssemblyAIUtterance[] = transcript.utterances || [];
     
-    // Extract utterances with speaker diarization
-    const utterances = result.results?.utterances || [];
-    const segments: TranscriptionSegment[] = utterances.map((utt: DeepgramUtterance) => ({
-      text: utt.text,
-      speaker: utt.speaker,
-      start: utt.start,
-      end: utt.end,
-      confidence: utt.confidence,
-      words: utt.words,
-    }));
+    // Map speakers (A, B, C...) to numbers (0, 1, 2...)
+    const speakerMap = new Map<string, number>();
+    let speakerIndex = 0;
+    
+    const segments: TranscriptionSegment[] = utterances.map((utt) => {
+      if (!speakerMap.has(utt.speaker)) {
+        speakerMap.set(utt.speaker, speakerIndex++);
+      }
+      const speakerNum = speakerMap.get(utt.speaker)!;
+      
+      return {
+        text: utt.text,
+        speaker: speakerNum,
+        start: utt.start / 1000, // Convert ms to seconds
+        end: utt.end / 1000,     // Convert ms to seconds
+        confidence: utt.confidence,
+        words: utt.words.map((w) => ({
+          word: w.text,
+          start: w.start / 1000,
+          end: w.end / 1000,
+          confidence: w.confidence,
+          speaker: speakerNum,
+        })),
+      };
+    });
 
     // Calculate overall confidence
-    const overallConfidence = segments.length > 0
-      ? segments.reduce((sum, seg) => sum + seg.confidence, 0) / segments.length
-      : 0;
-
-    // Get full transcript
-    const fullTranscript = result.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
+    const overallConfidence = transcript.confidence || 
+      (segments.length > 0 ? segments.reduce((sum, seg) => sum + seg.confidence, 0) / segments.length : 0);
 
     console.log(`✅ Transcription successful - ${segments.length} segments, confidence: ${(overallConfidence * 100).toFixed(1)}%`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        text: fullTranscript,
+        text: transcript.text,
         segments,
         confidence: overallConfidence,
-        speaker_count: new Set(segments.map(s => s.speaker)).size,
+        speaker_count: speakerMap.size,
         metadata: {
-          model: 'nova-2-medical',
-          duration: result.metadata?.duration || 0,
-          processing_time: result.metadata?.duration || 0,
+          model: 'slam-1',
+          duration: transcript.audio_duration || 0,
+          processing_time: pollAttempts * delay / 1000,
         }
       }),
       { 
@@ -151,16 +238,31 @@ serve(async (req) => {
     console.error('❌ Advanced transcription error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     
+    // Determine appropriate error code
+    let errorCode = 'TRANSCRIPTION_ERROR';
+    let statusCode = 500;
+    
+    if (errorMessage.includes('not configured')) {
+      errorCode = 'API_KEY_MISSING';
+      statusCode = 403;
+    } else if (errorMessage.includes('Upload failed: 400')) {
+      errorCode = 'INVALID_AUDIO_FORMAT';
+      statusCode = 400;
+    } else if (errorMessage.includes('timeout')) {
+      errorCode = 'PROCESSING_TIMEOUT';
+      statusCode = 408;
+    }
+    
     return new Response(
       JSON.stringify({
         success: false,
         error: {
-          code: 'TRANSCRIPTION_ERROR',
+          code: errorCode,
           message: errorMessage,
         },
       }),
       {
-        status: 500,
+        status: statusCode,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
