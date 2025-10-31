@@ -153,54 +153,6 @@ const SessionRecord = () => {
   });
 
   // CALLBACKS AFTER HOOKS
-  const handleStartTranscribing = useCallback(async () => {
-    if (isStartingRecording) {
-      return;
-    }
-
-    if (isRecording) {
-      toast.success('Stopping transcription...');
-      await saveAllPendingChunks();
-      stopRecording();
-      
-      // Auto-generate clinical note after stopping
-      setTimeout(async () => {
-        toast.info('Generating clinical note...');
-        await autoGenerateNote();
-      }, 1000);
-      return;
-    }
-
-    if (recordingMode === 'upload') {
-      toast.info('Upload flow coming soon. Please use Dictating or Transcribing for now.');
-      return;
-    }
-
-    if (recordingMode === 'dictating' || recordingMode === 'transcribing') {
-      setIsStartingRecording(true);
-      
-      try {
-        setActiveTab('transcript');
-        speakerRef.current = 'provider';
-        transcriptCountRef.current = 0;
-        toast.success('Starting live transcription... Speak now!');
-        
-        await startRecording();
-      } catch (error) {
-        console.error('Failed to start recording:', error);
-        toast.error('Failed to start recording. Please try again.');
-      } finally {
-        setIsStartingRecording(false);
-      }
-      return;
-    }
-
-    const hasManualInput = transcript.trim().length > 0 || context.trim().length > 0;
-    if (hasManualInput) {
-      await autoGenerateNote();
-    }
-  }, [isStartingRecording, isRecording, recordingMode, transcript, context, saveAllPendingChunks, stopRecording, startRecording]);
-
   const autoGenerateNote = useCallback(async () => {
     if (!id || !orchestratorRef.current) return;
     
@@ -277,6 +229,58 @@ const SessionRecord = () => {
       setIsAutoPipelineRunning(false);
     }
   }, [id, transcript, context, template, updateSession]);
+
+  const handleStartTranscribing = useCallback(async () => {
+    if (isStartingRecording || isRecording) {
+      return;
+    }
+
+    if (recordingMode === 'upload') {
+      toast.info('Upload flow coming soon. Please use Dictating or Transcribing for now.');
+      return;
+    }
+
+    if (recordingMode === 'dictating' || recordingMode === 'transcribing') {
+      setIsStartingRecording(true);
+      
+      try {
+        setActiveTab('transcript');
+        speakerRef.current = 'provider';
+        transcriptCountRef.current = 0;
+        toast.success('Starting live transcription... Speak now!');
+        
+        await startRecording();
+      } catch (error) {
+        console.error('Failed to start recording:', error);
+        toast.error('Failed to start recording. Please try again.');
+      } finally {
+        setIsStartingRecording(false);
+      }
+      return;
+    }
+  }, [isStartingRecording, isRecording, recordingMode, startRecording]);
+
+  const handlePauseRecording = useCallback(() => {
+    pauseRecording();
+    toast.info('Recording paused');
+  }, [pauseRecording]);
+
+  const handleResumeRecording = useCallback(() => {
+    resumeRecording();
+    toast.success('Recording resumed');
+  }, [resumeRecording]);
+
+  const handleStopRecording = useCallback(async () => {
+    toast.success('Stopping transcription...');
+    await saveAllPendingChunks();
+    stopRecording();
+    
+    // Auto-generate clinical note after stopping
+    setTimeout(async () => {
+      toast.info('Generating clinical note...');
+      await autoGenerateNote();
+    }, 1000);
+  }, [saveAllPendingChunks, stopRecording, autoGenerateNote]);
 
   const handleRecordingModeChange = useCallback((mode: string) => {
     setRecordingMode(mode);
@@ -457,23 +461,15 @@ const SessionRecord = () => {
   useEffect(() => {
     const MAX_DURATION = 600; // 10 minutes
     
-    if (isRecording && duration >= MAX_DURATION) {
+    if (isRecording && !isPaused && duration >= MAX_DURATION) {
       console.log('⏱️ Maximum session duration reached (10 minutes)');
       toast.warning('Maximum session duration reached (10 minutes)', {
         description: 'Automatically stopping and generating note...'
       });
       
-      // Auto-stop and generate note
-      (async () => {
-        await saveAllPendingChunks();
-        stopRecording();
-        
-        setTimeout(async () => {
-          await autoGenerateNote();
-        }, 1000);
-      })();
+      handleStopRecording();
     }
-  }, [isRecording, duration, saveAllPendingChunks, stopRecording, autoGenerateNote]);
+  }, [isRecording, isPaused, duration, handleStopRecording]);
 
   useEffect(() => {
     const updateTimer = () => {
@@ -537,22 +533,26 @@ const SessionRecord = () => {
     <AppLayout>
       <div className="flex flex-col h-full">
         {/* Top Bar */}
-        <SessionTopBar
-          patientName={patientName}
-          onPatientNameChange={setPatientName}
-          sessionDate={sessionDate}
-          onSessionDateChange={setSessionDate}
-          language={language}
-          onLanguageChange={setLanguage}
-          microphone={microphone}
-          onMicrophoneChange={setMicrophone}
-          elapsedTime={elapsedTime}
-          recordingMode={recordingMode}
-          onRecordingModeChange={handleRecordingModeChange}
-          onStartRecording={handleStartTranscribing}
-          isRecording={isRecording}
-          isStartingRecording={isStartingRecording}
-        />
+          <SessionTopBar
+            patientName={patientName}
+            onPatientNameChange={setPatientName}
+            sessionDate={sessionDate}
+            onSessionDateChange={setSessionDate}
+            language={language}
+            onLanguageChange={setLanguage}
+            microphone={microphone}
+            onMicrophoneChange={setMicrophone}
+            elapsedTime={elapsedTime}
+            recordingMode={recordingMode}
+            onRecordingModeChange={handleRecordingModeChange}
+            onStartRecording={handleStartTranscribing}
+            onPauseRecording={handlePauseRecording}
+            onResumeRecording={handleResumeRecording}
+            onStopRecording={handleStopRecording}
+            isRecording={isRecording}
+            isPaused={isPaused}
+            isStartingRecording={isStartingRecording}
+          />
 
         {/* Workflow Progress - Hidden but still functional */}
         {workflowState && (
