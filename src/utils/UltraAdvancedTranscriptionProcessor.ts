@@ -154,8 +154,21 @@ export class UltraAdvancedTranscriptionProcessor {
   private async transcribeWithAssemblyAI(audioBlob: Blob): Promise<any> {
     console.log('🎤 Transcribing with AssemblyAI...');
 
+    // Validate blob
+    if (!audioBlob || audioBlob.size === 0) {
+      console.error('❌ Invalid audio blob');
+      return { success: false, error: 'No audio data' };
+    }
+
     // Convert blob to base64
     const base64Audio = await this.blobToBase64(audioBlob);
+    
+    if (!base64Audio || base64Audio.length === 0) {
+      console.error('❌ Failed to convert audio to base64');
+      return { success: false, error: 'Audio conversion failed' };
+    }
+
+    console.log(`📊 Sending ${(base64Audio.length / 1024).toFixed(2)} KB to AssemblyAI`);
 
     const { data, error } = await supabase.functions.invoke('advanced-transcribe', {
       body: {
@@ -165,7 +178,7 @@ export class UltraAdvancedTranscriptionProcessor {
 
     if (error) {
       console.error('Transcription error:', error);
-      return { success: false };
+      return { success: false, error: error.message };
     }
 
     console.log('✅ Transcription complete');

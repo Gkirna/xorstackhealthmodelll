@@ -64,8 +64,18 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const currentVoiceGenderRef = useRef<'male' | 'female' | 'unknown'>('unknown');
   const voiceAnalysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const currentVoiceCharacteristicsRef = useRef<any>(null);
-  const autoCorrectorRef = useRef<MedicalAutoCorrector>(new MedicalAutoCorrector());
-  const ultraProcessorRef = useRef<UltraAdvancedTranscriptionProcessor>(new UltraAdvancedTranscriptionProcessor());
+  const autoCorrectorRef = useRef<MedicalAutoCorrector | null>(null);
+  const ultraProcessorRef = useRef<UltraAdvancedTranscriptionProcessor | null>(null);
+
+  // Initialize advanced systems once
+  useEffect(() => {
+    if (!autoCorrectorRef.current) {
+      autoCorrectorRef.current = new MedicalAutoCorrector();
+    }
+    if (!ultraProcessorRef.current) {
+      ultraProcessorRef.current = new UltraAdvancedTranscriptionProcessor();
+    }
+  }, []);
 
   // Initialize transcription engine
   useEffect(() => {
@@ -86,11 +96,13 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           console.log('✅ Final transcript chunk received');
           
           // Apply medical auto-correction before sending to callback
-          const correctedTranscript = autoCorrectorRef.current.correctTranscript(
-            transcript, 
-            currentVoiceGenderRef.current === 'unknown' ? 'provider' : 
-            currentVoiceGenderRef.current === 'female' ? 'patient' : 'provider'
-          );
+          const correctedTranscript = autoCorrectorRef.current 
+            ? autoCorrectorRef.current.correctTranscript(
+                transcript, 
+                currentVoiceGenderRef.current === 'unknown' ? 'provider' : 
+                currentVoiceGenderRef.current === 'female' ? 'patient' : 'provider'
+              )
+            : transcript;
           
           if (onFinalTranscriptChunk) {
             onFinalTranscriptChunk(correctedTranscript);
@@ -177,11 +189,14 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       source.connect(analyserRef.current);
       analyserRef.current.fftSize = 256;
       
-      // Initialize ultra-advanced voice analyzer
+      // Initialize ultra-advanced voice analyzer (reuse if exists)
       try {
         console.log('🎤 Initializing ultra-advanced voice analyzer with ML...');
         
-        voiceAnalyzerRef.current = new UltraAdvancedVoiceAnalyzer();
+        if (!voiceAnalyzerRef.current) {
+          voiceAnalyzerRef.current = new UltraAdvancedVoiceAnalyzer();
+        }
+        
         const characteristics = await voiceAnalyzerRef.current.initialize(stream);
         currentVoiceCharacteristicsRef.current = characteristics;
         
@@ -318,27 +333,33 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         }
         
         // Run ultra-advanced processing in background (no UI changes)
-        console.log('🚀 Starting ultra-advanced AI processing pipeline...');
-        ultraProcessorRef.current.processTranscription(audioBlob, finalTranscript)
-          .then(result => {
-            console.log('✅ Ultra-Advanced Processing Complete:');
-            console.log('  - Final Confidence:', (result.metadata.confidenceScore * 100).toFixed(1) + '%');
-            console.log('  - Re-analyzed Segments:', result.metadata.reanalyzedSegments);
-            console.log('  - Processing Time:', result.metadata.processingTime + 'ms');
-            console.log('  - Speaker Count:', result.metadata.speakerCount);
-            if (result.analysis.temporalPatterns) {
-              console.log('  - Temporal Patterns: Detected');
-            }
-            if (result.analysis.emotionAnalysis) {
-              console.log('  - Emotions:', result.analysis.emotionAnalysis);
-            }
-            if (result.analysis.conversationFlow) {
-              console.log('  - Conversation Flow:', result.analysis.conversationFlow);
-            }
-          })
-          .catch(error => {
-            console.error('❌ Ultra-advanced processing failed:', error);
-          });
+        if (audioBlob && audioBlob.size > 0 && ultraProcessorRef.current) {
+          console.log('🚀 Starting ultra-advanced AI processing pipeline...');
+          console.log(`📊 Audio blob size: ${(audioBlob.size / 1024).toFixed(2)} KB`);
+          
+          ultraProcessorRef.current.processTranscription(audioBlob, finalTranscript)
+            .then(result => {
+              console.log('✅ Ultra-Advanced Processing Complete:');
+              console.log('  - Final Confidence:', (result.metadata.confidenceScore * 100).toFixed(1) + '%');
+              console.log('  - Re-analyzed Segments:', result.metadata.reanalyzedSegments);
+              console.log('  - Processing Time:', result.metadata.processingTime + 'ms');
+              console.log('  - Speaker Count:', result.metadata.speakerCount);
+              if (result.analysis.temporalPatterns) {
+                console.log('  - Temporal Patterns: Detected');
+              }
+              if (result.analysis.emotionAnalysis) {
+                console.log('  - Emotions:', result.analysis.emotionAnalysis);
+              }
+              if (result.analysis.conversationFlow) {
+                console.log('  - Conversation Flow:', result.analysis.conversationFlow);
+              }
+            })
+            .catch(error => {
+              console.error('❌ Ultra-advanced processing failed:', error);
+            });
+        } else {
+          console.warn('⚠️ No valid audio data to process with ultra-advanced pipeline');
+        }
         
         if (onRecordingComplete) {
           onRecordingComplete(audioBlob, url);
@@ -434,17 +455,14 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
       
-      // Stop ultra-advanced voice analyzer
+      // Stop ultra-advanced voice analyzer interval but keep instance
       if (voiceAnalyzerRef.current) {
-        console.log('🧹 Cleaning up ultra-advanced analyzer...');
+        console.log('📊 Collecting ultra-advanced analytics...');
         const stats = voiceAnalyzerRef.current.getSpeakerStatistics();
         const dynamics = voiceAnalyzerRef.current.analyzeConversationDynamics();
-        console.log('📊 Final Ultra-Advanced Analytics:');
         console.log('  - Voice Stats:', stats);
         console.log('  - Conversation Dynamics:', dynamics);
-        
-        voiceAnalyzerRef.current.cleanup();
-        voiceAnalyzerRef.current = null;
+        // Don't null it out - reuse on next recording
       }
       
       if (voiceAnalysisIntervalRef.current) {
@@ -470,12 +488,6 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const clearRecording = useCallback(() => {
     if (state.recordedUrl) {
       URL.revokeObjectURL(state.recordedUrl);
-    }
-    
-    // Clean up voice analyzer if still active
-    if (voiceAnalyzerRef.current) {
-      voiceAnalyzerRef.current.cleanup();
-      voiceAnalyzerRef.current = null;
     }
     
     currentVoiceGenderRef.current = 'unknown';
