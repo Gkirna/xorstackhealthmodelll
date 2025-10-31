@@ -28,20 +28,7 @@ export const useAdvancedTranscription = () => {
 
       if (!data.success) {
         console.error('Transcription unsuccessful:', data.error);
-        
-        // Handle specific error codes
-        if (data.error?.code === 'NO_SPEECH_DETECTED') {
-          toast.error('No speech detected in the audio recording');
-        } else {
-          toast.error('Transcription failed: ' + data.error?.message);
-        }
-        return null;
-      }
-
-      // Additional validation
-      if (!data.text || data.text.trim().length === 0) {
-        console.error('Transcription returned empty text');
-        toast.error('No speech detected in the audio');
+        toast.error('Transcription failed: ' + data.error?.message);
         return null;
       }
 
@@ -63,14 +50,7 @@ export const useAdvancedTranscription = () => {
   ): Promise<MedicalEntityExtractionResult | null> => {
     setIsExtractingEntities(true);
     try {
-      // Validate input
-      if (!text || text.trim().length === 0) {
-        console.error('Empty text provided for entity extraction');
-        toast.error('Cannot extract entities from empty text');
-        return null;
-      }
-
-      console.log('🏥 Extracting medical entities from', text.length, 'characters...');
+      console.log('🏥 Extracting medical entities...');
 
       const { data, error } = await supabase.functions.invoke('extract-medical-entities', {
         body: { text, segments }
@@ -107,18 +87,8 @@ export const useAdvancedTranscription = () => {
       // Step 1: Transcribe with speaker diarization
       const transcriptionResult = await transcribeAudio(audioBase64);
       if (!transcriptionResult) {
-        console.error('Transcription failed, skipping entity extraction');
         return null;
       }
-
-      // Validate transcription has text
-      if (!transcriptionResult.text || transcriptionResult.text.trim().length === 0) {
-        console.error('Transcription returned empty text, skipping entity extraction');
-        toast.error('Transcription produced no text');
-        return null;
-      }
-
-      console.log('📝 Transcription text length:', transcriptionResult.text.length);
 
       // Step 2: Extract medical entities
       const entityResult = await extractMedicalEntities(
@@ -126,20 +96,7 @@ export const useAdvancedTranscription = () => {
         transcriptionResult.segments
       );
       if (!entityResult) {
-        // Return transcription only if entity extraction fails
-        console.warn('Entity extraction failed, returning transcription only');
-        return {
-          transcript: transcriptionResult.text,
-          segments: transcriptionResult.segments,
-          entities: [],
-          confidence: transcriptionResult.confidence,
-          speaker_count: transcriptionResult.speaker_count,
-          statistics: {
-            total_entities: 0,
-            by_type: {},
-            avg_confidence: 0
-          }
-        };
+        return null;
       }
 
       // Combine results

@@ -78,8 +78,6 @@ const SessionRecord = () => {
     currentVoiceCharacteristics,
     voiceAnalyzer,
     autoCorrector,
-    error: recordingError,
-    transcriptSupported,
   } = useAudioRecording({
     continuous: true,
     onTranscriptUpdate: (text: string, isFinal: boolean) => {
@@ -91,9 +89,6 @@ const SessionRecord = () => {
         
         const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
         setTranscript(prev => prev ? `${prev}\n\n${speakerLabel} : ${text}` : `${speakerLabel} : ${text}`);
-        
-        // Save to database
-        addTranscriptChunk(text, speakerLabel);
         
         speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
       }
@@ -563,47 +558,6 @@ const SessionRecord = () => {
         {workflowState && (
           <div className="px-6 py-3">
             <WorkflowProgress state={workflowState} />
-          </div>
-        )}
-
-        {/* Real-time Status Banner */}
-        {isRecording && (
-          <div className="px-6 py-2 bg-muted/50 border-b">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                  <span className="text-sm font-medium">Recording {isPaused ? '(Paused)' : 'Active'}</span>
-                </div>
-                
-                <div className="h-4 w-px bg-border" />
-                
-                {isTranscribing ? (
-                  <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-                    <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-                    <span>Transcribing live</span>
-                  </div>
-                ) : transcriptSupported ? (
-                  <div className="flex items-center gap-2 text-sm text-yellow-600 dark:text-yellow-400">
-                    <div className="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse" />
-                    <span>Connecting...</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <span>Audio only</span>
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                {transcriptCountRef.current > 0 && (
-                  <span>Chunks: {transcriptCountRef.current}</span>
-                )}
-                {recordingError && (
-                  <span className="text-red-600 dark:text-red-400">{recordingError}</span>
-                )}
-              </div>
-            </div>
           </div>
         )}
 
