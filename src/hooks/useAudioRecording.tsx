@@ -402,17 +402,10 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   }, [state.transcriptSupported, onRecordingComplete, onError, sampleRate, deviceId]);
 
   const pauseRecording = useCallback(() => {
-    console.log('⏸️ Pause recording called, current mediaRecorder state:', mediaRecorderRef.current?.state);
-    console.log('⏸️ Current isPaused state:', state.isPaused);
-    
+    console.log('⏸️ Pause recording called, current state:', mediaRecorderRef.current?.state);
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      console.log('✅ Pausing mediaRecorder...');
       mediaRecorderRef.current.pause();
-      
-      setState(prev => {
-        console.log('⏸️ Setting isPaused to TRUE, previous state:', prev.isPaused);
-        return { ...prev, isPaused: true, isTranscribing: false };
-      });
+      setState(prev => ({ ...prev, isPaused: true, isTranscribing: false }));
       
       // Pause transcription
       if (transcriptionRef.current) {
@@ -425,24 +418,14 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         timerRef.current = null;
       }
       toast.info('Recording paused');
-      console.log('✅ Pause complete');
-    } else {
-      console.warn('⚠️ Cannot pause - mediaRecorder state:', mediaRecorderRef.current?.state);
     }
-  }, [state.isPaused]);
+  }, []);
 
   const resumeRecording = useCallback(() => {
-    console.log('▶️ Resume recording called, current mediaRecorder state:', mediaRecorderRef.current?.state);
-    console.log('▶️ Current isPaused state:', state.isPaused);
-    
+    console.log('▶️ Resume recording called, current state:', mediaRecorderRef.current?.state);
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
-      console.log('✅ Resuming mediaRecorder...');
       mediaRecorderRef.current.resume();
-      
-      setState(prev => {
-        console.log('▶️ Setting isPaused to FALSE, previous state:', prev.isPaused);
-        return { ...prev, isPaused: false, isTranscribing: true };
-      });
+      setState(prev => ({ ...prev, isPaused: false, isTranscribing: true }));
       
       // Resume transcription
       if (transcriptionRef.current) {
@@ -455,11 +438,8 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       }, 1000);
       
       toast.success('Recording resumed');
-      console.log('✅ Resume complete');
-    } else {
-      console.warn('⚠️ Cannot resume - mediaRecorder state:', mediaRecorderRef.current?.state);
     }
-  }, [state.isPaused]);
+  }, []);
 
   const stopRecording = useCallback(() => {
     console.log('⏹️ Stop recording called, current state:', mediaRecorderRef.current?.state);

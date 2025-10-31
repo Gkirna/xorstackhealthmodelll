@@ -69,9 +69,6 @@ export function SessionTopBar({
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(patientName);
 
-  // Debug logging
-  console.log('🎨 SessionTopBar render:', { isRecording, isPaused, isStartingRecording });
-
   const handleNameSubmit = () => {
     onPatientNameChange(tempName);
     setIsEditingName(false);
@@ -112,15 +109,7 @@ export function SessionTopBar({
           {isRecording && !isPaused && (
             <>
               <Button
-                onClick={() => {
-                  console.log('🔴 PAUSE BUTTON CLICKED - isRecording:', isRecording, 'isPaused:', isPaused);
-                  if (onPauseRecording) {
-                    console.log('🔴 Calling onPauseRecording handler');
-                    onPauseRecording();
-                  } else {
-                    console.error('❌ onPauseRecording is undefined!');
-                  }
-                }}
+                onClick={onPauseRecording}
                 variant="ghost"
                 size="icon"
                 className="h-9 w-9"
@@ -138,14 +127,14 @@ export function SessionTopBar({
             </>
           )}
 
-          {/* Paused state: Show filled Stop + Resume buttons */}
+          {/* Paused state: Show Stop + Resume buttons */}
           {isRecording && isPaused && (
             <>
               <Button
                 onClick={onStopRecording}
-                variant="outline"
+                variant="ghost"
                 size="icon"
-                className="h-9 w-9 border-border"
+                className="h-9 w-9"
               >
                 <Square className="h-4 w-4 fill-current" />
               </Button>
