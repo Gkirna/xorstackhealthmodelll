@@ -586,8 +586,8 @@ const SessionRecord = () => {
           isStartingRecording={isStartingRecording}
         />
 
-        {/* Workflow Progress */}
-        {workflowState && (
+        {/* Workflow Progress - Hidden on Note tab */}
+        {workflowState && activeTab !== 'note' && (
           <div className="px-6 py-3">
             <WorkflowProgress state={workflowState} />
           </div>
