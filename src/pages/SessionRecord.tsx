@@ -159,18 +159,6 @@ const SessionRecord = () => {
     }
 
     if (isRecording) {
-      // Enforce minimum 10-second session length
-      const MIN_DURATION = 10;
-      const MAX_DURATION = 600; // 10 minutes
-      
-      if (duration < MIN_DURATION) {
-        const remaining = MIN_DURATION - duration;
-        toast.error(`Session too short!`, {
-          description: `Please record at least ${remaining} more second(s)`
-        });
-        return;
-      }
-      
       toast.success('Stopping transcription...');
       await saveAllPendingChunks();
       stopRecording();
