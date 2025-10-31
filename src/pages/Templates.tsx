@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 import { Badge } from "@/components/ui/badge";
 import { Search, Plus, FileText, Eye, Star, Edit, Trash2, Copy } from "lucide-react";
 import {
@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useTemplates, useCommunityTemplates } from "@/hooks/useTemplates";
+import { useTemplates } from "@/hooks/useTemplates";
 import { useCreateTemplate } from "@/hooks/useCreateTemplate";
 import { useUpdateTemplate } from "@/hooks/useUpdateTemplate";
 import { useDeleteTemplate } from "@/hooks/useDeleteTemplate";
@@ -43,7 +43,6 @@ import { toast } from 'sonner';
 
 const Templates = () => {
   const { data: personalTemplates = [], isLoading: loadingPersonal } = useTemplates();
-  const { data: communityTemplates = [], isLoading: loadingCommunity } = useCommunityTemplates();
   const createTemplate = useCreateTemplate();
   const updateTemplate = useUpdateTemplate();
   const deleteTemplate = useDeleteTemplate();
@@ -52,24 +51,20 @@ const Templates = () => {
   const [filterCategory, setFilterCategory] = useState("all");
   const [isNewTemplateOpen, setIsNewTemplateOpen] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState("personal");
   const [editingTemplate, setEditingTemplate] = useState<any>(null);
 
-  // Persist tab and filter state
+  // Persist filter state
   useEffect(() => {
-    const savedTab = localStorage.getItem('templatesTab');
     const savedCategory = localStorage.getItem('templatesCategory');
-    if (savedTab) setActiveTab(savedTab);
     if (savedCategory) setFilterCategory(savedCategory);
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('templatesTab', activeTab);
     localStorage.setItem('templatesCategory', filterCategory);
-  }, [activeTab, filterCategory]);
+  }, [filterCategory]);
 
   // Filtered templates with debounced search
-  const filteredPersonalTemplates = useMemo(() => {
+  const filteredTemplates = useMemo(() => {
     return personalTemplates.filter(template => {
       const matchesSearch = template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           template.description?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -77,15 +72,6 @@ const Templates = () => {
       return matchesSearch && matchesCategory;
     });
   }, [personalTemplates, searchQuery, filterCategory]);
-
-  const filteredCommunityTemplates = useMemo(() => {
-    return communityTemplates.filter(template => {
-      const matchesSearch = template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          template.description?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = filterCategory === "all" || template.category === filterCategory;
-      return matchesSearch && matchesCategory;
-    });
-  }, [communityTemplates, searchQuery, filterCategory]);
 
   const handleCreateTemplate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -267,138 +253,99 @@ const Templates = () => {
           </Select>
         </div>
 
-        {/* Templates Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
-            <TabsTrigger value="personal">Personal</TabsTrigger>
-            <TabsTrigger value="community">Community</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="personal" className="space-y-4 mt-6">
-            {loadingPersonal ? (
-              <div className="text-center py-8 text-muted-foreground">Loading templates...</div>
-            ) : filteredPersonalTemplates.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <FileText className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                  <p className="text-muted-foreground mb-4">
-                    {searchQuery || filterCategory !== "all" ? "No templates match your search" : "No templates yet"}
-                  </p>
-                  {!searchQuery && filterCategory === "all" && (
-                    <Button onClick={() => setIsNewTemplateOpen(true)}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create Your First Template
+        {/* Templates Grid */}
+        {loadingPersonal ? (
+          <div className="text-center py-8 text-muted-foreground">Loading templates...</div>
+        ) : filteredTemplates.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <FileText className="h-12 w-12 mx-auto mb-3 opacity-20" />
+              <p className="text-muted-foreground mb-4">
+                {searchQuery || filterCategory !== "all" ? "No templates match your search" : "No templates yet"}
+              </p>
+              {!searchQuery && filterCategory === "all" && (
+                <Button onClick={() => setIsNewTemplateOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Your First Template
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {filteredTemplates.map((template) => (
+            <Card key={template.id} className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      {template.name}
+                    </CardTitle>
+                    <CardDescription>{template.description}</CardDescription>
+                  </div>
+                  <Badge variant="secondary">{template.category}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setPreviewTemplate(template)}
+                    >
+                      <Eye className="mr-2 h-4 w-4" />
+                      Preview
                     </Button>
-                  )}
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {filteredPersonalTemplates.map((template) => (
-                <Card key={template.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          {template.name}
-                        </CardTitle>
-                        <CardDescription>{template.description}</CardDescription>
-                      </div>
-                      <Badge variant="secondary">{template.category}</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1"
-                          onClick={() => setPreviewTemplate(template)}
-                        >
-                          <Eye className="mr-2 h-4 w-4" />
-                          Preview
-                        </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => setEditingTemplate(template)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => handleDuplicateTemplate(template)}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
                         <Button 
                           variant="ghost" 
                           size="sm"
-                          onClick={() => setEditingTemplate(template)}
                         >
-                          <Edit className="h-4 w-4" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => handleDuplicateTemplate(template)}
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Template?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This will permanently delete "{template.name}". This action cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction 
-                                onClick={() => handleDeleteTemplate(template.id)}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="community" className="space-y-4 mt-6">
-            {loadingCommunity ? (
-              <div className="text-center py-8 text-muted-foreground">Loading community templates...</div>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {communityTemplates.map((template) => (
-                <Card key={template.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <CardTitle className="text-lg">{template.name}</CardTitle>
-                        <CardDescription>{template.description}</CardDescription>
-                      </div>
-                      <Badge variant="secondary">{template.category}</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <Button variant="outline" size="sm" className="w-full">
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add to My Templates
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Template?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will permanently delete "{template.name}". This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={() => handleDeleteTemplate(template.id)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+          </div>
+        )}
 
         {/* Preview Dialog */}
         <Dialog open={!!previewTemplate} onOpenChange={() => setPreviewTemplate(null)}>
@@ -417,6 +364,71 @@ const Templates = () => {
             <DialogFooter>
               <Button onClick={() => setPreviewTemplate(null)}>Close</Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Dialog */}
+        <Dialog open={!!editingTemplate} onOpenChange={() => setEditingTemplate(null)}>
+          <DialogContent className="max-w-2xl">
+            <form onSubmit={handleUpdateTemplate}>
+              <DialogHeader>
+                <DialogTitle>Edit Template</DialogTitle>
+                <DialogDescription>
+                  Update your template configuration
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-name">Template Name *</Label>
+                  <Input
+                    id="edit-name"
+                    name="name"
+                    defaultValue={editingTemplate?.name}
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-category">Category</Label>
+                    <Select name="category" defaultValue={editingTemplate?.category}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="soap">SOAP</SelectItem>
+                        <SelectItem value="hp">H&P</SelectItem>
+                        <SelectItem value="followup">Follow-up</SelectItem>
+                        <SelectItem value="procedure">Procedure Note</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-specialty">Specialty</Label>
+                    <Input
+                      id="edit-specialty"
+                      name="specialty"
+                      defaultValue={editingTemplate?.description}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-content">Template Structure (JSON)</Label>
+                  <Textarea
+                    id="edit-content"
+                    name="content"
+                    defaultValue={JSON.stringify(editingTemplate?.structure || {}, null, 2)}
+                    rows={8}
+                    className="font-mono text-sm"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setEditingTemplate(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit">Save Changes</Button>
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
       </div>
