@@ -289,16 +289,21 @@ const SessionRecord = () => {
   }, [resumeRecording]);
 
   const handleStopRecording = useCallback(async () => {
-    console.log('⏹️ Stopping recording...');
-    toast.success('Stopping transcription...');
+    console.log('🎯 STOP BUTTON CLICKED - Stopping recording and generating note');
+    toast.info('Stopping transcription...');
+    
+    // Save any pending chunks first
     await saveAllPendingChunks();
+    
+    // Stop the recording
     stopRecording();
     
-    // Auto-generate clinical note after stopping
+    // Immediately trigger note generation with minimal delay
     setTimeout(async () => {
+      console.log('🏥 Starting clinical note generation...');
       toast.info('Generating clinical note...');
       await autoGenerateNote();
-    }, 1000);
+    }, 500);
   }, [saveAllPendingChunks, stopRecording, autoGenerateNote]);
 
   const handleRecordingModeChange = useCallback((mode: string) => {

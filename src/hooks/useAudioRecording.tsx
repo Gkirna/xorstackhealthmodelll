@@ -418,8 +418,25 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       isTranscribing: false,
     }));
     
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
+    if (mediaRecorderRef.current) {
+      const currentState = mediaRecorderRef.current.state;
+      console.log(`🎙️ MediaRecorder state: ${currentState}`);
+      
+      // Handle both recording and paused states
+      if (currentState === 'paused') {
+        console.log('⏹️ Stopping from paused state - resuming first then stopping');
+        // Need to resume before stopping if paused
+        mediaRecorderRef.current.resume();
+        // Small delay to ensure resume is processed
+        setTimeout(() => {
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.stop();
+          }
+        }, 10);
+      } else if (currentState === 'recording') {
+        console.log('⏹️ Stopping from recording state');
+        mediaRecorderRef.current.stop();
+      }
       
       // Stop voice analyzer
       if (voiceAnalyzerRef.current) {
@@ -447,9 +464,11 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         timerRef.current = null;
       }
       
+      console.log('✅ Recording stopped successfully');
       toast.success('Recording stopped');
     }
   }, []);
+
 
   const clearRecording = useCallback(() => {
     if (state.recordedUrl) {
