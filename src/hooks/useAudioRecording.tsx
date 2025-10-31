@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { RealTimeTranscription } from '@/utils/RealTimeTranscription';
+import { AssemblyAIRealtime } from '@/utils/AssemblyAIRealtime';
 import { VoiceAnalyzer } from '@/utils/VoiceAnalyzer';
 import { MedicalAutoCorrector } from '@/utils/MedicalAutoCorrector';
 
@@ -54,7 +54,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const transcriptionRef = useRef<RealTimeTranscription | null>(null);
+  const transcriptionRef = useRef<AssemblyAIRealtime | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -65,16 +65,14 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const currentVoiceCharacteristicsRef = useRef<any>(null);
   const autoCorrectorRef = useRef<MedicalAutoCorrector>(new MedicalAutoCorrector());
 
-  // Initialize transcription engine
+  // Initialize AssemblyAI transcription engine
   useEffect(() => {
-    console.log('🎙️ Initializing real-time transcription engine...');
+    console.log('🎙️ Initializing AssemblyAI real-time transcription...');
     
-    transcriptionRef.current = new RealTimeTranscription({
+    transcriptionRef.current = new AssemblyAIRealtime({
       continuous,
-      interimResults: true,
-      lang: 'en-IN', // Indian English for optimized accuracy
-      onResult: async (transcript, isFinal) => {
-        console.log('📝 Transcription result:', { 
+      onTranscript: async (transcript, isFinal) => {
+        console.log('📝 AssemblyAI transcription:', { 
           text: transcript.substring(0, 50) + '...', 
           isFinal,
           length: transcript.length 
@@ -83,7 +81,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         if (isFinal) {
           console.log('✅ Final transcript chunk received');
           
-          // Apply medical auto-correction before sending to callback
+          // Apply medical auto-correction
           const correctedTranscript = autoCorrectorRef.current.correctTranscript(
             transcript, 
             currentVoiceGenderRef.current === 'unknown' ? 'provider' : 
@@ -108,29 +106,23 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         }
       },
       onError: (error) => {
-        console.error('❌ Transcription error:', error);
+        console.error('❌ AssemblyAI error:', error);
         setState(prev => ({ ...prev, error }));
         toast.error(error);
       },
-      onStart: () => {
-        console.log('✅ Transcription started successfully');
-        setState(prev => ({ ...prev, isTranscribing: true }));
+      onConnect: () => {
+        console.log('✅ AssemblyAI connected successfully');
+        setState(prev => ({ ...prev, isTranscribing: true, transcriptSupported: true }));
         toast.success('Real-time transcription active', { duration: 2000 });
       },
-      onEnd: () => {
-        console.log('🛑 Transcription ended');
+      onDisconnect: () => {
+        console.log('🛑 AssemblyAI disconnected');
         setState(prev => ({ ...prev, isTranscribing: false }));
       },
     });
 
-    const isSupported = transcriptionRef.current.isBrowserSupported();
-    setState(prev => ({ ...prev, transcriptSupported: isSupported }));
-    
-    if (!isSupported) {
-      console.warn('⚠️ Real-time transcription not supported in this browser');
-    } else {
-      console.log('✅ Real-time transcription is supported');
-    }
+    setState(prev => ({ ...prev, transcriptSupported: true }));
+    console.log('✅ AssemblyAI transcription ready');
 
     return () => {
       console.log('🧹 Cleaning up audio recorder...');
@@ -142,7 +134,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
       if (transcriptionRef.current) {
-        transcriptionRef.current.destroy();
+        transcriptionRef.current.disconnect();
       }
     };
   }, [continuous, onFinalTranscriptChunk, onTranscriptUpdate]);
@@ -304,8 +296,8 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         
         // Stop transcription
         if (transcriptionRef.current) {
-          const finalTranscript = transcriptionRef.current.stop();
-          console.log('📝 Final transcript:', finalTranscript);
+          transcriptionRef.current.disconnect();
+          console.log('📝 AssemblyAI transcription stopped');
         }
         
         if (onRecordingComplete) {
@@ -318,20 +310,28 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       console.log('🎙️ MediaRecorder started');
       
-      // Start transcription
-      if (transcriptionRef.current && transcriptionRef.current.isBrowserSupported()) {
-        console.log('🚀 Starting real-time transcription...');
-        const started = transcriptionRef.current.start();
-        if (started) {
-          setState(prev => ({ ...prev, isTranscribing: true }));
-          console.log('✅ Real-time transcription started successfully');
-        } else {
-          console.warn('⚠️ Transcription failed to start');
-          toast.warning('Real-time transcription not available. You can still record and transcribe later.');
+      // Start AssemblyAI transcription
+      if (transcriptionRef.current) {
+        console.log('🚀 Starting AssemblyAI transcription...');
+        try {
+          const connected = await transcriptionRef.current.connect();
+          if (connected) {
+            const audioStarted = await transcriptionRef.current.startAudio(stream);
+            if (audioStarted) {
+              setState(prev => ({ ...prev, isTranscribing: true }));
+              console.log('✅ AssemblyAI transcription started successfully');
+            } else {
+              console.warn('⚠️ Failed to start audio streaming');
+              toast.warning('Transcription may not be available. Recording will continue.');
+            }
+          } else {
+            console.warn('⚠️ Failed to connect to AssemblyAI');
+            toast.warning('Transcription not available. Recording will continue.');
+          }
+        } catch (error) {
+          console.error('AssemblyAI startup error:', error);
+          toast.warning('Transcription not available. Recording will continue.');
         }
-      } else {
-        console.warn('⚠️ Transcription not supported');
-        toast.warning('Real-time transcription not supported in this browser. Using Chrome is recommended.');
       }
       
       timerRef.current = setInterval(() => {
@@ -354,11 +354,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       mediaRecorderRef.current.pause();
       setState(prev => ({ ...prev, isPaused: true, isTranscribing: false }));
       
-      // Pause transcription
-      if (transcriptionRef.current) {
-        console.log('⏸️ Pausing transcription engine');
-        transcriptionRef.current.pause();
-      }
+      // Note: AssemblyAI doesn't support pause/resume, will reconnect on resume
       
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -374,11 +370,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       mediaRecorderRef.current.resume();
       setState(prev => ({ ...prev, isPaused: false, isTranscribing: true }));
       
-      // Resume transcription
-      if (transcriptionRef.current) {
-        console.log('▶️ Resuming transcription engine');
-        transcriptionRef.current.resume();
-      }
+      // Note: AssemblyAI will automatically reconnect on resume if needed
       
       timerRef.current = setInterval(() => {
         setState(prev => ({ ...prev, duration: prev.duration + 1 }));
@@ -419,8 +411,8 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       // Stop transcription
       if (transcriptionRef.current) {
-        console.log('⏹️ Stopping transcription engine');
-        transcriptionRef.current.stop();
+        console.log('⏹️ Disconnecting AssemblyAI');
+        transcriptionRef.current.disconnect();
       }
       
       if (timerRef.current) {
