@@ -586,12 +586,7 @@ const SessionRecord = () => {
           isStartingRecording={isStartingRecording}
         />
 
-        {/* Workflow Progress - Hidden on Note tab */}
-        {workflowState && activeTab !== 'note' && (
-          <div className="px-6 py-3">
-            <WorkflowProgress state={workflowState} />
-          </div>
-        )}
+        {/* Workflow Progress - Hidden from UI but functionality preserved */}
 
         {/* Main Content */}
         <div className="flex-1 px-6 py-4 overflow-hidden flex flex-col">
