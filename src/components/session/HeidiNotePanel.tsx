@@ -1,11 +1,12 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Copy, Download, Mic, Undo, Redo, ChevronDown, MoreHorizontal } from "lucide-react";
+import { Copy, Download, Mic, Undo, Redo, ChevronDown, MoreHorizontal, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { ClinicalNoteDisplay } from "./ClinicalNoteDisplay";
 import { TemplateSelector } from "./TemplateSelector";
 import { useTemplates } from "@/hooks/useTemplates";
+import { exportNote } from "@/lib/api";
 import {
   Select,
   SelectContent,
@@ -56,17 +57,37 @@ export function HeidiNotePanel({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { data: templates } = useTemplates();
   const [selectedTemplate, setSelectedTemplate] = useState<string>(selectedTemplateProp || "");
-  const [spellcheckEnabled, setSpellcheckEnabled] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
 
   const currentTemplate = templates?.find(t => t.id === selectedTemplate);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(note);
-    toast.success("Note copied to clipboard");
-  };
+  const handleExportPDF = async () => {
+    if (!sessionId) {
+      toast.error("Session ID is required for export");
+      return;
+    }
 
-  const handleExport = () => {
-    toast.info("Exporting note...");
+    try {
+      setIsExporting(true);
+      console.log('Starting PDF export for session:', sessionId);
+      const result = await exportNote(sessionId, 'pdf');
+      console.log('Export result:', result);
+      
+      if (result.success && result.data?.url) {
+        // Open in new tab for download
+        window.open(result.data.url, '_blank');
+        toast.success('Note exported as PDF');
+      } else {
+        const errorMsg = result.error?.message || 'Export failed';
+        console.error('Export error:', errorMsg);
+        toast.error(errorMsg);
+      }
+    } catch (error) {
+      console.error('PDF export exception:', error);
+      toast.error('Failed to export PDF: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleClear = () => {
@@ -259,12 +280,16 @@ export function HeidiNotePanel({
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={handleCopy}>
-                Copy to Clipboard
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExport}>
-                Export as PDF
+            <DropdownMenuContent align="start" className="bg-background">
+              <DropdownMenuItem onClick={handleExportPDF} disabled={isExporting}>
+                {isExporting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Exporting...
+                  </>
+                ) : (
+                  "Export as PDF"
+                )}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleDownloadTxt}>
                 Download .txt
@@ -272,20 +297,12 @@ export function HeidiNotePanel({
               <DropdownMenuItem onClick={handlePrint}>
                 Print
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSpellcheckEnabled((v) => !v)}>
-                {spellcheckEnabled ? "Disable Spellcheck" : "Enable Spellcheck"}
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={handleClear}>
                 Clear note
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onGenerate} disabled={isGenerating}>
                 {isGenerating ? "Generating..." : "Generate note"}
               </DropdownMenuItem>
-              {onToggleFormatted && (
-                <DropdownMenuItem onClick={onToggleFormatted}>
-                  {showFormatted ? "Show Raw Text" : "Show Formatted"}
-                </DropdownMenuItem>
-              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -330,14 +347,10 @@ export function HeidiNotePanel({
                 <ChevronDown className="ml-1 h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleCopy}>
-                <Copy className="mr-2 h-4 w-4" />
-                Copy to Clipboard
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExport}>
+            <DropdownMenuContent align="end" className="bg-background">
+              <DropdownMenuItem onClick={handleExportPDF} disabled={isExporting}>
                 <Download className="mr-2 h-4 w-4" />
-                Export as PDF
+                {isExporting ? "Exporting..." : "Export as PDF"}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -357,7 +370,6 @@ export function HeidiNotePanel({
           <div className="bg-white p-8 rounded-lg">
             <Textarea
               ref={textareaRef}
-              spellCheck={spellcheckEnabled}
               value={note}
               onChange={(e) => onNoteChange(e.target.value)}
               placeholder="Your clinical note will appear here after generation..."
