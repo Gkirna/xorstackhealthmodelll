@@ -77,7 +77,7 @@ export function SessionTopBar({
   return (
     <div className="border-b bg-background">
       {/* First Row: Add patient details + Start button */}
-      <div className="flex items-center justify-between px-6 py-3">
+      <div className="flex items-center justify-between px-4 py-2">
         <div className="flex items-center gap-1">
           {isEditingName ? (
             <Input
@@ -85,7 +85,7 @@ export function SessionTopBar({
               onChange={(e) => setTempName(e.target.value)}
               onBlur={handleNameSubmit}
               onKeyDown={(e) => e.key === "Enter" && handleNameSubmit()}
-              className="h-9 w-72 text-xl sm:text-2xl font-semibold"
+              className="h-8 w-64 text-lg font-semibold"
               autoFocus
             />
           ) : (
@@ -94,7 +94,7 @@ export function SessionTopBar({
                 setTempName(patientName);
                 setIsEditingName(true);
               }}
-              className="flex items-center gap-2 text-xl sm:text-2xl font-semibold text-foreground hover:text-primary transition-colors"
+              className="flex items-center gap-2 text-lg font-semibold text-foreground hover:text-primary transition-colors"
             >
               <span>{patientName || "Add patient details"}</span>
             </button>
@@ -212,7 +212,7 @@ export function SessionTopBar({
       </div>
 
       {/* Second Row: Date, Language, Badge, Timer, Mic */}
-      <div className="flex items-center justify-between px-6 py-1">
+      <div className="flex items-center justify-between px-4 py-1">
         <div className="flex items-center gap-2">
           {/* Date */}
           <Popover>

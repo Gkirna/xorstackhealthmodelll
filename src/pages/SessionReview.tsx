@@ -29,7 +29,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { extractTasks, suggestCodes, exportNote } from "@/lib/api";
 import { ExportOptions } from "@/components/ExportOptions";
-import { useTaskUpdates } from "@/hooks/useRealtime";
+import { useTaskUpdates, useSessionUpdates } from "@/hooks/useRealtime";
 import { useAuth } from "@/hooks/useAuth";
 
 const SessionReview = () => {
@@ -57,6 +57,18 @@ const SessionReview = () => {
         }
         return [...prev, task];
       });
+    }
+  });
+
+  // Subscribe to real-time session updates
+  useSessionUpdates(sessionId || '', (updatedSession) => {
+    console.log('Session updated in real-time:', updatedSession);
+    setSession(updatedSession);
+    setNoteContent(updatedSession.generated_note || '');
+    setStatus(updatedSession.status || 'draft');
+    
+    if (updatedSession.clinical_codes) {
+      setIcdCodes(Array.isArray(updatedSession.clinical_codes) ? updatedSession.clinical_codes : []);
     }
   });
 

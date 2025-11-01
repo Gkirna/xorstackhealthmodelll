@@ -90,3 +90,21 @@ export function useNotificationUpdates(
     { column: 'user_id', value: userId }
   );
 }
+
+/**
+ * Subscribe to session updates
+ */
+export function useSessionUpdates(
+  sessionId: string,
+  onUpdate: (session: any) => void
+) {
+  useRealtimeSubscription(
+    'sessions',
+    (payload) => {
+      if (payload.new && payload.new.id === sessionId) {
+        onUpdate(payload.new);
+      }
+    },
+    { column: 'id', value: sessionId }
+  );
+}

@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { useSession, useUpdateSession } from "@/hooks/useSessions";
 import { useTranscription } from "@/hooks/useTranscription";
 import { useAudioRecording } from "@/hooks/useAudioRecording";
-import { useTranscriptUpdates } from "@/hooks/useRealtime";
+import { useTranscriptUpdates, useSessionUpdates } from "@/hooks/useRealtime";
 import { WorkflowOrchestrator } from "@/utils/WorkflowOrchestrator";
 import { WorkflowProgress } from "@/components/WorkflowProgress";
 import type { WorkflowState } from "@/utils/WorkflowOrchestrator";
@@ -417,6 +417,42 @@ const SessionRecord = () => {
     toast.success("Session saved!");
     navigate(`/session/${id}/review`);
   }, [generatedNote, navigate, id]);
+
+  // Subscribe to real-time session updates
+  useSessionUpdates(id || '', (updatedSession) => {
+    console.log('Session updated in real-time on record page:', updatedSession);
+    // Update session state without triggering re-render loop
+    setPatientName(updatedSession.patient_name || "New Patient");
+    
+    // Parse generated_note if it's JSON wrapped in markdown
+    let parsedNote = updatedSession.generated_note || "";
+    let parsedJson = updatedSession.note_json || null;
+    
+    if (updatedSession.generated_note) {
+      try {
+        const jsonMatch = updatedSession.generated_note.match(/```json\s*([\s\S]*?)\s*```/);
+        if (jsonMatch) {
+          parsedNote = jsonMatch[1];
+          parsedJson = JSON.parse(jsonMatch[1]);
+        } else if (!updatedSession.note_json) {
+          try {
+            parsedJson = JSON.parse(updatedSession.generated_note);
+          } catch (e) {
+            // It's plaintext, keep as is
+          }
+        }
+      } catch (e) {
+        console.log('Could not parse note as JSON, using as plaintext');
+      }
+    }
+    
+    setGeneratedNote(parsedNote);
+    setNoteJson(parsedJson);
+    
+    if (updatedSession.scheduled_at) {
+      setSessionDate(new Date(updatedSession.scheduled_at));
+    }
+  });
 
   // EFFECTS LAST
   useEffect(() => {
