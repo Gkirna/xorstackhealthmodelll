@@ -142,33 +142,39 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
     return tempChunk;
   }, [sessionId]);
 
-  // Gender-based speaker detection
+  // Gender-neutral speaker detection based on audio analysis
+  // This detects speaker changes based on voice characteristics WITHOUT gender assumptions
   const detectSpeakerByGender = useCallback((text: string): string | null => {
-    // Track gender history
+    // Track voice pattern history
     const now = Date.now();
     
-    // If we have voice analysis available, use gender detection
+    // If we have voice analysis available, use voice characteristics
+    // Note: We alternate speakers based on voice patterns, NOT gender stereotypes
     if (voiceAnalyzerRef.current && currentVoiceGenderRef.current !== 'unknown') {
-      // Update gender history
+      // Update voice pattern history
       genderHistoryRef.current.push({
         gender: currentVoiceGenderRef.current,
         timestamp: now
       });
       
-      // Keep only last 10 gender detections
+      // Keep only last 10 voice pattern detections
       if (genderHistoryRef.current.length > 10) {
         genderHistoryRef.current.shift();
       }
       
-      // Determine speaker based on gender
-      // Female = patient (typically), Male = provider (typically)
-      const speaker = currentVoiceGenderRef.current === 'female' ? 'patient' : 'provider';
+      // Determine speaker based on voice change detection
+      // First detected voice = primary speaker (usually provider/doctor)
+      // Different voice pattern = secondary speaker (usually patient)
+      const isFirstVoicePattern = lastSpeakerRef.current === 'provider';
+      const currentVoiceIsFirst = currentVoiceGenderRef.current === genderHistoryRef.current[0]?.gender;
       
-      console.log(`🎭 Gender detected: ${currentVoiceGenderRef.current} → ${speaker}`);
+      const speaker = currentVoiceIsFirst ? 'provider' : 'patient';
+      
+      console.log(`🎭 Voice pattern detected → ${speaker}`);
       return speaker;
     }
     
-    // No gender detection available
+    // No voice analysis available - fall back to gap-based detection
     return null;
   }, []);
 

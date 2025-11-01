@@ -28,11 +28,18 @@ serve(async (req) => {
     // Convert base64 to binary
     const binaryAudio = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
     
-    // Create form data
+    // Create form data with enhanced settings for global English accents
     const formData = new FormData();
     const audioBlob = new Blob([binaryAudio], { type: 'audio/webm' });
     formData.append('file', audioBlob, 'audio.webm');
     formData.append('model', 'whisper-1');
+    formData.append('language', 'en'); // Specify English to handle all dialects
+    formData.append('temperature', '0.0'); // Lower temperature for more accurate, deterministic transcriptions
+    
+    // Add medical context prompt to improve accuracy for clinical terminology
+    // This helps with medical jargon across all English accents
+    const medicalPrompt = 'This is a medical consultation between a healthcare provider and patient. Common medical terms include: prescription, medication, diagnosis, symptoms, treatment, allergy, dosage, blood pressure, heart rate, diabetes, hypertension, examination.';
+    formData.append('prompt', medicalPrompt);
 
     // Call OpenAI Whisper API through Lovable AI Gateway
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {

@@ -24,7 +24,10 @@ export function useAudioUpload(options: AudioUploadOptions = {}) {
     onTranscriptGenerated,
     onAudioUploaded,
     maxFileSize = 50, // 50MB default
-    allowedFormats = ['.mp3', '.wav', '.m4a', '.webm'],
+    allowedFormats = [
+      '.mp3', '.wav', '.m4a', '.webm', '.ogg', '.aac', '.flac', 
+      '.mp4', '.avi', '.mov', '.wmv' // Support video files (audio will be extracted)
+    ],
   } = options;
 
   const [state, setState] = useState<UploadState>({

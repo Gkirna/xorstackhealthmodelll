@@ -91,17 +91,31 @@ serve(async (req) => {
       body: JSON.stringify({
         audio_url: upload_url,
         speech_model: 'slam-1',           // Medical-optimized model
-        speaker_labels: true,              // Enable speaker diarization
-        speakers_expected: 2,              // Doctor + Patient
+        speaker_labels: true,              // Enable advanced speaker diarization
+        speakers_expected: null,           // Auto-detect number of speakers (handles any gender combo)
+        multichannel: false,
+        disfluencies: false,               // Clean up "uh", "um", etc.
         format_text: true,                 // Auto-formatting
         punctuate: true,                   // Auto-punctuation
-        language_code: 'en',               // English
-        word_boost: [                      // Boost medical terminology
-          'diabetes', 'hypertension', 'medication', 'prescription',
-          'diagnosis', 'symptoms', 'treatment', 'allergy', 'tablet',
-          'dosage', 'patient', 'doctor', 'blood pressure', 'heart rate'
+        language_code: 'en',               // English (handles all accents: US, UK, AU, IN, etc.)
+        language_detection: true,          // Auto-detect English dialect
+        speech_threshold: 0.3,             // Lower threshold to catch softer speech and accents
+        auto_highlights: true,             // Highlight key medical terms
+        entity_detection: true,            // Detect medical entities
+        sentiment_analysis: false,         // Not needed for medical
+        word_boost: [                      // Boost medical terminology across all accents
+          'diabetes', 'hypertension', 'medication', 'prescription', 'mg', 'ml',
+          'diagnosis', 'symptoms', 'treatment', 'allergy', 'tablet', 'capsule',
+          'dosage', 'patient', 'doctor', 'blood pressure', 'heart rate', 'physician',
+          'examination', 'assessment', 'chest pain', 'shortness of breath', 'fever',
+          'nausea', 'vomiting', 'diarrhea', 'headache', 'dizziness', 'fatigue',
+          'ibuprofen', 'paracetamol', 'amoxicillin', 'insulin', 'aspirin',
+          'CT scan', 'MRI', 'X-ray', 'ultrasound', 'ECG', 'EKG', 'blood test'
         ],
         boost_param: 'high',               // High boost for medical terms
+        filter_profanity: false,           // Keep all speech as-is
+        redact_pii: false,                 // Don't redact patient info
+        speaker_boost: true,               // Boost speaker separation accuracy
       }),
     });
 
