@@ -138,24 +138,73 @@ const Sessions = () => {
   return (
     <AppLayout>
       <div className="flex h-full flex-row overflow-hidden border-r duration-500 ease-out min-w-[220px]">
+        {/* Sessions Toggle Button */}
+        <div className="flex items-center justify-center w-8 border-r bg-background">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setShowSessions(!showSessions)}
+            data-testid="sessions-toggle-button"
+          >
+            {showSessions ? (
+              <ChevronLeft className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
 
         {/* Sessions Sidebar Panel */}
         <div 
-          className="flex h-full flex-col overflow-hidden overflow-y-auto border-r py-4 transition-all duration-300 ease-in-out sm:flex w-full min-w-[220px] px-2"
+          className={`flex h-full flex-col gap-2 overflow-hidden overflow-y-auto border-r py-4 transition-all duration-500 ease-out sm:flex w-full min-w-[220px] px-2 ${
+            showSessions ? 'block' : 'hidden'
+          }`}
           data-testid="sidebar-session-list-panel"
         >
-          <div className="flex h-full min-w-[200px] shrink-0 flex-col">
-            <div className="flex size-full w-full min-w-[182px] flex-col">
+          <div className="flex h-full min-w-[200px] shrink-0 flex-col transition-transform duration-500 ease-out">
+            <div className="flex size-full w-full min-w-[182px] flex-col gap-2 sm:gap-1">
+              {/* Toolbar */}
+              <div className="flex h-6 items-center justify-between">
+                <div className="ml-auto hidden items-center gap-0.5 sm:flex">
+                  <Button variant="ghost" size="icon" className="h-5 w-5">
+                    <ListFilter className="h-3 w-3" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-5 w-5">
+                    <ArrowDownUp className="h-3 w-3" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-5 w-5">
+                    <Search className="h-3 w-3" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-5 w-5">
+                    <RefreshCw className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Search Input (Hidden by default) */}
+              <div className="overflow-hidden" style={{ opacity: 0, height: '0px' }}>
+                <div className="flex h-fit items-center gap-2 rounded-md border border-solid border-border px-3 bg-transparent transition-all">
+                  <Search className="h-3.5 w-3.5 cursor-pointer text-xs text-text-secondary hover:text-text-primary" />
+                  <input 
+                    className="flex h-[38px] w-full truncate border-0 bg-transparent transition-colors placeholder:text-text-secondary focus-visible:outline-none text-base font-normal sm:h-7 sm:text-xs" 
+                    placeholder="Search" 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+              </div>
+
               {/* Tabs */}
-              <div className="w-full h-full flex flex-col">
-                <div className="inline-flex items-center justify-center text-text-secondary h-fit w-full bg-transparent">
+              <div className="w-full transition-all ease-in-out" style={{ height: 'calc(100% - 62px)' }}>
+                <div className="inline-flex items-center justify-center rounded-md p-1 text-text-secondary h-fit w-full bg-transparent py-0">
                   <button 
                     type="button" 
                     role="tab"
-                    className={`inline-flex items-center justify-center whitespace-nowrap px-3 py-2 text-sm font-medium transition-all duration-300 ease-in-out w-full rounded-none border-b-2 ${
+                    className={`inline-flex items-center justify-center whitespace-nowrap px-3 py-1.5 text-sm font-medium transition-all w-full rounded-none border-b-2 border-outline ${
                       activeTab === 'upcoming' 
                         ? 'bg-surface text-text-primary border-border-selected' 
-                        : 'border-outline hover:bg-background-tertiary-hover hover:text-text-primary'
+                        : 'hover:bg-background-tertiary-hover hover:text-text-primary'
                     }`}
                     onClick={() => setActiveTab('upcoming')}
                   >
@@ -164,10 +213,10 @@ const Sessions = () => {
                   <button 
                     type="button" 
                     role="tab"
-                    className={`inline-flex items-center justify-center whitespace-nowrap px-3 py-2 text-sm font-medium transition-all duration-300 ease-in-out w-full rounded-none border-b-2 ${
+                    className={`inline-flex items-center justify-center whitespace-nowrap px-3 py-1.5 text-sm font-medium transition-all w-full rounded-none border-b-2 border-outline ${
                       activeTab === 'past' 
                         ? 'bg-surface text-text-primary border-border-selected' 
-                        : 'border-outline hover:bg-background-tertiary-hover hover:text-text-primary'
+                        : 'hover:bg-background-tertiary-hover hover:text-text-primary'
                     }`}
                     onClick={() => setActiveTab('past')}
                   >
@@ -176,7 +225,7 @@ const Sessions = () => {
                 </div>
 
                 {/* Sessions Content */}
-                <div className="flex-1 mt-2 overflow-hidden">
+                <div className="mt-1.5" style={{ height: 'calc(100% - 36px)' }}>
                   {activeTab === 'upcoming' ? (
                     <div className="h-full">
                       {isLoading ? (
