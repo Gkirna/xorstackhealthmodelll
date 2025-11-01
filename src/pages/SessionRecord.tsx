@@ -408,6 +408,22 @@ const SessionRecord = () => {
     }
   }, [transcript, id, session, context, template, updateSession]);
 
+  const handlePatientNameChange = useCallback(async (newName: string) => {
+    setPatientName(newName);
+    
+    // Update the session in the database
+    if (id && newName !== session?.patient_name) {
+      try {
+        await updateSession.mutateAsync({
+          id,
+          updates: { patient_name: newName },
+        });
+      } catch (error) {
+        console.error('Error updating patient name:', error);
+      }
+    }
+  }, [id, session?.patient_name, updateSession]);
+
   const handleFinishRecording = useCallback(async () => {
     if (!generatedNote) {
       toast.error("Please generate a note before finishing");
@@ -604,7 +620,7 @@ const SessionRecord = () => {
         {/* Top Bar */}
         <SessionTopBar
           patientName={patientName}
-          onPatientNameChange={setPatientName}
+          onPatientNameChange={handlePatientNameChange}
           sessionDate={sessionDate}
           onSessionDateChange={setSessionDate}
           language={language}

@@ -32,6 +32,89 @@ import { ExportOptions } from "@/components/ExportOptions";
 import { useTaskUpdates, useSessionUpdates } from "@/hooks/useRealtime";
 import { useAuth } from "@/hooks/useAuth";
 
+// Transcript Reference Component
+const TranscriptReference = ({ sessionId }: { sessionId?: string }) => {
+  const [transcripts, setTranscripts] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const loadTranscripts = async () => {
+      try {
+        setIsLoading(true);
+        const { data, error } = await supabase
+          .from('session_transcripts')
+          .select('*')
+          .eq('session_id', sessionId)
+          .order('timestamp_offset', { ascending: true });
+
+        if (error) throw error;
+        setTranscripts(data || []);
+      } catch (error) {
+        console.error('Error loading transcripts:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadTranscripts();
+
+    // Subscribe to real-time transcript updates
+    const channel = supabase
+      .channel(`transcripts-${sessionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'session_transcripts',
+          filter: `session_id=eq.${sessionId}`,
+        },
+        (payload) => {
+          console.log('New transcript received:', payload);
+          setTranscripts(prev => [...prev, payload.new]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [sessionId]);
+
+  const fullTranscript = transcripts
+    .map(t => `${t.speaker}: ${t.text}`)
+    .join('\n\n');
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FileText className="h-5 w-5" />
+          Original Transcript
+        </CardTitle>
+        <CardDescription>Reference the original encounter transcript</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="p-4 bg-muted rounded-lg max-h-48 overflow-y-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </div>
+          ) : transcripts.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center">
+              No transcript available yet
+            </p>
+          ) : (
+            <p className="text-sm whitespace-pre-wrap">{fullTranscript}</p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 const SessionReview = () => {
   const { id: sessionId } = useParams();
   const navigate = useNavigate();
@@ -292,38 +375,31 @@ const SessionReview = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <Textarea
-                  className="min-h-[500px] font-mono text-sm"
-                  value={noteContent}
-                  onChange={(e) => setNoteContent(e.target.value)}
-                />
+                {session?.note_json ? (
+                  <div className="prose prose-sm max-w-none">
+                    {Object.entries(session.note_json).map(([key, value]: [string, any]) => (
+                      <div key={key} className="mb-4">
+                        <h3 className="text-sm font-semibold capitalize mb-2">
+                          {key.replace(/_/g, ' ')}
+                        </h3>
+                        <div className="text-sm whitespace-pre-wrap bg-muted p-3 rounded">
+                          {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Textarea
+                    className="min-h-[500px] font-mono text-sm"
+                    value={noteContent}
+                    onChange={(e) => setNoteContent(e.target.value)}
+                  />
+                )}
               </CardContent>
             </Card>
 
             {/* Transcript Reference */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Original Transcript
-                </CardTitle>
-                <CardDescription>Reference the original encounter transcript</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="p-4 bg-muted rounded-lg max-h-48 overflow-y-auto">
-                  <p className="text-sm whitespace-pre-wrap">
-                    Patient states "I've been having chest pain for the past two days. It's a sharp pain 
-                    that comes and goes, and sometimes it goes down my left arm."
-                    {"\n\n"}
-                    Physician: "When did you first notice the pain? Have you experienced anything like 
-                    this before?"
-                    {"\n\n"}
-                    Patient: "It started on Monday. No, this is the first time. I'm worried it might 
-                    be my heart."
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+            <TranscriptReference sessionId={sessionId} />
           </div>
 
           {/* Sidebar */}

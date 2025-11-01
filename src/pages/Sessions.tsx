@@ -27,11 +27,35 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useSessions, useDeleteSession } from "@/hooks/useSessions";
 import { format } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
 
 const Sessions = () => {
   const navigate = useNavigate();
-  const { data: sessions = [], isLoading } = useSessions();
+  const { data: sessions = [], isLoading, refetch } = useSessions();
   const deleteSession = useDeleteSession();
+
+  // Subscribe to real-time session updates for patient names
+  useEffect(() => {
+    const channel = supabase
+      .channel('sessions-list-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'sessions',
+        },
+        (payload) => {
+          console.log('Session updated in list:', payload);
+          refetch(); // Refetch sessions when any session updates
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refetch]);
   
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
