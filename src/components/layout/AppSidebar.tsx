@@ -22,7 +22,8 @@ import {
   Unlink,
   Check,
   Trash2,
-  Plus
+  Plus,
+  LayoutDashboard
 } from "lucide-react";
 import { NavLink, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,7 @@ import {
 } from "@/components/ui/sidebar";
 
 const navigationItems = [
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "View sessions", url: "/sessions", icon: FolderOpen, hasChevron: true },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
 ];

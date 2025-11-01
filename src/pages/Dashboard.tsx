@@ -8,12 +8,58 @@ import { useSessions } from "@/hooks/useSessions";
 import { useTasks } from "@/hooks/useTasks";
 import { useTemplates } from "@/hooks/useTemplates";
 import { format } from "date-fns";
+import { useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { data: sessions = [] } = useSessions();
-  const { data: tasks = [] } = useTasks();
+  const { data: sessions = [], refetch: refetchSessions } = useSessions();
+  const { data: tasks = [], refetch: refetchTasks } = useTasks();
   const { data: templates = [] } = useTemplates();
+
+  // Real-time updates for sessions
+  useEffect(() => {
+    const channel = supabase
+      .channel('dashboard-sessions-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sessions'
+        },
+        () => {
+          refetchSessions();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refetchSessions]);
+
+  // Real-time updates for tasks
+  useEffect(() => {
+    const channel = supabase
+      .channel('dashboard-tasks-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tasks'
+        },
+        () => {
+          refetchTasks();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refetchTasks]);
 
   const recentSessions = sessions.slice(0, 5);
   const pendingTasks = tasks.filter(t => t.status === 'pending').slice(0, 5);
