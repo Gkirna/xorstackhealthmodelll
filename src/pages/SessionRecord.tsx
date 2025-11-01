@@ -419,9 +419,8 @@ const SessionRecord = () => {
   }, [generatedNote, navigate, id]);
 
   // Subscribe to real-time session updates
-  useSessionUpdates(id || '', (updatedSession) => {
+  const handleSessionUpdate = useCallback((updatedSession: any) => {
     console.log('Session updated in real-time on record page:', updatedSession);
-    // Update session state without triggering re-render loop
     setPatientName(updatedSession.patient_name || "New Patient");
     
     // Parse generated_note if it's JSON wrapped in markdown
@@ -452,7 +451,9 @@ const SessionRecord = () => {
     if (updatedSession.scheduled_at) {
       setSessionDate(new Date(updatedSession.scheduled_at));
     }
-  });
+  }, []);
+
+  useSessionUpdates(id || '', handleSessionUpdate);
 
   // EFFECTS LAST
   useEffect(() => {

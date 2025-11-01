@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -61,7 +61,7 @@ const SessionReview = () => {
   });
 
   // Subscribe to real-time session updates
-  useSessionUpdates(sessionId || '', (updatedSession) => {
+  const handleSessionUpdate = useCallback((updatedSession: any) => {
     console.log('Session updated in real-time:', updatedSession);
     setSession(updatedSession);
     setNoteContent(updatedSession.generated_note || '');
@@ -70,7 +70,9 @@ const SessionReview = () => {
     if (updatedSession.clinical_codes) {
       setIcdCodes(Array.isArray(updatedSession.clinical_codes) ? updatedSession.clinical_codes : []);
     }
-  });
+  }, []);
+
+  useSessionUpdates(sessionId || '', handleSessionUpdate);
 
   // Load session data
   useEffect(() => {

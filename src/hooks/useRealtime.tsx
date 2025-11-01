@@ -98,13 +98,30 @@ export function useSessionUpdates(
   sessionId: string,
   onUpdate: (session: any) => void
 ) {
-  useRealtimeSubscription(
-    'sessions',
-    (payload) => {
-      if (payload.new && payload.new.id === sessionId) {
-        onUpdate(payload.new);
-      }
-    },
-    { column: 'id', value: sessionId }
-  );
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const channel = supabase
+      .channel(`session-${sessionId}-changes`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'sessions',
+          filter: `id=eq.${sessionId}`,
+        },
+        (payload) => {
+          console.log('Session real-time update received:', payload);
+          if (payload.new) {
+            onUpdate(payload.new);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [sessionId, onUpdate]);
 }
