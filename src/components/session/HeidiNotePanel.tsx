@@ -300,21 +300,11 @@ export function HeidiNotePanel({
               <DropdownMenuItem onClick={handleClear}>
                 Clear note
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onGenerate} disabled={isGenerating}>
-                {isGenerating ? "Generating..." : "Generate note"}
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <Mic className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <ChevronDown className="h-4 w-4" />
-          </Button>
-          <div className="w-px h-4 bg-border" />
           {onUndo && (
             <Button 
               variant="ghost" 
@@ -340,20 +330,13 @@ export function HeidiNotePanel({
             </Button>
           )}
           <div className="w-px h-4 bg-border" />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8">
-                <span className="text-sm">Copy</span>
-                <ChevronDown className="ml-1 h-3 w-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-background">
-              <DropdownMenuItem onClick={handleExportPDF} disabled={isExporting}>
-                <Download className="mr-2 h-4 w-4" />
-                {isExporting ? "Exporting..." : "Export as PDF"}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button 
+            onClick={onGenerate} 
+            disabled={isGenerating}
+            className="h-8"
+          >
+            {isGenerating ? "Generating..." : "Generate note"}
+          </Button>
         </div>
       </div>
 
