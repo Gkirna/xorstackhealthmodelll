@@ -74,6 +74,12 @@ export function SessionTopBar({
     setIsEditingName(false);
   };
 
+  const handleDateChange = (date: Date | undefined) => {
+    if (date) {
+      onSessionDateChange(date);
+    }
+  };
+
   return (
     <div className="border-b bg-background">
       {/* First Row: Add patient details + Start button */}
@@ -226,7 +232,7 @@ export function SessionTopBar({
               <CalendarComponent
                 mode="single"
                 selected={sessionDate}
-                onSelect={(date) => date && onSessionDateChange(date)}
+                onSelect={handleDateChange}
                 initialFocus
               />
             </PopoverContent>

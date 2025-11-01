@@ -408,6 +408,24 @@ const SessionRecord = () => {
     }
   }, [transcript, id, session, context, template, updateSession]);
 
+  const handleSessionDateChange = useCallback(async (newDate: Date) => {
+    setSessionDate(newDate);
+    
+    // Update the session in the database with the new scheduled_at
+    if (id) {
+      try {
+        await updateSession.mutateAsync({
+          id,
+          updates: { scheduled_at: newDate.toISOString() },
+        });
+        toast.success('Session scheduled successfully');
+      } catch (error) {
+        console.error('Error updating session date:', error);
+        toast.error('Failed to update session date');
+      }
+    }
+  }, [id, updateSession]);
+
   const handlePatientNameChange = useCallback(async (newName: string) => {
     setPatientName(newName);
     
@@ -622,7 +640,7 @@ const SessionRecord = () => {
           patientName={patientName}
           onPatientNameChange={handlePatientNameChange}
           sessionDate={sessionDate}
-          onSessionDateChange={setSessionDate}
+          onSessionDateChange={handleSessionDateChange}
           language={language}
           onLanguageChange={setLanguage}
           microphone={microphone}

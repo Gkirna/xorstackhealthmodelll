@@ -99,13 +99,19 @@ const Sessions = () => {
     return matchesSearch && matchesStatus;
   });
 
-  const upcomingSessions = filteredSessions.filter(s => 
-    s.scheduled_at && new Date(s.scheduled_at) > new Date()
-  );
+  const upcomingSessions = filteredSessions.filter(s => {
+    if (!s.scheduled_at) return false;
+    const scheduledDate = new Date(s.scheduled_at);
+    const now = new Date();
+    return scheduledDate > now;
+  });
 
-  const pastSessions = filteredSessions.filter(s => 
-    !s.scheduled_at || new Date(s.scheduled_at) <= new Date()
-  );
+  const pastSessions = filteredSessions.filter(s => {
+    if (!s.scheduled_at) return true; // Sessions without scheduled_at go to Past
+    const scheduledDate = new Date(s.scheduled_at);
+    const now = new Date();
+    return scheduledDate <= now;
+  });
 
   // Group sessions by date
   const groupSessionsByDate = (sessions: any[]) => {

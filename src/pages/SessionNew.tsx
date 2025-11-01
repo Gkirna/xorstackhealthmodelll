@@ -14,7 +14,8 @@ const SessionNew = () => {
       try {
         const session = await createSession.mutateAsync({
           patient_name: "New Patient",
-          scheduled_at: new Date().toISOString(),
+          // Don't set scheduled_at - leave it null so it appears in Past sessions
+          // Users can schedule it later if needed
         });
 
         navigate(`/session/${session.id}/record`, { replace: true });
