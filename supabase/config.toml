@@ -28,5 +28,5 @@ verify_jwt = true
 [functions.extract-medical-entities]
 verify_jwt = true
 
-[functions.realtime-speaker-detect]
+[functions.assemblyai-realtime]
 verify_jwt = true

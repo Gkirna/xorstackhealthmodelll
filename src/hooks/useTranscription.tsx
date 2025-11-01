@@ -178,53 +178,84 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
     return null;
   }, []);
 
-  // FALLBACK: Gap-based detection (only when voice analysis unavailable)
-  // This is LESS RELIABLE but works when no voice analyzer is available
+  // STRATEGY 2: Enhanced Smart Speaker Detection
+  // Handles clinical pauses, thinking time, and natural speech gaps intelligently
   const determineSpeakerByGaps = useCallback((text: string): string => {
     const now = Date.now();
     const timeSinceLastChunk = now - lastChunkTimeRef.current;
+    const timeSinceLastChange = now - lastSpeakerChangeTimeRef.current;
     
     // Update last chunk time
     lastChunkTimeRef.current = now;
     
-    // CRITICAL: Gap detection is unreliable - same speaker can pause 30+ seconds
-    // Only use this as absolute fallback
+    // Constants for this calculation
+    const SHORT_PAUSE = 3000;    // 3 seconds
+    const MEDIUM_PAUSE = 10000;  // 10 seconds  
+    const LONG_PAUSE = 30000;    // 30 seconds
+    const MIN_DURATION = 5000;   // 5 seconds
+    const MIN_CHUNKS = 2;       // 2 chunks
     
-    // Keep same speaker for ANY pause under 60 seconds (to avoid false positives)
-    if (timeSinceLastChunk < 60000) {
+    // STRATEGY 2.1: Short pause (< 3 seconds) - definitely same speaker
+    if (timeSinceLastChunk < SHORT_PAUSE) {
       chunkCountPerSpeakerRef.current++;
       return lastSpeakerRef.current;
     }
     
-    // Very long pause (60+ seconds) - possible speaker change
-    // But this is still a guess - voice analysis would be more accurate
-    console.log(`⚠️ Using gap-based detection (unreliable) - ${Math.round(timeSinceLastChunk/1000)}s gap`);
+    // STRATEGY 2.2: Medium pause (3-30 seconds) - clinical pause, thinking, activity
+    if (timeSinceLastChunk >= SHORT_PAUSE && timeSinceLastChunk < MEDIUM_PAUSE) {
+      // Keep same speaker if they haven't spoken long enough yet
+      if (timeSinceLastChange < MIN_DURATION || chunkCountPerSpeakerRef.current < MIN_CHUNKS) {
+        console.log(`⏸️  Short pause detected (${Math.round(timeSinceLastChunk/1000)}s) - keeping ${lastSpeakerRef.current}`);
+        return lastSpeakerRef.current;
+      }
+    }
     
-    const newSpeaker = lastSpeakerRef.current === 'provider' ? 'patient' : 'provider';
-    lastSpeakerRef.current = newSpeaker;
-    lastSpeakerChangeTimeRef.current = now;
-    chunkCountPerSpeakerRef.current = 0;
+    // STRATEGY 2.3: Long pause (30+ seconds) - likely speaker change
+    if (timeSinceLastChunk >= LONG_PAUSE) {
+      // Only change if previous speaker spoke for minimum duration
+      if (timeSinceLastChange >= MIN_DURATION && chunkCountPerSpeakerRef.current >= MIN_CHUNKS) {
+        const newSpeaker = lastSpeakerRef.current === 'provider' ? 'patient' : 'provider';
+        lastSpeakerRef.current = newSpeaker;
+        lastSpeakerChangeTimeRef.current = now;
+        chunkCountPerSpeakerRef.current = 0;
+        console.log(`🔄 Speaker changed to: ${newSpeaker} (long gap: ${Math.round(timeSinceLastChunk/1000)}s)`);
+        return newSpeaker;
+      }
+    }
     
-    return newSpeaker;
+    // Default: Keep same speaker (prevents over-changing during natural pauses)
+    if (timeSinceLastChange < MIN_DURATION || chunkCountPerSpeakerRef.current < MIN_CHUNKS) {
+      return lastSpeakerRef.current;
+    }
+    
+    // If medium pause and speaker has spoken enough, consider change
+    if (timeSinceLastChunk >= MEDIUM_PAUSE && timeSinceLastChunk < LONG_PAUSE) {
+      const newSpeaker = lastSpeakerRef.current === 'provider' ? 'patient' : 'provider';
+      lastSpeakerRef.current = newSpeaker;
+      lastSpeakerChangeTimeRef.current = now;
+      chunkCountPerSpeakerRef.current = 0;
+      console.log(`🔄 Speaker changed to: ${newSpeaker} (medium gap: ${Math.round(timeSinceLastChunk/1000)}s)`);
+      return newSpeaker;
+    }
+    
+    // Increment chunk count
+    chunkCountPerSpeakerRef.current++;
+    return lastSpeakerRef.current;
   }, []);
 
   // Main speaker determination function
-  // PRIORITY ORDER:
-  // 1. Voice acoustic analysis (most accurate)
-  // 2. Speaker profile matching (from VoiceAnalyzer)
-  // 3. Gap detection (least accurate - fallback only)
   const determineSpeaker = useCallback((text: string): string => {
-    // PRIORITY 1: Use voice analysis if available (MOST ACCURATE)
-    const voiceBasedSpeaker = detectSpeakerByGender(text);
+    // Try gender detection first, fallback to gap detection
+    const genderSpeaker = detectSpeakerByGender(text);
     
-    if (voiceBasedSpeaker) {
-      // Update last speaker if voice detection is available
-      lastSpeakerRef.current = voiceBasedSpeaker;
+    if (genderSpeaker) {
+      // Update last speaker if gender detection is available
+      lastSpeakerRef.current = genderSpeaker;
       lastSpeakerChangeTimeRef.current = Date.now();
-      return voiceBasedSpeaker;
+      return genderSpeaker;
     }
     
-    // PRIORITY 2: Fallback to gap-based detection (less accurate)
+    // Fallback to gap-based detection
     return determineSpeakerByGaps(text);
   }, [detectSpeakerByGender, determineSpeakerByGaps]);
 
