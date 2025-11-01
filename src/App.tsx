@@ -12,6 +12,7 @@ import NotFound from "./pages/NotFound";
 // Lazy load heavy components
 const Tasks = lazy(() => import("./pages/Tasks"));
 const Templates = lazy(() => import("./pages/Templates"));
+const Community = lazy(() => import("./pages/Community"));
 const Team = lazy(() => import("./pages/Team"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Help = lazy(() => import("./pages/Help"));
@@ -55,6 +56,7 @@ const App = () => (
               <Route path="/sessions" element={<Index />} />
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/templates" element={<Templates />} />
+              <Route path="/community" element={<Community />} />
               <Route path="/team" element={<Team />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/help" element={<Help />} />
