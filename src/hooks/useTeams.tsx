@@ -64,8 +64,19 @@ export function useCreateTeam() {
 
   return useMutation({
     mutationFn: async (teamData: { name: string; description?: string }) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      // Get current authenticated user
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError) {
+        console.error('Auth error:', authError);
+        throw new Error('Authentication error: ' + authError.message);
+      }
+      
+      if (!user) {
+        throw new Error('You must be logged in to create a team');
+      }
+
+      console.log('Creating team with user:', user.id);
 
       // Create team
       const { data: team, error: teamError } = await supabase
@@ -78,7 +89,10 @@ export function useCreateTeam() {
         .select()
         .single();
 
-      if (teamError) throw teamError;
+      if (teamError) {
+        console.error('Team creation error:', teamError);
+        throw teamError;
+      }
 
       // Add creator as owner
       const { error: memberError } = await supabase
