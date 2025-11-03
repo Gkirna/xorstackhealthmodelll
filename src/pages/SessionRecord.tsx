@@ -154,7 +154,14 @@ const SessionRecord = () => {
   
   // NOW use useTranscription with the currentVoiceGender from useAudioRecording
   console.log('🔗 Connecting useTranscription with voice gender:', currentVoiceGender || 'unknown');
-  const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats } = useTranscription(id || '', currentVoiceGender || 'unknown');
+  const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats, updateVoiceCharacteristics } = useTranscription(id || '', currentVoiceGender || 'unknown');
+  
+  // Sync voice characteristics from audio recording to transcription hook
+  useEffect(() => {
+    if (currentVoiceCharacteristics) {
+      updateVoiceCharacteristics(currentVoiceCharacteristics);
+    }
+  }, [currentVoiceCharacteristics, updateVoiceCharacteristics]);
   
   // Advanced transcription
   const { processAudioWithFullAnalysis, isProcessing } = useAdvancedTranscription();

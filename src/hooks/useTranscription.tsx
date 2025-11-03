@@ -654,6 +654,12 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
     }
   }, [isTranscribing]);
 
+  // Method to update voice characteristics from external source
+  const updateVoiceCharacteristics = useCallback((characteristics: any) => {
+    currentVoiceCharacteristicsRef.current = characteristics;
+    console.log('🎤 Voice characteristics updated in transcription:', characteristics);
+  }, []);
+
   return {
     transcriptChunks,
     isTranscribing,
@@ -663,5 +669,6 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
     loadTranscripts,
     getFullTranscript,
     saveAllPendingChunks,
+    updateVoiceCharacteristics,
   };
 }
