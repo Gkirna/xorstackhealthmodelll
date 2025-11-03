@@ -62,9 +62,7 @@ const SessionRecord = () => {
   const transcriptCountRef = useRef(0);
 
   // CUSTOM HOOKS NEXT
-  const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats } = useTranscription(id || '', 'unknown');
-  const { processAudioWithFullAnalysis, isProcessing } = useAdvancedTranscription();
-
+  // IMPORTANT: First declare useAudioRecording to get voice characteristics
   const {
     startRecording,
     stopRecording,
@@ -86,6 +84,8 @@ const SessionRecord = () => {
         transcriptCountRef.current++;
         
         console.log(`💬 Transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
+        console.log(`🎤 Current voice gender: ${currentVoiceGender || 'unknown'}`);
+        console.log(`🎤 Current voice characteristics:`, currentVoiceCharacteristics);
         
         const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
         setTranscript(prev => prev ? `${prev}\n\n${speakerLabel} : ${text}` : `${speakerLabel} : ${text}`);
@@ -151,6 +151,13 @@ const SessionRecord = () => {
       toast.error(error);
     },
   });
+  
+  // NOW use useTranscription with the currentVoiceGender from useAudioRecording
+  console.log('🔗 Connecting useTranscription with voice gender:', currentVoiceGender || 'unknown');
+  const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats } = useTranscription(id || '', currentVoiceGender || 'unknown');
+  
+  // Advanced transcription
+  const { processAudioWithFullAnalysis, isProcessing } = useAdvancedTranscription();
 
   // CALLBACKS AFTER HOOKS
   const handleStartTranscribing = useCallback(async () => {
