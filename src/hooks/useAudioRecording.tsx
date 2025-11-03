@@ -4,6 +4,33 @@ import { RealTimeTranscription } from '@/utils/RealTimeTranscription';
 import { VoiceAnalyzer } from '@/utils/VoiceAnalyzer';
 import { MedicalAutoCorrector } from '@/utils/MedicalAutoCorrector';
 
+// Global singleton to track active audio recording
+let globalActiveStream: MediaStream | null = null;
+let globalActiveContext: AudioContext | null = null;
+
+// Global cleanup function
+async function forceGlobalCleanup() {
+  console.log('🧹 GLOBAL CLEANUP: Releasing all audio resources...');
+  
+  if (globalActiveStream) {
+    globalActiveStream.getTracks().forEach(track => {
+      track.stop();
+      console.log(`🔇 Global cleanup stopped track: ${track.kind}`);
+    });
+    globalActiveStream = null;
+  }
+  
+  if (globalActiveContext && globalActiveContext.state !== 'closed') {
+    await globalActiveContext.close();
+    console.log('🧹 Global cleanup closed AudioContext');
+    globalActiveContext = null;
+  }
+  
+  // Wait for cleanup to complete
+  await new Promise(resolve => setTimeout(resolve, 100));
+  console.log('✅ Global cleanup complete');
+}
+
 interface AudioRecordingOptions {
   onTranscriptUpdate?: (transcript: string, isFinal: boolean) => void;
   onFinalTranscriptChunk?: (text: string) => void;
@@ -158,9 +185,13 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         console.log('🔇 Stopping all media tracks on unmount...');
         streamRef.current.getTracks().forEach(track => {
           track.stop();
-          console.log(`🔇 Track ${track.kind} stopped on unmount`);
         });
         streamRef.current = null;
+      }
+      
+      // Update global refs
+      if (globalActiveStream === streamRef.current) {
+        globalActiveStream = null;
       }
       
       // Close AudioContext
@@ -168,6 +199,10 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         console.log('🧹 Closing AudioContext on unmount...');
         audioContextRef.current.close();
         audioContextRef.current = null;
+      }
+      
+      if (globalActiveContext === audioContextRef.current) {
+        globalActiveContext = null;
       }
       
       // Stop audio monitoring
@@ -189,31 +224,25 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       console.log('🎤 Starting audio recording...');
       setState(prev => ({ ...prev, error: null, recordedBlob: null, recordedUrl: null }));
       
-      // FORCE CLEANUP: Stop any existing streams first
+      // FORCE GLOBAL CLEANUP FIRST
+      await forceGlobalCleanup();
+      
+      // Local cleanup
       if (streamRef.current) {
-        console.log('🧹 Force cleanup: Stopping existing stream...');
-        streamRef.current.getTracks().forEach(track => {
-          track.stop();
-          console.log(`🔇 Force stopped track: ${track.kind}, state: ${track.readyState}`);
-        });
+        streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
       }
       
-      // Close existing AudioContext
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        console.log('🧹 Force cleanup: Closing existing AudioContext...');
         await audioContextRef.current.close();
         audioContextRef.current = null;
       }
       
-      // Clean up voice analyzer
       if (voiceAnalyzerRef.current) {
-        console.log('🧹 Force cleanup: Cleaning voice analyzer...');
         voiceAnalyzerRef.current.cleanup();
         voiceAnalyzerRef.current = null;
       }
       
-      // Clear intervals
       if (voiceAnalysisIntervalRef.current) {
         clearInterval(voiceAnalysisIntervalRef.current);
         voiceAnalysisIntervalRef.current = null;
@@ -224,15 +253,14 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         animationFrameRef.current = null;
       }
       
-      console.log('✅ Force cleanup complete, requesting fresh microphone access...');
+      analyserRef.current = null;
       
-      // Small delay to ensure cleanup is complete
-      await new Promise(resolve => setTimeout(resolve, 100));
+      console.log('✅ All cleanup complete, requesting microphone...');
       
       const constraints: MediaStreamConstraints = {
         audio: {
           echoCancellation: { ideal: true },
-          noiseSuppression: { ideal: true }, // Enhanced for Indian environments
+          noiseSuppression: { ideal: true },
           autoGainControl: { ideal: true },
           sampleRate: sampleRate,
           channelCount: 1,
@@ -242,22 +270,20 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
+      // Store in both local and global refs
       streamRef.current = stream;
+      globalActiveStream = stream;
+      
       console.log('✅ Microphone access granted');
-      console.log('🎤 Stream details:', {
+      console.log('🎤 Stream:', {
         id: stream.id,
         active: stream.active,
-        tracks: stream.getTracks().map(t => ({
-          kind: t.kind,
-          label: t.label,
-          enabled: t.enabled,
-          muted: t.muted,
-          readyState: t.readyState
-        }))
+        tracks: stream.getTracks().length
       });
       
       // Setup single shared audio context for both level monitoring and voice analysis
       audioContextRef.current = new AudioContext();
+      globalActiveContext = audioContextRef.current;
       const sharedContext = audioContextRef.current;
       
       analyserRef.current = sharedContext.createAnalyser();
@@ -548,7 +574,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     }
   }, []);
 
-  const stopRecording = useCallback(() => {
+  const stopRecording = useCallback(async () => {
     console.log('⏹️ Stop recording called, current state:', mediaRecorderRef.current?.state);
     
     // Immediately update state to stop recording
@@ -599,16 +625,18 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         console.log('🔇 Stopping all media tracks to release microphone...');
         streamRef.current.getTracks().forEach(track => {
           track.stop();
-          console.log(`🔇 Track ${track.kind} stopped (enabled: ${track.enabled}, readyState: ${track.readyState})`);
+          console.log(`🔇 Track ${track.kind} stopped`);
         });
         streamRef.current = null;
+        globalActiveStream = null;
       }
       
       // Close audio context to release resources
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
         console.log('🧹 Closing AudioContext...');
-        audioContextRef.current.close();
+        await audioContextRef.current.close();
         audioContextRef.current = null;
+        globalActiveContext = null;
       }
       
       // Stop audio monitoring
