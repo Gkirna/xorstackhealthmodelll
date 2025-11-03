@@ -96,6 +96,13 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   useEffect(() => {
     console.log('🎙️ Initializing real-time transcription engine...');
     
+    // FORCE CLEANUP ON MOUNT - Release any stuck microphone
+    const initCleanup = async () => {
+      await forceGlobalCleanup();
+      console.log('✅ Initial cleanup complete on mount');
+    };
+    initCleanup();
+    
     transcriptionRef.current = new RealTimeTranscription({
       continuous,
       interimResults: true,
