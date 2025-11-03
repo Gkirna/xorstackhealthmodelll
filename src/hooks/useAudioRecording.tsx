@@ -515,9 +515,27 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       toast.success('Recording started');
     } catch (error) {
       console.error('❌ Microphone access error:', error);
-      const errorMessage = 'Failed to access microphone. Please grant permission.';
+      console.error('❌ Error name:', error?.name);
+      console.error('❌ Error message:', error?.message);
+      console.error('❌ Error stack:', error?.stack);
+      
+      let errorMessage = 'Failed to access microphone. Please grant permission.';
+      
+      if (error?.name === 'NotAllowedError') {
+        errorMessage = 'Microphone permission denied. Please allow microphone access in your browser settings.';
+      } else if (error?.name === 'NotFoundError') {
+        errorMessage = 'No microphone found. Please connect a microphone and try again.';
+      } else if (error?.name === 'NotReadableError') {
+        errorMessage = 'Microphone is in use by another application. Please close other apps using the microphone.';
+      } else if (error?.name === 'OverconstrainedError') {
+        errorMessage = 'Microphone does not meet the required constraints. Try a different microphone.';
+      } else if (error?.name === 'AbortError') {
+        errorMessage = 'Microphone access was aborted. Please try again.';
+      }
+      
+      console.error('❌ Final error message:', errorMessage);
       setState(prev => ({ ...prev, error: errorMessage, audioLevel: 0 }));
-      toast.error(errorMessage);
+      toast.error(errorMessage, { duration: 5000 });
       if (onError) onError(errorMessage);
     }
   }, [state.transcriptSupported, onRecordingComplete, onError, sampleRate, deviceId]);
