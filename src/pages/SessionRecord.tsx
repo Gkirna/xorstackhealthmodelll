@@ -26,6 +26,7 @@ import { ExtremelyAdvancedAutoCorrectorDashboard } from '@/components/ExtremelyA
 import { AdvancedTranscriptionDashboard } from '@/components/AdvancedTranscriptionDashboard';
 import { useAdvancedTranscription } from '@/hooks/useAdvancedTranscription';
 import type { EnhancedTranscriptionData } from '@/types/advancedTranscription';
+import { TemplateSelectionDialog } from "@/components/session/TemplateSelectionDialog";
 
 const SessionRecord = () => {
   const { id } = useParams();
@@ -53,6 +54,7 @@ const SessionRecord = () => {
   const [activeTab, setActiveTab] = useState<string>("transcript");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [enhancedTranscriptionData, setEnhancedTranscriptionData] = useState<EnhancedTranscriptionData | null>(null);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   
   // ALL REFS NEXT
   const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
@@ -174,7 +176,7 @@ const SessionRecord = () => {
     }
   }, [isStartingRecording, isRecording, recordingMode, transcript, context, saveAllPendingChunks, stopRecording, startRecording]);
 
-  const autoGenerateNote = useCallback(async () => {
+  const autoGenerateNote = useCallback(async (selectedTemplateId?: string) => {
     if (!id || !orchestratorRef.current) return;
     
     if (!transcript.trim()) {
@@ -182,17 +184,19 @@ const SessionRecord = () => {
       return;
     }
 
+    const templateToUse = selectedTemplateId || template;
+
     try {
       setIsAutoPipelineRunning(true);
       setActiveTab('note');
       
-      toast.info(`Generating ${template.toUpperCase()} clinical documentation...`);
+      toast.info('Generating clinical documentation...');
       setSaveStatus('saving');
       
       const result = await orchestratorRef.current.runCompletePipeline(id, transcript, {
         context,
         detailLevel: 'high',
-        templateId: template,
+        templateId: templateToUse,
       });
       
       if (result.success && result.note) {
@@ -249,7 +253,7 @@ const SessionRecord = () => {
     } finally {
       setIsAutoPipelineRunning(false);
     }
-  }, [id, transcript, context, template, updateSession]);
+  }, [id, transcript, context, updateSession]);
 
   const handlePauseRecording = useCallback(() => {
     console.log('🎯 PAUSE BUTTON CLICKED - Calling pauseRecording()');
@@ -262,7 +266,7 @@ const SessionRecord = () => {
   }, [resumeRecording]);
 
   const handleStopRecording = useCallback(async () => {
-    console.log('🎯 STOP BUTTON CLICKED - Stopping recording and generating note');
+    console.log('🎯 STOP BUTTON CLICKED - Stopping recording and opening template selection');
     toast.info('Stopping transcription...');
     
     // Save any pending chunks first
@@ -271,13 +275,11 @@ const SessionRecord = () => {
     // Stop the recording
     stopRecording();
     
-    // Immediately trigger note generation with minimal delay
-    setTimeout(async () => {
-      console.log('🏥 Starting clinical note generation...');
-      toast.info('Generating clinical note...');
-      await autoGenerateNote();
-    }, 500);
-  }, [saveAllPendingChunks, stopRecording, autoGenerateNote]);
+    // Open template selection dialog
+    setTimeout(() => {
+      setTemplateDialogOpen(true);
+    }, 300);
+  }, [saveAllPendingChunks, stopRecording]);
 
   const handleRecordingModeChange = useCallback((mode: string) => {
     setRecordingMode(mode);
@@ -711,6 +713,19 @@ const SessionRecord = () => {
         {/* Ask Heidi Bar */}
         <AskHeidiBar sessionId={id} transcript={transcript} context={context} />
       </div>
+
+      {/* Template Selection Dialog */}
+      <TemplateSelectionDialog
+        open={templateDialogOpen}
+        onOpenChange={setTemplateDialogOpen}
+        onSelectTemplate={(templateId) => {
+          setTemplate(templateId);
+          setTemplateDialogOpen(false);
+          toast.info('Generating clinical note...');
+          autoGenerateNote(templateId);
+        }}
+        isGenerating={isAutoPipelineRunning}
+      />
     </AppLayout>
   );
 };
