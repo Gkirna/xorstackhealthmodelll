@@ -168,16 +168,25 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       streamRef.current = stream;
       console.log('✅ Microphone access granted');
       
-      // Setup audio level monitoring
+      // Setup single shared audio context for both level monitoring and voice analysis
       audioContextRef.current = new AudioContext();
-      analyserRef.current = audioContextRef.current.createAnalyser();
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      source.connect(analyserRef.current);
-      analyserRef.current.fftSize = 256;
+      const sharedContext = audioContextRef.current;
       
-      // Initialize advanced voice analyzer
+      analyserRef.current = sharedContext.createAnalyser();
+      const source = sharedContext.createMediaStreamSource(stream);
+      source.connect(analyserRef.current);
+      analyserRef.current.fftSize = 4096; // Larger size for pitch detection (was 256)
+      analyserRef.current.smoothingTimeConstant = 0.8;
+      
+      console.log('🎤 Shared AudioContext created:', {
+        state: sharedContext.state,
+        sampleRate: sharedContext.sampleRate,
+        fftSize: analyserRef.current.fftSize
+      });
+      
+      // Initialize advanced voice analyzer WITH the shared context
       try {
-        console.log('🎤 Initializing advanced voice analyzer...');
+        console.log('🎤 Initializing advanced voice analyzer with shared AudioContext...');
         console.log('🎤 Audio stream details:', {
           tracks: stream.getTracks().length,
           active: stream.active,
@@ -190,10 +199,11 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         });
         
         voiceAnalyzerRef.current = new VoiceAnalyzer();
-        console.log('🎤 VoiceAnalyzer instance created, calling initialize...');
+        console.log('🎤 VoiceAnalyzer instance created, calling initializeWithContext...');
         
-        const characteristics = await voiceAnalyzerRef.current.initialize(stream);
-        console.log('✅ VoiceAnalyzer.initialize() completed');
+        // Pass the shared AudioContext and analyser to VoiceAnalyzer
+        const characteristics = await voiceAnalyzerRef.current.initializeWithContext(sharedContext, analyserRef.current);
+        console.log('✅ VoiceAnalyzer.initializeWithContext() completed');
         
         currentVoiceCharacteristicsRef.current = characteristics;
         console.log('🎤 Initial characteristics:', {

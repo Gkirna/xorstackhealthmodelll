@@ -71,7 +71,41 @@ export class VoiceAnalyzer {
   }
 
   /**
-   * Initialize analyzer with audio stream
+   * Initialize analyzer with existing AudioContext and analyser (shared context)
+   */
+  async initializeWithContext(audioContext: AudioContext, analyser: AnalyserNode): Promise<VoiceCharacteristics> {
+    try {
+      console.log('🎤 VoiceAnalyzer.initializeWithContext() - using shared AudioContext');
+      this.audioContext = audioContext;
+      this.analyser = analyser;
+      
+      // Use the existing analyser configuration
+      this.bufferSize = analyser.fftSize;
+      this.sampleRate = audioContext.sampleRate;
+      
+      console.log('🎤 Shared AudioContext state:', audioContext.state);
+      console.log('🎤 Shared AudioContext sample rate:', audioContext.sampleRate);
+      console.log('🎤 Shared Analyser configured:', {
+        fftSize: analyser.fftSize,
+        frequencyBinCount: analyser.frequencyBinCount,
+        smoothing: analyser.smoothingTimeConstant
+      });
+      
+      console.log('🎤 Voice analyzer initialization with shared context complete');
+      
+      // Wait a bit for audio data to flow
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Analyze initial voice sample
+      return await this.analyzeVoiceSample();
+    } catch (error) {
+      console.error('❌ Failed to initialize voice analyzer with shared context:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Initialize analyzer with audio stream (creates own AudioContext)
    */
   async initialize(stream: MediaStream): Promise<VoiceCharacteristics> {
     try {
