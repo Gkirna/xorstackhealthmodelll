@@ -92,25 +92,42 @@ serve(async (req) => {
         audio_url: upload_url,
         speech_model: 'slam-1',           // Medical-optimized model
         speaker_labels: true,              // Enable advanced speaker diarization
-        speakers_expected: null,           // Auto-detect number of speakers (handles any gender combo)
+        speakers_expected: 2,              // Optimize for 2 speakers (doctor + patient)
         multichannel: false,
         disfluencies: false,               // Clean up "uh", "um", etc.
         format_text: true,                 // Auto-formatting
         punctuate: true,                   // Auto-punctuation
         language_code: 'en',               // English (handles all accents: US, UK, AU, IN, etc.)
         language_detection: true,          // Auto-detect English dialect
-        speech_threshold: 0.3,             // Lower threshold to catch softer speech and accents
+        speech_threshold: 0.25,            // Even lower threshold for soft-spoken patients and accents
         auto_highlights: true,             // Highlight key medical terms
         entity_detection: true,            // Detect medical entities
         sentiment_analysis: false,         // Not needed for medical
-        word_boost: [                      // Boost medical terminology across all accents
-          'diabetes', 'hypertension', 'medication', 'prescription', 'mg', 'ml',
-          'diagnosis', 'symptoms', 'treatment', 'allergy', 'tablet', 'capsule',
-          'dosage', 'patient', 'doctor', 'blood pressure', 'heart rate', 'physician',
-          'examination', 'assessment', 'chest pain', 'shortness of breath', 'fever',
-          'nausea', 'vomiting', 'diarrhea', 'headache', 'dizziness', 'fatigue',
-          'ibuprofen', 'paracetamol', 'amoxicillin', 'insulin', 'aspirin',
-          'CT scan', 'MRI', 'X-ray', 'ultrasound', 'ECG', 'EKG', 'blood test'
+        word_boost: [                      // Expanded medical terminology with accent variations
+          // Medications (with accent variations)
+          'paracetamol', 'acetaminophen', 'ibuprofen', 'aspirin', 'amoxicillin',
+          'metformin', 'insulin', 'atorvastatin', 'lisinopril', 'omeprazole',
+          
+          // Vital signs
+          'blood pressure', 'BP', 'heart rate', 'pulse', 'temperature', 'oxygen',
+          'saturation', 'SPO2', 'respiratory rate',
+          
+          // Common conditions
+          'diabetes', 'hypertension', 'asthma', 'COPD', 'arthritis', 'migraine',
+          'fever', 'cough', 'cold', 'flu', 'infection', 'allergy',
+          
+          // Symptoms (accent-aware)
+          'chest pain', 'shortness of breath', 'breathlessness', 'headache',
+          'dizziness', 'nausea', 'vomiting', 'diarrhoea', 'diarrhea', 'fatigue',
+          
+          // Medical terms
+          'diagnosis', 'prescription', 'medication', 'treatment', 'examination',
+          'assessment', 'symptoms', 'patient', 'doctor', 'physician', 'tablet',
+          'capsule', 'dosage', 'milligram', 'mg', 'milliliter', 'ml',
+          
+          // Diagnostic tests
+          'CT scan', 'MRI', 'X-ray', 'ultrasound', 'ECG', 'EKG', 'blood test',
+          'urine test', 'biopsy', 'endoscopy'
         ],
         boost_param: 'high',               // High boost for medical terms
         filter_profanity: false,           // Keep all speech as-is

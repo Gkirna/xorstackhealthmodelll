@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { Mic, Square, Play, Pause, Zap } from 'lucide-react';
 import { useAudioRecording } from '@/hooks/useAudioRecording';
+import { VoicePitchVisualizer } from '@/components/VoicePitchVisualizer';
 
 interface DictatingPanelProps {
   sessionId?: string;
@@ -35,6 +36,7 @@ export function DictatingPanel({
     resumeRecording,
     stopRecording,
     formatDuration,
+    currentVoiceCharacteristics,
   } = useAudioRecording({
     onTranscriptUpdate,
     onFinalTranscriptChunk,
@@ -64,6 +66,12 @@ export function DictatingPanel({
             </AlertDescription>
           </Alert>
         )}
+
+        {/* Real-time Voice Analysis Visualizer */}
+        <VoicePitchVisualizer 
+          characteristics={currentVoiceCharacteristics}
+          isRecording={isRecording}
+        />
         
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">

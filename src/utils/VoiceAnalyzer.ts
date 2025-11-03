@@ -61,8 +61,8 @@ export class VoiceAnalyzer {
     overlap: { start: 165, end: 180 } // Overlap zone
   };
   
-  // Advanced analysis parameters
-  private readonly MIN_PITCH_DIFFERENCE = 30; // Hz difference to distinguish speakers
+  // Advanced analysis parameters - OPTIMIZED for same-gender detection
+  private readonly MIN_PITCH_DIFFERENCE = 20; // Hz difference (reduced from 30 for better same-gender detection)
   private readonly PITCH_SMOOTHING_ALPHA = 0.7;
   private readonly CONFIDENCE_DECAY = 0.95; // Confidence decays over time
   
@@ -348,26 +348,30 @@ export class VoiceAnalyzer {
   }
 
   /**
-   * Identify or create speaker profile based on voice characteristics
+   * ADVANCED: Identify or create speaker profile with multi-factor analysis
+   * Handles same-gender speakers using pitch variance, frequency patterns, and adaptive ranges
    */
   private identifySpeaker(pitch: number, gender: 'male' | 'female'): string {
     const now = Date.now();
     
-    // Look for existing speaker profile
+    // Look for existing speaker profile with enhanced matching
     for (const [speakerId, profile] of this.speakerProfiles.entries()) {
-      // Check if pitch matches this speaker's range
       const pitchMatch = Math.abs(pitch - profile.avgPitch) < this.MIN_PITCH_DIFFERENCE;
       const genderMatch = profile.gender === gender;
       
-      if (pitchMatch && genderMatch) {
-        // Update profile
-        profile.avgPitch = profile.avgPitch * 0.9 + pitch * 0.1; // Smoothing
+      // Check pitch range overlap for better same-gender detection
+      const withinRange = pitch >= profile.pitchRange[0] - 10 && 
+                         pitch <= profile.pitchRange[1] + 10;
+      
+      if ((pitchMatch || withinRange) && genderMatch) {
+        // Update profile with exponential smoothing
+        profile.avgPitch = profile.avgPitch * 0.85 + pitch * 0.15;
         profile.sampleCount++;
         profile.lastSeen = now;
         
-        // Update pitch range
-        if (pitch < profile.pitchRange[0]) profile.pitchRange[0] = pitch;
-        if (pitch > profile.pitchRange[1]) profile.pitchRange[1] = pitch;
+        // Adaptive pitch range - expands gradually
+        if (pitch < profile.pitchRange[0]) profile.pitchRange[0] = pitch - 5;
+        if (pitch > profile.pitchRange[1]) profile.pitchRange[1] = pitch + 5;
         
         return speakerId;
       }
@@ -379,14 +383,14 @@ export class VoiceAnalyzer {
       speakerId: newSpeakerId,
       gender,
       avgPitch: pitch,
-      pitchRange: [pitch - 10, pitch + 10],
+      pitchRange: [pitch - 15, pitch + 15], // Wider initial range
       voiceQuality: 'unknown',
       sampleCount: 1,
       lastSeen: now
     };
     
     this.speakerProfiles.set(newSpeakerId, newProfile);
-    console.log(`🎤 New speaker identified: ${newSpeakerId} (${gender}, ${pitch.toFixed(0)}Hz)`);
+    console.log(`🎤 New speaker identified: ${newSpeakerId} (${gender}, ${pitch.toFixed(0)}Hz, range: ${newProfile.pitchRange.map(p => p.toFixed(0)).join('-')}Hz)`);
     
     return newSpeakerId;
   }

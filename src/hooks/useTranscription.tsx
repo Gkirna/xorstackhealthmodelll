@@ -66,6 +66,7 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
   // Voice analysis for gender detection
   const voiceAnalyzerRef = useRef<VoiceAnalyzer | null>(null);
   const currentVoiceGenderRef = useRef<'male' | 'female' | 'unknown'>('unknown');
+  const currentVoiceCharacteristicsRef = useRef<any>(null);
   const genderHistoryRef = useRef<{ gender: 'male' | 'female', timestamp: number }[]>([]);
   
   // Update gender from external source (from audio recording)
@@ -142,45 +143,45 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
     return tempChunk;
   }, [sessionId]);
 
-  // Gender-neutral speaker detection based on audio analysis
-  // This detects speaker changes based on voice characteristics WITHOUT gender assumptions
+  // ADVANCED: Voice-based speaker detection using pitch/frequency characteristics
+  // This is the PRIMARY method - uses advanced voice analysis from VoiceAnalyzer
   const detectSpeakerByGender = useCallback((text: string): string | null => {
-    // Track voice pattern history
-    const now = Date.now();
-    
-    // If we have voice analysis available, use voice characteristics
-    // Note: We alternate speakers based on voice patterns, NOT gender stereotypes
-    if (voiceAnalyzerRef.current && currentVoiceGenderRef.current !== 'unknown') {
-      // Update voice pattern history
-      genderHistoryRef.current.push({
-        gender: currentVoiceGenderRef.current,
-        timestamp: now
-      });
-      
-      // Keep only last 10 voice pattern detections
-      if (genderHistoryRef.current.length > 10) {
-        genderHistoryRef.current.shift();
-      }
-      
-      // Determine speaker based on voice change detection
-      // First detected voice = primary speaker (usually provider/doctor)
-      // Different voice pattern = secondary speaker (usually patient)
-      const isFirstVoicePattern = lastSpeakerRef.current === 'provider';
-      const currentVoiceIsFirst = currentVoiceGenderRef.current === genderHistoryRef.current[0]?.gender;
-      
-      const speaker = currentVoiceIsFirst ? 'provider' : 'patient';
-      
-      console.log(`🎭 Voice pattern detected → ${speaker}`);
-      return speaker;
+    if (!currentVoiceGenderRef.current || currentVoiceGenderRef.current === 'unknown') {
+      return null;
     }
     
-    // No voice analysis available - fall back to gap-based detection
-    return null;
+    // Get current voice characteristics from analyzer
+    const characteristics = currentVoiceCharacteristicsRef.current;
+    if (!characteristics || characteristics.confidence < 0.7) {
+      console.log('⚠️ Low confidence voice characteristics, using fallback');
+      return null;
+    }
+    
+    // Use speakerId from VoiceAnalyzer (already handles pitch/frequency differentiation)
+    const speakerId = characteristics.speakerId;
+    
+    // Silence detection
+    if (speakerId === 'silence') {
+      return null;
+    }
+    
+    // Map speaker IDs to provider/patient
+    // First detected speaker = provider, different voice = patient
+    if (speakerId.includes('speaker_1')) {
+      console.log(`🎭 Speaker 1 detected (${characteristics.pitch.toFixed(0)}Hz) → Provider`);
+      return 'provider';
+    } else {
+      console.log(`🎭 Speaker 2+ detected (${characteristics.pitch.toFixed(0)}Hz) → Patient`);
+      return 'patient';
+    }
   }, []);
 
-  // STRATEGY 2: Enhanced Smart Speaker Detection
-  // Handles clinical pauses, thinking time, and natural speech gaps intelligently
+  // FALLBACK: Gap-based speaker detection (ONLY when voice analysis unavailable)
+  // This is UNRELIABLE for same speaker with long pauses - use voice analysis instead!
   const determineSpeakerByGaps = useCallback((text: string): string => {
+    console.warn('⚠️ Using GAP-BASED detection (unreliable for same speaker with pauses)');
+    console.warn('💡 Ensure VoiceAnalyzer is properly initialized for better accuracy');
+    
     const now = Date.now();
     const timeSinceLastChunk = now - lastChunkTimeRef.current;
     const timeSinceLastChange = now - lastSpeakerChangeTimeRef.current;
@@ -188,10 +189,10 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
     // Update last chunk time
     lastChunkTimeRef.current = now;
     
-    // Constants for this calculation
+    // Constants - INCREASED to 60 seconds to reduce false speaker changes
     const SHORT_PAUSE = 3000;    // 3 seconds
     const MEDIUM_PAUSE = 10000;  // 10 seconds  
-    const LONG_PAUSE = 30000;    // 30 seconds
+    const LONG_PAUSE = 60000;    // 60 seconds (increased from 30)
     const MIN_DURATION = 5000;   // 5 seconds
     const MIN_CHUNKS = 2;       // 2 chunks
     
@@ -243,19 +244,20 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
     return lastSpeakerRef.current;
   }, []);
 
-  // Main speaker determination function
+  // PRIORITY SYSTEM: Voice-based detection FIRST, gap detection as FALLBACK
   const determineSpeaker = useCallback((text: string): string => {
-    // Try gender detection first, fallback to gap detection
-    const genderSpeaker = detectSpeakerByGender(text);
+    // PRIORITY 1: Voice analysis (pitch/frequency based) - MOST ACCURATE
+    const voiceSpeaker = detectSpeakerByGender(text);
     
-    if (genderSpeaker) {
-      // Update last speaker if gender detection is available
-      lastSpeakerRef.current = genderSpeaker;
+    if (voiceSpeaker) {
+      lastSpeakerRef.current = voiceSpeaker;
       lastSpeakerChangeTimeRef.current = Date.now();
-      return genderSpeaker;
+      console.log(`✅ Voice-based detection: ${voiceSpeaker}`);
+      return voiceSpeaker;
     }
     
-    // Fallback to gap-based detection
+    // PRIORITY 2: Gap detection (only when voice analysis unavailable)
+    console.warn('⚠️ Voice analysis unavailable - using gap detection fallback');
     return determineSpeakerByGaps(text);
   }, [detectSpeakerByGender, determineSpeakerByGaps]);
 

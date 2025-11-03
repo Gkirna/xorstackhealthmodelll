@@ -188,21 +188,28 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           console.log(`🎭 Voice detected: ${characteristics.gender} (${characteristics.pitch.toFixed(0)}Hz, confidence: ${(characteristics.confidence * 100).toFixed(0)}%)`);
         }
         
-        // Start real-time voice analysis (every 500ms)
+        // Start real-time voice analysis (every 300ms for more responsive updates)
         voiceAnalysisIntervalRef.current = setInterval(async () => {
           if (voiceAnalyzerRef.current) {
             try {
               const updated = await voiceAnalyzerRef.current.analyzeVoiceSample();
               currentVoiceCharacteristicsRef.current = updated;
               
-              if (updated.gender !== 'unknown' && updated.confidence > 0.7) {
+              // Update gender with higher confidence threshold for accuracy
+              if (updated.gender !== 'unknown' && updated.confidence > 0.75) {
                 currentVoiceGenderRef.current = updated.gender;
+                console.log(`🎭 Voice update: ${updated.gender} (${updated.pitch.toFixed(0)}Hz, ${updated.speakerId})`);
+              }
+              
+              // Log speaker changes
+              if (updated.speakerId !== 'silence' && updated.confidence > 0.7) {
+                console.log(`👤 Active speaker: ${updated.speakerId} (confidence: ${(updated.confidence * 100).toFixed(0)}%)`);
               }
             } catch (error) {
               // Silently continue if analysis fails
             }
           }
-        }, 500);
+        }, 300); // 300ms for more responsive updates
         
         // Log speaker statistics every 5 seconds
         const statsInterval = setInterval(() => {
