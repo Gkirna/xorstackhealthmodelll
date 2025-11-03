@@ -288,7 +288,107 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         tracks: stream.getTracks().length
       });
       
-      // Setup single shared audio context for both level monitoring and voice analysis
+      // CRITICAL: Create and start MediaRecorder FIRST before AudioContext
+      // (AudioContext can consume the stream and prevent MediaRecorder from starting)
+      console.log('🎬 Creating MediaRecorder FIRST (before AudioContext)...');
+      let mediaRecorder: MediaRecorder;
+      
+      try {
+        mediaRecorder = new MediaRecorder(stream);
+        console.log('✅ MediaRecorder created with browser default');
+      } catch (defaultError) {
+        console.warn('⚠️ Default MediaRecorder failed, trying explicit types:', defaultError);
+        
+        const supportedTypes = ['audio/webm', 'audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4'];
+        let created = false;
+        
+        for (const type of supportedTypes) {
+          try {
+            if (MediaRecorder.isTypeSupported(type)) {
+              mediaRecorder = new MediaRecorder(stream, { mimeType: type });
+              console.log('✅ MediaRecorder created with:', type);
+              created = true;
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+        
+        if (!created) {
+          throw new Error('Failed to create MediaRecorder with any configuration');
+        }
+      }
+      
+      const mimeType = mediaRecorder.mimeType || 'audio/webm';
+      console.log('📝 MediaRecorder MIME type:', mimeType);
+      
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunksRef.current.push(event.data);
+          const totalSize = chunksRef.current.reduce((acc, chunk) => acc + chunk.size, 0);
+          console.log(`📦 Audio chunk: ${event.data.size} bytes (Total: ${(totalSize / 1024).toFixed(2)} KB)`);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        console.log('🛑 Recording stopped, processing audio...');
+        
+        const audioBlob = new Blob(chunksRef.current, { type: mimeType });
+        const url = URL.createObjectURL(audioBlob);
+        
+        console.log(`✅ Audio blob: ${audioBlob.size} bytes (${mimeType})`);
+        
+        setState(prev => ({ 
+          ...prev, 
+          recordedBlob: audioBlob,
+          recordedUrl: url,
+          audioLevel: 0
+        }));
+        
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+          try {
+            await audioContextRef.current.close();
+            console.log('🔇 AudioContext closed in onstop');
+          } catch (e) {
+            console.warn('⚠️ AudioContext already closed:', e);
+          }
+        }
+        
+        stream.getTracks().forEach(track => {
+          track.stop();
+          console.log('🔇 Track stopped');
+        });
+        
+        if (transcriptionRef.current) {
+          const finalTranscript = transcriptionRef.current.stop();
+          console.log('📝 Final transcript:', finalTranscript);
+        }
+        
+        if (onRecordingComplete) {
+          onRecordingComplete(audioBlob, url);
+        }
+      };
+
+      // Start MediaRecorder BEFORE AudioContext processes the stream
+      try {
+        mediaRecorder.start(1000);
+        console.log('✅ MediaRecorder started successfully');
+      } catch (startError) {
+        console.error('❌ MediaRecorder start failed:', startError);
+        throw new Error('Failed to start recording: ' + (startError instanceof Error ? startError.message : String(startError)));
+      }
+      
+      setState(prev => ({ ...prev, isRecording: true, isPaused: false, duration: 0 }));
+      
+      // NOW setup AudioContext (after MediaRecorder is running)
+      console.log('🎤 Now setting up AudioContext for visualization...');
       audioContextRef.current = new AudioContext();
       globalActiveContext = audioContextRef.current;
       const sharedContext = audioContextRef.current;
@@ -296,35 +396,17 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       analyserRef.current = sharedContext.createAnalyser();
       const source = sharedContext.createMediaStreamSource(stream);
       source.connect(analyserRef.current);
-      analyserRef.current.fftSize = 4096; // Larger size for pitch detection (was 256)
+      analyserRef.current.fftSize = 4096;
       analyserRef.current.smoothingTimeConstant = 0.8;
       
-      console.log('🎤 Shared AudioContext created:', {
-        state: sharedContext.state,
-        sampleRate: sharedContext.sampleRate,
-        fftSize: analyserRef.current.fftSize
-      });
+      console.log('✅ AudioContext setup complete');
       
-      // Initialize advanced voice analyzer WITH the shared context
+      // Initialize voice analyzer (non-critical, can fail gracefully)
       try {
-        console.log('🎤 Initializing advanced voice analyzer with shared AudioContext...');
-        console.log('🎤 Audio stream details:', {
-          tracks: stream.getTracks().length,
-          active: stream.active,
-          audioTracks: stream.getAudioTracks().map(t => ({ 
-            id: t.id, 
-            enabled: t.enabled, 
-            muted: t.muted,
-            readyState: t.readyState 
-          }))
-        });
-        
+        console.log('🎤 Initializing voice analyzer...');
         voiceAnalyzerRef.current = new VoiceAnalyzer();
-        console.log('🎤 VoiceAnalyzer instance created, calling initializeWithContext...');
-        
-        // Pass the shared AudioContext and analyser to VoiceAnalyzer
         const characteristics = await voiceAnalyzerRef.current.initializeWithContext(sharedContext, analyserRef.current);
-        console.log('✅ VoiceAnalyzer.initializeWithContext() completed');
+        console.log('✅ Voice analyzer initialized');
         
         currentVoiceCharacteristicsRef.current = characteristics;
         console.log('🎤 Initial characteristics:', {
@@ -395,11 +477,11 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         
         console.log('✅ Advanced voice analyzer active - interval ID:', voiceAnalysisIntervalRef.current);
       } catch (error) {
-        console.error('❌ Voice analyzer initialization failed:', error);
-        console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+        console.error('❌ Voice analyzer failed (non-critical):', error);
         // Continue without voice analysis
       }
       
+      // Start audio level monitoring
       const monitorAudioLevel = () => {
         if (!analyserRef.current) return;
         
@@ -414,116 +496,6 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       };
       
       monitorAudioLevel();
-      
-      // Simplified MediaRecorder creation with minimal options
-      console.log('🎬 Creating MediaRecorder with minimal configuration...');
-      let mediaRecorder: MediaRecorder;
-      
-      try {
-        // Try with minimal options first (most compatible)
-        mediaRecorder = new MediaRecorder(stream);
-        console.log('✅ MediaRecorder created with browser default settings');
-      } catch (defaultError) {
-        console.warn('⚠️ Default MediaRecorder failed, trying with explicit MIME type:', defaultError);
-        
-        // Fallback: try with explicit MIME type
-        const supportedTypes = [
-          'audio/webm',
-          'audio/webm;codecs=opus',
-          'audio/ogg;codecs=opus',
-          'audio/mp4',
-          ''
-        ];
-        
-        let created = false;
-        for (const type of supportedTypes) {
-          try {
-            if (type === '' || MediaRecorder.isTypeSupported(type)) {
-              mediaRecorder = new MediaRecorder(stream, type ? { mimeType: type } : {});
-              console.log('✅ MediaRecorder created with MIME type:', type || 'none');
-              created = true;
-              break;
-            }
-          } catch (e) {
-            console.warn(`⚠️ Failed with MIME type ${type}:`, e);
-            continue;
-          }
-        }
-        
-        if (!created) {
-          throw new Error('Failed to create MediaRecorder with any configuration');
-        }
-      }
-      
-      mediaRecorderRef.current = mediaRecorder;
-      chunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunksRef.current.push(event.data);
-          const totalSize = chunksRef.current.reduce((acc, chunk) => acc + chunk.size, 0);
-          console.log(`📦 Audio chunk received: ${event.data.size} bytes (Total: ${(totalSize / 1024).toFixed(2)} KB)`);
-        }
-      };
-      
-      const mimeType = mediaRecorder.mimeType || 'audio/webm';
-      console.log('📝 Final MIME type being used:', mimeType);
-
-      mediaRecorder.onstop = async () => {
-        console.log('🛑 Recording stopped, processing audio...');
-        
-        const audioBlob = new Blob(chunksRef.current, { type: mimeType });
-        const url = URL.createObjectURL(audioBlob);
-        
-        console.log(`✅ Audio blob created: ${audioBlob.size} bytes (${mimeType})`);
-        
-        setState(prev => ({ 
-          ...prev, 
-          recordedBlob: audioBlob,
-          recordedUrl: url,
-          audioLevel: 0
-        }));
-        
-        // Stop audio monitoring
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-        }
-        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-          try {
-            await audioContextRef.current.close();
-            console.log('🔇 AudioContext closed in onstop');
-          } catch (e) {
-            console.warn('⚠️ AudioContext already closed:', e);
-          }
-        }
-        
-        stream.getTracks().forEach(track => {
-          track.stop();
-          console.log('🔇 Audio track stopped');
-        });
-        
-        // Stop transcription
-        if (transcriptionRef.current) {
-          const finalTranscript = transcriptionRef.current.stop();
-          console.log('📝 Final transcript:', finalTranscript);
-        }
-        
-        if (onRecordingComplete) {
-          onRecordingComplete(audioBlob, url);
-        }
-      };
-
-      try {
-        mediaRecorder.start(1000);
-        console.log('🎬 MediaRecorder.start() called successfully');
-      } catch (startError) {
-        console.error('❌ MediaRecorder.start() failed:', startError);
-        throw new Error('Failed to start MediaRecorder: ' + (startError instanceof Error ? startError.message : String(startError)));
-      }
-      
-      setState(prev => ({ ...prev, isRecording: true, isPaused: false, duration: 0 }));
-      
-      console.log('🎙️ MediaRecorder started');
       
       // Start transcription
       if (transcriptionRef.current && transcriptionRef.current.isBrowserSupported()) {
