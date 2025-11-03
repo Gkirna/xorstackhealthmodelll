@@ -84,8 +84,6 @@ const SessionRecord = () => {
         transcriptCountRef.current++;
         
         console.log(`💬 Transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
-        console.log(`🎤 Current voice gender: ${currentVoiceGender || 'unknown'}`);
-        console.log(`🎤 Current voice characteristics:`, currentVoiceCharacteristics);
         
         const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
         setTranscript(prev => prev ? `${prev}\n\n${speakerLabel} : ${text}` : `${speakerLabel} : ${text}`);
@@ -93,59 +91,7 @@ const SessionRecord = () => {
         speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
       }
     },
-    onRecordingComplete: async (audioBlob: Blob, audioUrl?: string) => {
-      console.log('🎯 Recording complete, starting advanced analysis...');
-      toast.info('Processing with advanced transcription and medical NER...');
-      
-      try {
-        // Validate blob before processing
-        if (!audioBlob || audioBlob.size === 0) {
-          console.error('Empty or invalid audio blob');
-          toast.error('No audio data to transcribe');
-          return;
-        }
-
-        // Convert blob to base64
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          const result = reader.result as string;
-          
-          if (!result || !result.includes(',')) {
-            console.error('Invalid audio data format');
-            toast.error('Failed to process audio data');
-            return;
-          }
-          
-          const base64Audio = result.split(',')[1];
-          
-          if (!base64Audio || base64Audio.length === 0) {
-            console.error('Empty base64 audio data');
-            toast.error('No audio content to transcribe');
-            return;
-          }
-
-          console.log(`🎙️ Processing audio: ${(base64Audio.length / 1024).toFixed(2)} KB`);
-          const enhancedData = await processAudioWithFullAnalysis(base64Audio);
-          
-          if (enhancedData) {
-            setEnhancedTranscriptionData(enhancedData);
-            console.log(`✅ Advanced analysis complete:`, {
-              speakers: enhancedData.speaker_count,
-              entities: enhancedData.entities.length,
-              confidence: (enhancedData.confidence * 100).toFixed(1) + '%'
-            });
-          }
-        };
-        reader.onerror = () => {
-          console.error('FileReader error');
-          toast.error('Failed to read audio file');
-        };
-        reader.readAsDataURL(audioBlob);
-      } catch (error) {
-        console.error('Advanced transcription error:', error);
-        toast.error('Failed to process audio');
-      }
-    },
+    // onRecordingComplete will be set via ref to avoid re-renders
     onError: (error: string) => {
       console.error('Recording error:', error);
       toast.error(error);
