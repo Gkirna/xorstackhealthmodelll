@@ -189,6 +189,46 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       console.log('🎤 Starting audio recording...');
       setState(prev => ({ ...prev, error: null, recordedBlob: null, recordedUrl: null }));
       
+      // FORCE CLEANUP: Stop any existing streams first
+      if (streamRef.current) {
+        console.log('🧹 Force cleanup: Stopping existing stream...');
+        streamRef.current.getTracks().forEach(track => {
+          track.stop();
+          console.log(`🔇 Force stopped track: ${track.kind}, state: ${track.readyState}`);
+        });
+        streamRef.current = null;
+      }
+      
+      // Close existing AudioContext
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        console.log('🧹 Force cleanup: Closing existing AudioContext...');
+        await audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+      
+      // Clean up voice analyzer
+      if (voiceAnalyzerRef.current) {
+        console.log('🧹 Force cleanup: Cleaning voice analyzer...');
+        voiceAnalyzerRef.current.cleanup();
+        voiceAnalyzerRef.current = null;
+      }
+      
+      // Clear intervals
+      if (voiceAnalysisIntervalRef.current) {
+        clearInterval(voiceAnalysisIntervalRef.current);
+        voiceAnalysisIntervalRef.current = null;
+      }
+      
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      
+      console.log('✅ Force cleanup complete, requesting fresh microphone access...');
+      
+      // Small delay to ensure cleanup is complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const constraints: MediaStreamConstraints = {
         audio: {
           echoCancellation: { ideal: true },
@@ -204,6 +244,17 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       streamRef.current = stream;
       console.log('✅ Microphone access granted');
+      console.log('🎤 Stream details:', {
+        id: stream.id,
+        active: stream.active,
+        tracks: stream.getTracks().map(t => ({
+          kind: t.kind,
+          label: t.label,
+          enabled: t.enabled,
+          muted: t.muted,
+          readyState: t.readyState
+        }))
+      });
       
       // Setup single shared audio context for both level monitoring and voice analysis
       audioContextRef.current = new AudioContext();
