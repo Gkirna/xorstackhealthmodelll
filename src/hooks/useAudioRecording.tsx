@@ -133,17 +133,54 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     }
 
     return () => {
-      console.log('🧹 Cleaning up audio recorder...');
+      console.log('🧹 Cleaning up audio recorder on unmount...');
+      
+      // Stop timers
       if (timerRef.current) clearInterval(timerRef.current);
+      
+      // Stop voice analyzer
+      if (voiceAnalyzerRef.current) {
+        voiceAnalyzerRef.current.cleanup();
+        voiceAnalyzerRef.current = null;
+      }
+      if (voiceAnalysisIntervalRef.current) {
+        clearInterval(voiceAnalysisIntervalRef.current);
+        voiceAnalysisIntervalRef.current = null;
+      }
+      
+      // Stop MediaRecorder
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
       }
+      
+      // CRITICAL: Stop all media stream tracks
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+        console.log('🔇 Stopping all media tracks on unmount...');
+        streamRef.current.getTracks().forEach(track => {
+          track.stop();
+          console.log(`🔇 Track ${track.kind} stopped on unmount`);
+        });
+        streamRef.current = null;
       }
+      
+      // Close AudioContext
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        console.log('🧹 Closing AudioContext on unmount...');
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+      
+      // Stop audio monitoring
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      
+      // Stop transcription
       if (transcriptionRef.current) {
         transcriptionRef.current.destroy();
       }
+      
+      console.log('✅ Audio recorder cleanup complete');
     };
   }, [continuous, onFinalTranscriptChunk, onTranscriptUpdate]);
 
@@ -506,6 +543,31 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         voiceAnalysisIntervalRef.current = null;
       }
       
+      // CRITICAL: Stop all media stream tracks to release microphone
+      if (streamRef.current) {
+        console.log('🔇 Stopping all media tracks to release microphone...');
+        streamRef.current.getTracks().forEach(track => {
+          track.stop();
+          console.log(`🔇 Track ${track.kind} stopped (enabled: ${track.enabled}, readyState: ${track.readyState})`);
+        });
+        streamRef.current = null;
+      }
+      
+      // Close audio context to release resources
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        console.log('🧹 Closing AudioContext...');
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+      
+      // Stop audio monitoring
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      
+      analyserRef.current = null;
+      
       // Stop transcription
       if (transcriptionRef.current) {
         console.log('⏹️ Stopping transcription engine');
@@ -517,7 +579,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         timerRef.current = null;
       }
       
-      console.log('✅ Recording stopped successfully');
+      console.log('✅ Recording stopped successfully, all resources released');
       toast.success('Recording stopped');
     }
   }, []);
