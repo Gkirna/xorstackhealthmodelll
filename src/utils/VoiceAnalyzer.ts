@@ -54,7 +54,7 @@ export class VoiceAnalyzer {
   private readonly PITCH_UPDATE_INTERVAL = 500; // ms
   private readonly HISTORY_LIMIT = 100;
   private readonly MIN_CONFIDENCE = 0.6;
-  private readonly VOICE_ACTIVITY_THRESHOLD = 0.02;
+  private readonly VOICE_ACTIVITY_THRESHOLD = 2; // Lowered for better detection (was 20 = 0.02 * 1000)
   private readonly GENDER_PITCH_BOUNDARIES = {
     male: { min: 85, max: 180 },
     female: { min: 165, max: 255 },
@@ -217,13 +217,16 @@ export class VoiceAnalyzer {
   private detectVoiceActivity(buffer: Float32Array): boolean {
     const volume = this.detectVolume(buffer);
     
-    // Voice activity detection threshold
-    if (volume < this.VOICE_ACTIVITY_THRESHOLD * 1000) {
+    console.log(`🔊 Voice activity check - volume: ${volume.toFixed(2)}, threshold: ${this.VOICE_ACTIVITY_THRESHOLD}`);
+    
+    // Voice activity detection threshold (volume is already multiplied by 1000 in detectVolume)
+    if (volume < this.VOICE_ACTIVITY_THRESHOLD) {
       return false;
     }
     
     // Check for voice characteristics (not just noise)
     const pitch = this.detectPitchAdvanced(buffer);
+    console.log(`🎵 Pitch detected: ${pitch.toFixed(0)}Hz`);
     return pitch >= 50 && pitch <= 800;
   }
 
