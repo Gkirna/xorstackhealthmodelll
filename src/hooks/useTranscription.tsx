@@ -146,12 +146,17 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
   // ADVANCED: Voice-based speaker detection using pitch/frequency characteristics
   // This is the PRIMARY method - uses advanced voice analysis from VoiceAnalyzer
   const detectSpeakerByGender = useCallback((text: string): string | null => {
+    console.log('🔍 detectSpeakerByGender called');
+    
     if (!currentVoiceGenderRef.current || currentVoiceGenderRef.current === 'unknown') {
+      console.log('⚠️ Voice gender unknown, returning null');
       return null;
     }
     
     // Get current voice characteristics from analyzer
     const characteristics = currentVoiceCharacteristicsRef.current;
+    console.log('🎤 Current characteristics:', characteristics);
+    
     if (!characteristics || characteristics.confidence < 0.7) {
       console.log('⚠️ Low confidence voice characteristics, using fallback');
       return null;
@@ -162,6 +167,7 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
     
     // Silence detection
     if (speakerId === 'silence') {
+      console.log('🔇 Silence detected, returning null');
       return null;
     }
     

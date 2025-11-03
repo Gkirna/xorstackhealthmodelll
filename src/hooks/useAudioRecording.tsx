@@ -178,10 +178,31 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       // Initialize advanced voice analyzer
       try {
         console.log('🎤 Initializing advanced voice analyzer...');
+        console.log('🎤 Audio stream details:', {
+          tracks: stream.getTracks().length,
+          active: stream.active,
+          audioTracks: stream.getAudioTracks().map(t => ({ 
+            id: t.id, 
+            enabled: t.enabled, 
+            muted: t.muted,
+            readyState: t.readyState 
+          }))
+        });
         
         voiceAnalyzerRef.current = new VoiceAnalyzer();
+        console.log('🎤 VoiceAnalyzer instance created, calling initialize...');
+        
         const characteristics = await voiceAnalyzerRef.current.initialize(stream);
+        console.log('✅ VoiceAnalyzer.initialize() completed');
+        
         currentVoiceCharacteristicsRef.current = characteristics;
+        console.log('🎤 Initial characteristics:', {
+          gender: characteristics.gender,
+          pitch: characteristics.pitch.toFixed(0),
+          confidence: (characteristics.confidence * 100).toFixed(0) + '%',
+          speakerId: characteristics.speakerId,
+          voiceQuality: characteristics.voiceQuality
+        });
         
         if (characteristics.gender !== 'unknown') {
           currentVoiceGenderRef.current = characteristics.gender;
@@ -189,7 +210,14 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         }
         
         // Start real-time voice analysis (every 300ms for more responsive updates)
+        console.log('🔄 Starting voice analysis interval (every 300ms)');
+        let intervalCount = 0;
         voiceAnalysisIntervalRef.current = setInterval(async () => {
+          intervalCount++;
+          if (intervalCount % 10 === 0) {
+            console.log(`🔄 Voice analysis running (${intervalCount} iterations)`);
+          }
+          
           if (voiceAnalyzerRef.current) {
             try {
               const updated = await voiceAnalyzerRef.current.analyzeVoiceSample();
@@ -197,17 +225,24 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
               
               // Update gender with higher confidence threshold for accuracy
               if (updated.gender !== 'unknown' && updated.confidence > 0.75) {
+                const previousGender = currentVoiceGenderRef.current;
                 currentVoiceGenderRef.current = updated.gender;
-                console.log(`🎭 Voice update: ${updated.gender} (${updated.pitch.toFixed(0)}Hz, ${updated.speakerId})`);
+                if (previousGender !== updated.gender) {
+                  console.log(`🎭 Voice update: ${updated.gender} (${updated.pitch.toFixed(0)}Hz, ${updated.speakerId})`);
+                }
               }
               
               // Log speaker changes
               if (updated.speakerId !== 'silence' && updated.confidence > 0.7) {
-                console.log(`👤 Active speaker: ${updated.speakerId} (confidence: ${(updated.confidence * 100).toFixed(0)}%)`);
+                if (intervalCount % 5 === 0) { // Log every 1.5 seconds
+                  console.log(`👤 Active speaker: ${updated.speakerId} (pitch: ${updated.pitch.toFixed(0)}Hz, confidence: ${(updated.confidence * 100).toFixed(0)}%)`);
+                }
               }
             } catch (error) {
-              // Silently continue if analysis fails
+              console.error('❌ Voice analysis error in interval:', error);
             }
+          } else {
+            console.warn('⚠️ voiceAnalyzerRef.current is null in interval');
           }
         }, 300); // 300ms for more responsive updates
         
@@ -227,9 +262,10 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           clearInterval(statsInterval);
         }, 0) as any;
         
-        console.log('✅ Advanced voice analyzer active');
+        console.log('✅ Advanced voice analyzer active - interval ID:', voiceAnalysisIntervalRef.current);
       } catch (error) {
-        console.warn('⚠️ Voice analyzer initialization failed:', error);
+        console.error('❌ Voice analyzer initialization failed:', error);
+        console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
         // Continue without voice analysis
       }
       
