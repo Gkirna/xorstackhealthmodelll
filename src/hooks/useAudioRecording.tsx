@@ -415,27 +415,45 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       monitorAudioLevel();
       
-      // Try different MIME types for better compatibility
-      let mimeType = 'audio/webm';
-      const supportedTypes = [
-        'audio/webm;codecs=opus',
-        'audio/webm',
-        'audio/ogg;codecs=opus',
-        'audio/mp4'
-      ];
+      // Simplified MediaRecorder creation with minimal options
+      console.log('🎬 Creating MediaRecorder with minimal configuration...');
+      let mediaRecorder: MediaRecorder;
       
-      for (const type of supportedTypes) {
-        if (MediaRecorder.isTypeSupported(type)) {
-          mimeType = type;
-          console.log('✅ Using MIME type:', type);
-          break;
+      try {
+        // Try with minimal options first (most compatible)
+        mediaRecorder = new MediaRecorder(stream);
+        console.log('✅ MediaRecorder created with browser default settings');
+      } catch (defaultError) {
+        console.warn('⚠️ Default MediaRecorder failed, trying with explicit MIME type:', defaultError);
+        
+        // Fallback: try with explicit MIME type
+        const supportedTypes = [
+          'audio/webm',
+          'audio/webm;codecs=opus',
+          'audio/ogg;codecs=opus',
+          'audio/mp4',
+          ''
+        ];
+        
+        let created = false;
+        for (const type of supportedTypes) {
+          try {
+            if (type === '' || MediaRecorder.isTypeSupported(type)) {
+              mediaRecorder = new MediaRecorder(stream, type ? { mimeType: type } : {});
+              console.log('✅ MediaRecorder created with MIME type:', type || 'none');
+              created = true;
+              break;
+            }
+          } catch (e) {
+            console.warn(`⚠️ Failed with MIME type ${type}:`, e);
+            continue;
+          }
+        }
+        
+        if (!created) {
+          throw new Error('Failed to create MediaRecorder with any configuration');
         }
       }
-      
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType,
-        audioBitsPerSecond: 128000,
-      });
       
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
@@ -447,6 +465,9 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           console.log(`📦 Audio chunk received: ${event.data.size} bytes (Total: ${(totalSize / 1024).toFixed(2)} KB)`);
         }
       };
+      
+      const mimeType = mediaRecorder.mimeType || 'audio/webm';
+      console.log('📝 Final MIME type being used:', mimeType);
 
       mediaRecorder.onstop = async () => {
         console.log('🛑 Recording stopped, processing audio...');
@@ -467,8 +488,13 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
         }
-        if (audioContextRef.current) {
-          audioContextRef.current.close();
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+          try {
+            await audioContextRef.current.close();
+            console.log('🔇 AudioContext closed in onstop');
+          } catch (e) {
+            console.warn('⚠️ AudioContext already closed:', e);
+          }
         }
         
         stream.getTracks().forEach(track => {
@@ -487,7 +513,14 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         }
       };
 
-      mediaRecorder.start(1000); // Collect data every second
+      try {
+        mediaRecorder.start(1000);
+        console.log('🎬 MediaRecorder.start() called successfully');
+      } catch (startError) {
+        console.error('❌ MediaRecorder.start() failed:', startError);
+        throw new Error('Failed to start MediaRecorder: ' + (startError instanceof Error ? startError.message : String(startError)));
+      }
+      
       setState(prev => ({ ...prev, isRecording: true, isPaused: false, duration: 0 }));
       
       console.log('🎙️ MediaRecorder started');
@@ -514,27 +547,35 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
 
       toast.success('Recording started');
     } catch (error) {
-      console.error('❌ Microphone access error:', error);
+      console.error('❌ Recording error:', error);
       console.error('❌ Error name:', error?.name);
       console.error('❌ Error message:', error?.message);
       console.error('❌ Error stack:', error?.stack);
       
-      let errorMessage = 'Failed to access microphone. Please grant permission.';
+      let errorMessage = 'Failed to start recording. Please try again.';
       
       if (error?.name === 'NotAllowedError') {
-        errorMessage = 'Microphone permission denied. Please allow microphone access in your browser settings.';
+        errorMessage = 'Microphone permission denied. Please allow microphone access.';
       } else if (error?.name === 'NotFoundError') {
-        errorMessage = 'No microphone found. Please connect a microphone and try again.';
+        errorMessage = 'No microphone found. Please connect a microphone.';
       } else if (error?.name === 'NotReadableError') {
-        errorMessage = 'Microphone is in use by another application. Please close other apps using the microphone.';
+        errorMessage = 'Microphone is in use by another app. Close other apps and try again.';
       } else if (error?.name === 'OverconstrainedError') {
-        errorMessage = 'Microphone does not meet the required constraints. Try a different microphone.';
+        errorMessage = 'Microphone does not meet requirements. Try a different microphone.';
       } else if (error?.name === 'AbortError') {
-        errorMessage = 'Microphone access was aborted. Please try again.';
+        errorMessage = 'Recording was aborted. Please try again.';
+      } else if (error?.name === 'NotSupportedError') {
+        errorMessage = 'Your browser does not support audio recording. Try Chrome or Edge.';
+      } else if (error?.message?.includes('MediaRecorder')) {
+        errorMessage = 'Failed to initialize recorder. Please refresh the page.';
       }
       
       console.error('❌ Final error message:', errorMessage);
-      setState(prev => ({ ...prev, error: errorMessage, audioLevel: 0 }));
+      
+      // Cleanup on error
+      await forceGlobalCleanup();
+      
+      setState(prev => ({ ...prev, error: errorMessage, audioLevel: 0, isRecording: false }));
       toast.error(errorMessage, { duration: 5000 });
       if (onError) onError(errorMessage);
     }
@@ -657,11 +698,19 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       }
       
       // Close audio context to release resources
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        console.log('🧹 Closing AudioContext...');
-        await audioContextRef.current.close();
-        audioContextRef.current = null;
-        globalActiveContext = null;
+      if (audioContextRef.current) {
+        try {
+          if (audioContextRef.current.state !== 'closed') {
+            console.log('🧹 Closing AudioContext...');
+            await audioContextRef.current.close();
+            console.log('✅ AudioContext closed successfully');
+          }
+        } catch (closeError) {
+          console.warn('⚠️ AudioContext close error (may already be closed):', closeError);
+        } finally {
+          audioContextRef.current = null;
+          globalActiveContext = null;
+        }
       }
       
       // Stop audio monitoring
