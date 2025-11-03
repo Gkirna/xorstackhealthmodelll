@@ -75,11 +75,17 @@ export class VoiceAnalyzer {
    */
   async initialize(stream: MediaStream): Promise<VoiceCharacteristics> {
     try {
+      console.log('🎤 VoiceAnalyzer.initialize() - creating AudioContext');
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
         sampleRate: this.sampleRate
       });
       
+      console.log('🎤 AudioContext state:', this.audioContext.state);
+      console.log('🎤 AudioContext sample rate:', this.audioContext.sampleRate);
+      
       this.microphone = this.audioContext.createMediaStreamSource(stream);
+      console.log('🎤 MediaStreamSource created');
+      
       this.analyser = this.audioContext.createAnalyser();
       this.gainNode = this.audioContext.createGain();
       
@@ -87,11 +93,21 @@ export class VoiceAnalyzer {
       this.analyser.fftSize = this.bufferSize;
       this.analyser.smoothingTimeConstant = 0.8;
       
+      console.log('🎤 Analyser configured:', {
+        fftSize: this.analyser.fftSize,
+        frequencyBinCount: this.analyser.frequencyBinCount,
+        smoothing: this.analyser.smoothingTimeConstant
+      });
+      
       // Connect audio graph
       this.microphone.connect(this.gainNode!);
       this.gainNode!.connect(this.analyser);
       
-      console.log('🎤 Voice analyzer initialized');
+      console.log('🎤 Audio graph connected: microphone -> gain -> analyser');
+      console.log('🎤 Voice analyzer initialization complete');
+      
+      // Wait a bit for audio data to flow
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       // Analyze initial voice sample
       return await this.analyzeVoiceSample();
@@ -111,6 +127,16 @@ export class VoiceAnalyzer {
 
     const dataArray = new Float32Array(this.analyser.fftSize);
     this.analyser.getFloatTimeDomainData(dataArray);
+    
+    // Debug: Check if buffer has data
+    const bufferSum = Array.from(dataArray).reduce((sum, val) => sum + Math.abs(val), 0);
+    const bufferAvg = bufferSum / dataArray.length;
+    console.log(`🔍 Buffer analysis: size=${dataArray.length}, avg=${bufferAvg.toFixed(6)}, sum=${bufferSum.toFixed(6)}`);
+    
+    // Check if buffer is all zeros
+    if (bufferSum === 0) {
+      console.warn('⚠️ Audio buffer is empty - no data from microphone');
+    }
     
     // Advanced pitch detection with autocorrelation
     const pitch = this.detectPitchAdvanced(dataArray);
