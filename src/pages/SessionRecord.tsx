@@ -161,18 +161,26 @@ const SessionRecord = () => {
     if (currentVoiceCharacteristics) {
       updateVoiceCharacteristics(currentVoiceCharacteristics);
     }
-  }, [currentVoiceCharacteristics, updateVoiceCharacteristics]);
+  }, [currentVoiceCharacteristics]); // Removed updateVoiceCharacteristics from deps - it's stable
   
   // Advanced transcription
   const { processAudioWithFullAnalysis, isProcessing } = useAdvancedTranscription();
 
   // CALLBACKS AFTER HOOKS
   const handleStartTranscribing = useCallback(async () => {
+    console.log('🎯 handleStartTranscribing called:', {
+      isStartingRecording,
+      isRecording,
+      recordingMode
+    });
+    
     if (isStartingRecording) {
+      console.log('⏳ Already starting recording, ignoring click');
       return;
     }
 
     if (isRecording) {
+      console.log('🛑 Stopping recording...');
       toast.success('Stopping transcription...');
       await saveAllPendingChunks();
       stopRecording();
@@ -186,11 +194,13 @@ const SessionRecord = () => {
     }
 
     if (recordingMode === 'upload') {
+      console.log('⚠️ Upload mode selected');
       toast.info('Upload flow coming soon. Please use Dictating or Transcribing for now.');
       return;
     }
 
     if (recordingMode === 'dictating' || recordingMode === 'transcribing') {
+      console.log('🎤 Starting recording in mode:', recordingMode);
       setIsStartingRecording(true);
       
       try {
@@ -199,9 +209,11 @@ const SessionRecord = () => {
         transcriptCountRef.current = 0;
         toast.success('Starting live transcription... Speak now!');
         
+        console.log('📞 Calling startRecording()...');
         await startRecording();
+        console.log('✅ startRecording() completed');
       } catch (error) {
-        console.error('Failed to start recording:', error);
+        console.error('❌ Failed to start recording:', error);
         toast.error('Failed to start recording. Please try again.');
       } finally {
         setIsStartingRecording(false);
@@ -209,6 +221,7 @@ const SessionRecord = () => {
       return;
     }
 
+    console.log('📝 Manual input mode');
     const hasManualInput = transcript.trim().length > 0 || context.trim().length > 0;
     if (hasManualInput) {
       await autoGenerateNote();
@@ -610,14 +623,14 @@ const SessionRecord = () => {
     if (id) {
       loadTranscripts();
     }
-  }, [id, loadTranscripts]);
+  }, [id]); // Removed loadTranscripts from deps - only load on id change
 
   useEffect(() => {
     const fullTranscript = getFullTranscript();
     if (fullTranscript) {
       setTranscript(fullTranscript);
     }
-  }, [transcriptChunks, getFullTranscript]);
+  }, [transcriptChunks]); // Removed getFullTranscript from deps - only update when chunks change
 
   useTranscriptUpdates(id || '', (newTranscript) => {
     loadTranscripts();
