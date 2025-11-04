@@ -253,7 +253,7 @@ const SessionRecord = () => {
     } finally {
       setIsAutoPipelineRunning(false);
     }
-  }, [id, transcript, context, updateSession]);
+  }, [id, transcript, context, template]);
 
   const handlePauseRecording = useCallback(() => {
     console.log('🎯 PAUSE BUTTON CLICKED - Calling pauseRecording()');
@@ -381,7 +381,7 @@ const SessionRecord = () => {
     } finally {
       setIsAutoPipelineRunning(false);
     }
-  }, [transcript, id, session, context, template, updateSession]);
+  }, [transcript, id, session, context, template]);
 
   const handleSessionDateChange = useCallback(async (newDate: Date) => {
     setSessionDate(newDate);
@@ -399,7 +399,7 @@ const SessionRecord = () => {
         toast.error('Failed to update session date');
       }
     }
-  }, [id, updateSession]);
+  }, [id]);
 
   const handlePatientNameChange = useCallback(async (newName: string) => {
     setPatientName(newName);
@@ -415,7 +415,7 @@ const SessionRecord = () => {
         console.error('Error updating patient name:', error);
       }
     }
-  }, [id, session?.patient_name, updateSession]);
+  }, [id, session?.patient_name]);
 
   const handleFinishRecording = useCallback(async () => {
     if (!generatedNote) {
@@ -503,18 +503,17 @@ const SessionRecord = () => {
 
   useEffect(() => {
     if (!session || !id) return;
+    if (patientName === session.patient_name) return; // Skip if no change
     
     const timeoutId = setTimeout(async () => {
-      if (patientName !== session.patient_name) {
-        await updateSession.mutateAsync({
-          id,
-          updates: { patient_name: patientName },
-        });
-      }
+      await updateSession.mutateAsync({
+        id,
+        updates: { patient_name: patientName },
+      });
     }, 1000);
 
     return () => clearTimeout(timeoutId);
-  }, [patientName, session, id, updateSession]);
+  }, [patientName, session?.patient_name, id]); // Removed updateSession, use session.patient_name specifically
 
   useEffect(() => {
     orchestratorRef.current = new WorkflowOrchestrator((state) => {

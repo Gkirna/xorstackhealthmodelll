@@ -8,29 +8,6 @@ import { MedicalAutoCorrector } from '@/utils/MedicalAutoCorrector';
 let globalActiveStream: MediaStream | null = null;
 let globalActiveContext: AudioContext | null = null;
 
-// Global cleanup function
-async function forceGlobalCleanup() {
-  console.log('🧹 GLOBAL CLEANUP: Releasing all audio resources...');
-  
-  if (globalActiveStream) {
-    globalActiveStream.getTracks().forEach(track => {
-      track.stop();
-      console.log(`🔇 Global cleanup stopped track: ${track.kind}`);
-    });
-    globalActiveStream = null;
-  }
-  
-  if (globalActiveContext && globalActiveContext.state !== 'closed') {
-    await globalActiveContext.close();
-    console.log('🧹 Global cleanup closed AudioContext');
-    globalActiveContext = null;
-  }
-  
-  // Wait for cleanup to complete
-  await new Promise(resolve => setTimeout(resolve, 100));
-  console.log('✅ Global cleanup complete');
-}
-
 interface AudioRecordingOptions {
   onTranscriptUpdate?: (transcript: string, isFinal: boolean) => void;
   onFinalTranscriptChunk?: (text: string) => void;
@@ -95,13 +72,6 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   // Initialize transcription engine
   useEffect(() => {
     console.log('🎙️ Initializing real-time transcription engine...');
-    
-    // FORCE CLEANUP ON MOUNT - Release any stuck microphone
-    const initCleanup = async () => {
-      await forceGlobalCleanup();
-      console.log('✅ Initial cleanup complete on mount');
-    };
-    initCleanup();
     
     transcriptionRef.current = new RealTimeTranscription({
       continuous,
@@ -231,18 +201,17 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       console.log('🎤 Starting audio recording...');
       setState(prev => ({ ...prev, error: null, recordedBlob: null, recordedUrl: null }));
       
-      // FORCE GLOBAL CLEANUP FIRST
-      await forceGlobalCleanup();
-      
-      // Local cleanup
+      // Local cleanup before starting
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
+        globalActiveStream = null;
       }
       
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
         await audioContextRef.current.close();
         audioContextRef.current = null;
+        globalActiveContext = null;
       }
       
       if (voiceAnalyzerRef.current) {
@@ -545,7 +514,16 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       console.error('❌ Final error message:', errorMessage);
       
       // Cleanup on error
-      await forceGlobalCleanup();
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+        globalActiveStream = null;
+      }
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        await audioContextRef.current.close();
+        audioContextRef.current = null;
+        globalActiveContext = null;
+      }
       
       setState(prev => ({ ...prev, error: errorMessage, audioLevel: 0, isRecording: false }));
       toast.error(errorMessage, { duration: 5000 });
