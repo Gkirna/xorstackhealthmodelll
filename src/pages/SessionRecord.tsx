@@ -784,8 +784,8 @@ const SessionRecord = () => {
           onRecordingInputModeChange={setRecordingInputMode}
         />
 
-        {/* Audio Quality Indicator - Show when recording */}
-        {(isRecording || isPaused) && (
+        {/* Audio Quality Indicator - Show when recording in direct mode only */}
+        {(isRecording || isPaused) && recordingInputMode === 'direct' && (
           <div className="px-6 pt-3">
             <AudioQualityIndicator
               volume={audioLevel || 0}
