@@ -82,17 +82,16 @@ CRITICAL INSTRUCTIONS:
 5. Maintain professional medical documentation standards
 6. Preserve patient safety information and critical alerts
 7. Structure the output as valid JSON
-8. **IMPORTANT**: Detect the language of the transcript and generate the note in the SAME LANGUAGE
-9. If transcript is in Kannada (ಕನ್ನಡ), generate the entire note in Kannada
-10. If transcript is in English, generate the note in English
-11. Maintain medical accuracy and proper terminology in the target language
+8. **IMPORTANT**: Always generate the clinical note in ENGLISH, regardless of the transcript language
+9. Translate any non-English content to English while preserving medical accuracy
+10. Use standard English medical terminology
 
-MULTILINGUAL SUPPORT:
-- Analyze the transcript to detect its language
-- Generate the clinical note in the SAME LANGUAGE as the transcript
-- Use appropriate medical terminology for that language
-- Preserve all clinical details during language processing
-- Section headers should also be in the same language as content
+LANGUAGE HANDLING:
+- The transcript may be in any language (English, Hindi, Kannada, etc.)
+- Always translate and generate the clinical note in English
+- Use appropriate English medical terminology
+- Preserve all clinical details during translation
+- Section headers must be in English
 
 Output format (MUST be valid JSON):
 {
@@ -100,7 +99,7 @@ Output format (MUST be valid JSON):
   "sections": {
 ${sections}
   },
-  "plaintext": "Full formatted clinical note with proper section headers and content IN THE SAME LANGUAGE AS THE TRANSCRIPT"
+  "plaintext": "Full formatted clinical note with proper section headers and content IN ENGLISH"
 }
 
 Quality criteria:
@@ -110,7 +109,7 @@ Quality criteria:
 - Structure: Logical flow and organization
 - Speaker Attribution: Correctly identify doctor vs patient statements
 - Compliance: Follows documentation standards
-- Language Consistency: Note must be in the same language as transcript`;
+- Language: Clinical note must always be in English`;
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -122,7 +121,7 @@ Quality criteria:
         model: 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Generate a clinical note from this transcript. IMPORTANT: Generate the note in the SAME LANGUAGE as the transcript below.\n\nTranscript:\n${transcript_text}` }
+          { role: 'user', content: `Generate a clinical note from this transcript. IMPORTANT: Generate the note in ENGLISH, translating any non-English content while preserving medical accuracy.\n\nTranscript:\n${transcript_text}` }
         ],
       }),
     });
