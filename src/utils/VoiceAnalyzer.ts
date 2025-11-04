@@ -67,13 +67,38 @@ export class VoiceAnalyzer {
   private readonly CONFIDENCE_DECAY = 0.95; // Confidence decays over time
   private mode: 'direct' | 'playback' = 'direct';
   
+  // Pitch ranges for gender detection (in Hz) - optimized for each mode
+  private readonly MIN_PITCH_MALE: number;
+  private readonly MAX_PITCH_MALE: number;
+  private readonly MIN_PITCH_FEMALE: number;
+  private readonly MAX_PITCH_FEMALE: number;
+  private readonly CONFIDENCE_THRESHOLD: number;
+  
   constructor(mode: 'direct' | 'playback' = 'direct') {
     this.mode = mode;
+    
     // Adjust thresholds for playback mode (degraded audio quality)
     if (mode === 'playback') {
       this.MIN_PITCH_DIFFERENCE = 25; // Wider tolerance for degraded audio
+      this.MIN_PITCH_MALE = 65;
+      this.MAX_PITCH_MALE = 210;
+      this.MIN_PITCH_FEMALE = 140;
+      this.MAX_PITCH_FEMALE = 380;
+      this.CONFIDENCE_THRESHOLD = 0.55;
+    } else {
+      this.MIN_PITCH_MALE = 85;
+      this.MAX_PITCH_MALE = 180;
+      this.MIN_PITCH_FEMALE = 165;
+      this.MAX_PITCH_FEMALE = 255;
+      this.CONFIDENCE_THRESHOLD = 0.70;
     }
-    console.log(`🎤 VoiceAnalyzer initialized in ${mode} mode`);
+    
+    console.log(`🎤 VoiceAnalyzer initialized in ${mode} mode with thresholds:`, {
+      pitchDiff: this.MIN_PITCH_DIFFERENCE,
+      maleRange: [this.MIN_PITCH_MALE, this.MAX_PITCH_MALE],
+      femaleRange: [this.MIN_PITCH_FEMALE, this.MAX_PITCH_FEMALE],
+      confidence: this.CONFIDENCE_THRESHOLD
+    });
   }
 
   /**

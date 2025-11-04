@@ -65,6 +65,15 @@ export class RealTimeTranscription {
     this.recognition.interimResults = this.config.interimResults;
     this.recognition.lang = this.config.lang;
     this.recognition.maxAlternatives = 5; // Increased for better accuracy in medical context
+    
+    // Enhanced settings for better playback mode performance
+    if ('audioConstraints' in this.recognition) {
+      (this.recognition as any).audioConstraints = {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      };
+    }
 
     this.recognition.onstart = () => {
       console.log('Speech recognition started');
@@ -224,36 +233,62 @@ export class RealTimeTranscription {
       }
 
       // Auto-restart on certain errors in continuous mode
-      if (this.config.continuous && shouldRestart && this.isListening) {
-        console.log('⏳ Auto-restarting recognition in 500ms...');
+      if (this.config.continuous && shouldRestart) {
+        console.log('⏳ Auto-restarting recognition in 300ms...');
         setTimeout(() => {
           if (this.isListening) {
             try {
               console.log('🔄 Restarting recognition...');
+              this.isListening = false; // Reset flag before restart
               this.recognition.start();
             } catch (e) {
               console.error('Failed to restart:', e);
+              // Try one more time after a longer delay
+              setTimeout(() => {
+                if (!this.isListening) {
+                  try {
+                    this.recognition.start();
+                  } catch (retryError) {
+                    console.error('Restart retry failed:', retryError);
+                  }
+                }
+              }, 1000);
             }
           }
-        }, 500);
+        }, 300);
       }
     };
 
     this.recognition.onend = () => {
-      console.log('Speech recognition ended');
+      console.log('Speech recognition ended, was listening:', this.isListening);
+      const wasListening = this.isListening;
       this.isListening = false;
       
       if (this.config.onEnd) {
         this.config.onEnd();
       }
 
-      // Auto-restart if continuous mode
-      if (this.config.continuous && this.isListening) {
-        try {
-          this.recognition.start();
-        } catch (e) {
-          console.error('Failed to restart recognition:', e);
-        }
+      // Auto-restart if continuous mode and was actively listening
+      if (this.config.continuous && wasListening) {
+        console.log('🔄 Continuous mode - restarting in 200ms...');
+        setTimeout(() => {
+          try {
+            this.recognition.start();
+            this.isListening = true;
+            console.log('✅ Recognition restarted successfully');
+          } catch (e) {
+            console.error('Failed to restart recognition:', e);
+            // Try again after a longer delay
+            setTimeout(() => {
+              try {
+                this.recognition.start();
+                this.isListening = true;
+              } catch (retryError) {
+                console.error('Restart retry failed:', retryError);
+              }
+            }, 1000);
+          }
+        }, 200);
       }
     };
   }
