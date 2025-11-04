@@ -18,52 +18,98 @@ serve(async (req) => {
       throw new Error('No audio data provided');
     }
 
-    // Get LOVABLE_API_KEY for authentication
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
+    // Get AssemblyAI API key
+    const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
+    if (!ASSEMBLYAI_API_KEY) {
+      throw new Error('ASSEMBLYAI_API_KEY not configured');
     }
 
-    console.log('🎙️ Starting fast audio transcription...', { language });
+    console.log('🎙️ Starting AssemblyAI transcription...', { language });
 
     // Convert base64 to binary
     const binaryAudio = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
     
-    // Create form data for Whisper API
-    const formData = new FormData();
-    const audioBlob = new Blob([binaryAudio], { type: 'audio/webm' });
-    formData.append('file', audioBlob, 'audio.webm');
-    formData.append('model', 'whisper-1');
-    
-    // Set language based on input (en, hi, kn)
-    formData.append('language', language === 'hi' ? 'hi' : language === 'kn' ? 'kn' : 'en');
-    formData.append('temperature', '0.0');
-    
-    // Add medical context prompts based on language
-    const medicalPrompts: Record<string, string> = {
-      'en': 'This is a medical consultation between a healthcare provider and a patient. Common medical terms: medication, diagnosis, symptoms, treatment, allergy, dosage, blood pressure, heart rate, diabetes, hypertension, examination.',
-      'hi': 'यह एक स्वास्थ्य सेवा प्रदाता और रोगी के बीच चिकित्सा परामर्श है। सामान्य चिकित्सा शब्द: दवा, निदान, लक्षण, उपचार, एलर्जी, खुराक, रक्तचाप, हृदय गति, मधुमेह, उच्च रक्तचाप, परीक्षण।',
-      'kn': 'ಇದು ಆರೋಗ್ಯ ಸೇವಾ ಪೂರೈಕೆದಾರ ಮತ್ತು ರೋಗಿಯ ನಡುವಿನ ವೈದ್ಯಕೀಯ ಸಮಾಲೋಚನೆಯಾಗಿದೆ. ಸಾಮಾನ್ಯ ವೈದ್ಯಕೀಯ ಪದಗಳು: ಔಷಧಿ, ರೋಗನಿರ್ಣಯ, ಲಕ್ಷಣಗಳು, ಚಿಕಿತ್ಸೆ, ಅಲರ್ಜಿ, ಪ್ರಮಾಣ, ರಕ್ತದೊತ್ತಡ, ಹೃದಯ ಬಡಿತ, ಮಧುಮೇಹ, ಅಧಿಕ ರಕ್ತದೊತ್ತಡ, ಪರೀಕ್ಷೆ.'
-    };
-    formData.append('prompt', medicalPrompts[language] || medicalPrompts['en']);
-
-    // Call OpenAI Whisper API through Lovable AI Gateway with authentication
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/audio/transcriptions', {
+    // Step 1: Upload audio to AssemblyAI
+    console.log('📤 Uploading audio to AssemblyAI...');
+    const uploadResponse = await fetch('https://api.assemblyai.com/v2/upload', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'authorization': ASSEMBLYAI_API_KEY,
       },
-      body: formData,
+      body: binaryAudio,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Transcription API error:', errorText);
-      throw new Error(`Transcription failed: ${response.status}`);
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      console.error('❌ Upload error:', errorText);
+      throw new Error(`Upload failed: ${uploadResponse.status}`);
     }
 
-    const result = await response.json();
-    const transcriptText = result.text;
+    const { upload_url } = await uploadResponse.json();
+    console.log('✅ Audio uploaded successfully');
+
+    // Step 2: Request transcription
+    console.log('🎯 Requesting transcription...');
+    const languageCode = language === 'hi' ? 'hi' : language === 'kn' ? 'kn' : 'en';
+    
+    const transcriptResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
+      method: 'POST',
+      headers: {
+        'authorization': ASSEMBLYAI_API_KEY,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        audio_url: upload_url,
+        language_code: languageCode,
+        speaker_labels: true,
+      }),
+    });
+
+    if (!transcriptResponse.ok) {
+      const errorText = await transcriptResponse.text();
+      console.error('❌ Transcription request error:', errorText);
+      throw new Error(`Transcription request failed: ${transcriptResponse.status}`);
+    }
+
+    const { id: transcriptId } = await transcriptResponse.json();
+    console.log('⏳ Polling for transcription results...', transcriptId);
+
+    // Step 3: Poll for results (with timeout)
+    let transcriptResult;
+    let attempts = 0;
+    const maxAttempts = 60; // 60 seconds max wait
+    
+    while (attempts < maxAttempts) {
+      const pollingResponse = await fetch(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, {
+        headers: {
+          'authorization': ASSEMBLYAI_API_KEY,
+        },
+      });
+
+      if (!pollingResponse.ok) {
+        throw new Error(`Polling failed: ${pollingResponse.status}`);
+      }
+
+      transcriptResult = await pollingResponse.json();
+      
+      if (transcriptResult.status === 'completed') {
+        console.log('✅ Transcription completed!');
+        break;
+      } else if (transcriptResult.status === 'error') {
+        console.error('❌ Transcription error:', transcriptResult.error);
+        throw new Error(`Transcription error: ${transcriptResult.error}`);
+      }
+      
+      // Wait 1 second before next poll
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      attempts++;
+    }
+
+    if (attempts >= maxAttempts) {
+      throw new Error('Transcription timeout - took too long');
+    }
+
+    const transcriptText = transcriptResult.text;
 
     console.log('✅ Transcription successful, length:', transcriptText.length);
 
