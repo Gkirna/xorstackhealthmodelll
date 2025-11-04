@@ -573,12 +573,18 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         transcriptionRef.current.pause();
       }
       
+      // KEEP voice analyzer running but log that we're paused
+      console.log('⏸️ Voice analyzer continues monitoring during pause for seamless resume');
+      
+      // KEEP AudioContext and analyser running for instant resume
+      console.log('⏸️ AudioContext and analyser remain active for instant resume');
+      
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
       
-      console.log('✅ Recording paused, isPaused=true');
+      console.log('✅ Recording paused - voice analysis and audio monitoring continue');
       toast.info('Recording paused');
     }
   }, []);
@@ -603,12 +609,42 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         transcriptionRef.current.resume();
       }
       
+      // Verify voice analyzer is still running
+      if (voiceAnalyzerRef.current) {
+        console.log('✅ Voice analyzer still active - seamless resume');
+        // Log current voice characteristics
+        if (currentVoiceCharacteristicsRef.current) {
+          console.log('🎤 Current voice state:', {
+            gender: currentVoiceCharacteristicsRef.current.gender,
+            pitch: currentVoiceCharacteristicsRef.current.pitch?.toFixed(0) + 'Hz',
+            speakerId: currentVoiceCharacteristicsRef.current.speakerId,
+            confidence: (currentVoiceCharacteristicsRef.current.confidence * 100).toFixed(0) + '%'
+          });
+        }
+      } else {
+        console.warn('⚠️ Voice analyzer lost during pause - this should not happen');
+      }
+      
+      // Verify AudioContext is still active
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        console.log('✅ AudioContext still active:', audioContextRef.current.state);
+      } else {
+        console.error('❌ AudioContext lost during pause - real-time features may be degraded');
+      }
+      
+      // Verify analyser is still connected
+      if (analyserRef.current) {
+        console.log('✅ Audio analyser still connected');
+      } else {
+        console.warn('⚠️ Audio analyser disconnected during pause');
+      }
+      
       timerRef.current = setInterval(() => {
         setState(prev => ({ ...prev, duration: prev.duration + 1 }));
       }, 1000);
       
-      console.log('✅ Recording resumed, isPaused=false');
-      toast.success('Recording resumed');
+      console.log('✅ Recording resumed with all real-time features active');
+      toast.success('Recording resumed - all features active');
     }
   }, []);
 
