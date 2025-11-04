@@ -64,6 +64,19 @@ const SessionRecord = () => {
   const speakerRef = useRef<'provider' | 'patient'>('provider');
   const transcriptCountRef = useRef(0);
 
+  // Language code mapping: simple code -> locale code for transcription
+  const getTranscriptionLanguage = (lang: string): string => {
+    const languageMap: Record<string, string> = {
+      'en': 'en-IN',
+      'hi': 'hi-IN',
+      'kn': 'kn-IN',
+      'es': 'es-ES',
+      'fr': 'fr-FR',
+      'de': 'de-DE',
+    };
+    return languageMap[lang] || 'en-IN'; // Default to English if not found
+  };
+
   // CUSTOM HOOKS NEXT
   // IMPORTANT: First declare useAudioRecording to get voice characteristics
   const {
@@ -81,7 +94,7 @@ const SessionRecord = () => {
     autoCorrector,
   } = useAudioRecording({
     continuous: true,
-    language: 'kn-IN', // Kannada language for real-time transcription
+    language: getTranscriptionLanguage(language), // Use selected language
     onTranscriptUpdate: (text: string, isFinal: boolean) => {
       if (isFinal && text.trim()) {
         const currentSpeaker = speakerRef.current;
