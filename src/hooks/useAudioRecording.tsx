@@ -16,6 +16,7 @@ interface AudioRecordingOptions {
   continuous?: boolean;
   sampleRate?: number;
   deviceId?: string;
+  language?: string; // Language code for transcription (e.g., 'kn-IN', 'en-IN')
 }
 
 interface RecordingState {
@@ -40,6 +41,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     continuous = true,
     sampleRate = 48000,
     deviceId,
+    language = 'kn-IN', // Default to Kannada
   } = options;
 
   const [state, setState] = useState<RecordingState>({
@@ -71,12 +73,12 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
 
   // Initialize transcription engine
   useEffect(() => {
-    console.log('🎙️ Initializing real-time transcription engine...');
+    console.log(`🎙️ Initializing real-time transcription engine for language: ${language}`);
     
     transcriptionRef.current = new RealTimeTranscription({
       continuous,
       interimResults: true,
-      lang: 'en-IN', // Indian English for optimized accuracy
+      lang: language, // Use language from options
       onResult: async (transcript, isFinal) => {
         console.log('📝 Transcription result:', { 
           text: transcript.substring(0, 50) + '...', 
@@ -194,7 +196,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       console.log('✅ Audio recorder cleanup complete');
     };
-  }, [continuous, onFinalTranscriptChunk, onTranscriptUpdate]);
+  }, [continuous, onFinalTranscriptChunk, onTranscriptUpdate, language]);
 
   const startRecording = useCallback(async () => {
     try {

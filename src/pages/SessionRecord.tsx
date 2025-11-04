@@ -80,6 +80,7 @@ const SessionRecord = () => {
     autoCorrector,
   } = useAudioRecording({
     continuous: true,
+    language: 'kn-IN', // Kannada language for real-time transcription
     onTranscriptUpdate: (text: string, isFinal: boolean) => {
       if (isFinal && text.trim()) {
         const currentSpeaker = speakerRef.current;
