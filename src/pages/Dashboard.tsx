@@ -2,7 +2,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FolderOpen, CheckSquare, FileText, PlusCircle, Upload } from "lucide-react";
+import { FolderOpen, CheckSquare, FileText, PlusCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useSessions } from "@/hooks/useSessions";
 import { useTasks } from "@/hooks/useTasks";
@@ -70,16 +70,10 @@ const Dashboard = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Dashboard</h1>
-          <div className="flex gap-2">
-            <Button onClick={() => navigate("/session/upload-audio")} variant="outline">
-              <Upload className="mr-2 h-4 w-4" />
-              Upload Audio
-            </Button>
-            <Button onClick={() => navigate("/session/new")}>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              New Session
-            </Button>
-          </div>
+          <Button onClick={() => navigate("/session/new")}>
+            <PlusCircle className="mr-2 h-4 w-4" />
+            New Session
+          </Button>
         </div>
 
         {/* Stats */}

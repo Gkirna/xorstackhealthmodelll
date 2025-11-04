@@ -27,6 +27,7 @@ import { AdvancedTranscriptionDashboard } from '@/components/AdvancedTranscripti
 import { useAdvancedTranscription } from '@/hooks/useAdvancedTranscription';
 import type { EnhancedTranscriptionData } from '@/types/advancedTranscription';
 import { TemplateSelectionDialog } from "@/components/session/TemplateSelectionDialog";
+import { UploadRecordingDialog } from "@/components/session/UploadRecordingDialog";
 
 const SessionRecord = () => {
   const { id } = useParams();
@@ -143,8 +144,8 @@ const SessionRecord = () => {
     }
 
     if (recordingMode === 'upload') {
-      console.log('⚠️ Upload mode selected');
-      toast.info('Upload flow coming soon. Please use Dictating or Transcribing for now.');
+      console.log('📁 Upload mode selected - opening upload dialog');
+      setUploadDialogOpen(true);
       return;
     }
 
@@ -293,9 +294,77 @@ const SessionRecord = () => {
   }, []);
 
   const handleUploadRecording = useCallback(async (file: File, mode: "transcribe" | "dictate") => {
-    toast.info(`Processing ${file.name}...`);
-    console.log('Upload file:', file, 'Mode:', mode);
-  }, []);
+    if (!id) {
+      toast.error('Session ID not found');
+      return;
+    }
+
+    console.log('📁 Processing uploaded file:', { name: file.name, size: `${(file.size / (1024 * 1024)).toFixed(2)}MB`, mode });
+    
+    try {
+      // Import and use the audio upload hook functionality
+      toast.info(`Processing ${file.name}... This may take a few minutes.`);
+      
+      // Convert file to base64 for transcription
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const base64 = reader.result as string;
+          const base64Data = base64.split(',')[1];
+          
+          // Call transcription edge function
+          const { data, error } = await supabase.functions.invoke('transcribe-audio', {
+            body: {
+              audio: base64Data,
+              session_id: id,
+            },
+          });
+
+          if (error) throw error;
+
+          const transcriptText = data?.text || '';
+          
+          if (transcriptText) {
+            const wordCount = transcriptText.split(' ').length;
+            console.log('✅ Transcription completed:', wordCount, 'words');
+            toast.success(`Transcription completed! ${wordCount} words transcribed.`);
+            
+            // Add speaker labels based on mode
+            const labeledTranscript = mode === 'dictate' 
+              ? `Doctor: ${transcriptText}`
+              : transcriptText.split('\n').map((line, idx) => {
+                  const speaker = idx % 2 === 0 ? 'Doctor' : 'Patient';
+                  return `${speaker}: ${line}`;
+                }).join('\n\n');
+            
+            // Set the transcript
+            setTranscript(labeledTranscript);
+            setActiveTab('transcript');
+            
+            // Auto-generate note after a brief delay
+            setTimeout(() => {
+              autoGenerateNote();
+            }, 1000);
+          } else {
+            throw new Error('No transcript received from server');
+          }
+        } catch (error) {
+          console.error('❌ Transcription error:', error);
+          toast.error(error instanceof Error ? error.message : 'Failed to transcribe audio');
+        }
+      };
+      
+      reader.onerror = () => {
+        toast.error('Failed to read audio file');
+      };
+      
+      reader.readAsDataURL(file);
+      
+    } catch (error) {
+      console.error('❌ Upload processing error:', error);
+      toast.error('Failed to process audio file');
+    }
+  }, [id, autoGenerateNote]);
 
   const handleGenerateNote = useCallback(async () => {
     if (!transcript.trim()) {
@@ -725,6 +794,18 @@ const SessionRecord = () => {
           autoGenerateNote(templateId);
         }}
         isGenerating={isAutoPipelineRunning}
+      />
+
+      {/* Upload Recording Dialog */}
+      <UploadRecordingDialog
+        open={uploadDialogOpen}
+        onOpenChange={(open) => {
+          setUploadDialogOpen(open);
+          if (!open) {
+            setRecordingMode('transcribing');
+          }
+        }}
+        onUpload={handleUploadRecording}
       />
     </AppLayout>
   );
