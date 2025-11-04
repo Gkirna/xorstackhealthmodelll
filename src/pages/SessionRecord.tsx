@@ -315,8 +315,8 @@ const SessionRecord = () => {
     console.log('📁 Processing uploaded file:', { name: file.name, size: `${(file.size / (1024 * 1024)).toFixed(2)}MB`, mode });
     
     try {
-      // Import and use the audio upload hook functionality
-      toast.info(`Processing ${file.name}... This may take a few minutes.`);
+      // Show fast transcription message
+      toast.info('Transcribing audio...');
       
       // Convert file to base64 for transcription
       const reader = new FileReader();
@@ -325,11 +325,17 @@ const SessionRecord = () => {
           const base64 = reader.result as string;
           const base64Data = base64.split(',')[1];
           
-          // Call transcription edge function
+          // Get the selected language code (en, hi, kn)
+          const langCode = language === 'en-IN' ? 'en' : 
+                           language === 'hi-IN' ? 'hi' : 
+                           language === 'kn-IN' ? 'kn' : 'en';
+          
+          // Call transcription edge function with language
           const { data, error } = await supabase.functions.invoke('transcribe-audio', {
             body: {
               audio: base64Data,
               session_id: id,
+              language: langCode,
             },
           });
 
@@ -377,7 +383,7 @@ const SessionRecord = () => {
       console.error('❌ Upload processing error:', error);
       toast.error('Failed to process audio file');
     }
-  }, [id, autoGenerateNote]);
+  }, [id, language, autoGenerateNote]);
 
   const handleGenerateNote = useCallback(async () => {
     if (!transcript.trim()) {

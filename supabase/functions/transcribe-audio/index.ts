@@ -12,39 +12,40 @@ serve(async (req) => {
   }
 
   try {
-    const { audio, session_id } = await req.json();
+    const { audio, session_id, language = 'en' } = await req.json();
 
     if (!audio) {
       throw new Error('No audio data provided');
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
-    }
-
-    console.log('🎙️ Starting audio transcription...');
+    console.log('🎙️ Starting fast audio transcription...', { language });
 
     // Convert base64 to binary
     const binaryAudio = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
     
-    // Create form data with enhanced settings for global English accents
+    // Create form data for Whisper API
     const formData = new FormData();
     const audioBlob = new Blob([binaryAudio], { type: 'audio/webm' });
     formData.append('file', audioBlob, 'audio.webm');
     formData.append('model', 'whisper-1');
-    formData.append('language', 'kn'); // Kannada language
-    formData.append('temperature', '0.0'); // Lower temperature for more accurate, deterministic transcriptions
     
-    // Add medical context prompt in Kannada to improve accuracy for clinical terminology
-    const medicalPrompt = 'ಇದು ಆರೋಗ್ಯ ಸೇವಾ ಪೂರೈಕೆದಾರ ಮತ್ತು ರೋಗಿಯ ನಡುವಿನ ವೈದ್ಯಕೀಯ ಸಮಾಲೋಚನೆಯಾಗಿದೆ. ಸಾಮಾನ್ಯ ವೈದ್ಯಕೀಯ ಪದಗಳು: ಔಷಧಿ, ರೋಗನಿರ್ಣಯ, ಲಕ್ಷಣಗಳು, ಚಿಕಿತ್ಸೆ, ಅಲರ್ಜಿ, ಪ್ರಮಾಣ, ರಕ್ತದೊತ್ತಡ, ಹೃದಯ ಬಡಿತ, ಮಧುಮೇಹ, ಅಧಿಕ ರಕ್ತದೊತ್ತಡ, ಪರೀಕ್ಷೆ.';
-    formData.append('prompt', medicalPrompt);
+    // Set language based on input (en, hi, kn)
+    formData.append('language', language === 'hi' ? 'hi' : language === 'kn' ? 'kn' : 'en');
+    formData.append('temperature', '0.0');
+    
+    // Add medical context prompts based on language
+    const medicalPrompts: Record<string, string> = {
+      'en': 'This is a medical consultation between a healthcare provider and a patient. Common medical terms: medication, diagnosis, symptoms, treatment, allergy, dosage, blood pressure, heart rate, diabetes, hypertension, examination.',
+      'hi': 'यह एक स्वास्थ्य सेवा प्रदाता और रोगी के बीच चिकित्सा परामर्श है। सामान्य चिकित्सा शब्द: दवा, निदान, लक्षण, उपचार, एलर्जी, खुराक, रक्तचाप, हृदय गति, मधुमेह, उच्च रक्तचाप, परीक्षण।',
+      'kn': 'ಇದು ಆರೋಗ್ಯ ಸೇವಾ ಪೂರೈಕೆದಾರ ಮತ್ತು ರೋಗಿಯ ನಡುವಿನ ವೈದ್ಯಕೀಯ ಸಮಾಲೋಚನೆಯಾಗಿದೆ. ಸಾಮಾನ್ಯ ವೈದ್ಯಕೀಯ ಪದಗಳು: ಔಷಧಿ, ರೋಗನಿರ್ಣಯ, ಲಕ್ಷಣಗಳು, ಚಿಕಿತ್ಸೆ, ಅಲರ್ಜಿ, ಪ್ರಮಾಣ, ರಕ್ತದೊತ್ತಡ, ಹೃದಯ ಬಡಿತ, ಮಧುಮೇಹ, ಅಧಿಕ ರಕ್ತದೊತ್ತಡ, ಪರೀಕ್ಷೆ.'
+    };
+    formData.append('prompt', medicalPrompts[language] || medicalPrompts['en']);
 
     // Call OpenAI Whisper API through Lovable AI Gateway
-    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'multipart/form-data',
       },
       body: formData,
     });
