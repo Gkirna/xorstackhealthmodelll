@@ -68,6 +68,8 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
   const currentVoiceGenderRef = useRef<'male' | 'female' | 'unknown'>('unknown');
   const currentVoiceCharacteristicsRef = useRef<any>(null);
   const genderHistoryRef = useRef<{ gender: 'male' | 'female', timestamp: number }[]>([]);
+  const lastSpeakerPitchRef = useRef<number>(0);
+  const recentChunksRef = useRef<{ length: number, speaker: string }[]>([]);
   
   // Update gender from external source (from audio recording)
   useEffect(() => {
@@ -90,13 +92,32 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
   const FORCE_SAVE_THRESHOLD = 20; // Force save when queue gets large
   const CONNECTION_TIMEOUT = 60000; // 60 seconds - connection timeout
   
-  // STRATEGY 2: Enhanced Smart Speaker Detection
+  // ADAPTIVE SPEAKER DETECTION CONFIGURATION
+  const ADAPTIVE_CONFIG = {
+    confidence: {
+      high: { threshold: 0.90, minDuration: 800, minChunks: 1 },      // Very confident - allow quick changes
+      medium: { threshold: 0.75, minDuration: 1500, minChunks: 1 },   // Moderately confident - slightly longer
+      low: { minDuration: 5000, minChunks: 2 }                        // Low confidence - safe fallback
+    },
+    pitchDifference: {
+      high: { threshold: 40, multiplier: 0.7 },      // Large pitch diff - reduce threshold by 30%
+      medium: { threshold: 20, multiplier: 0.85 }    // Medium pitch diff - reduce by 15%
+    },
+    conversationType: {
+      rapidFire: { chunkLength: 30, changeRate: 0.6, multiplier: 0.6 },    // Short chunks + frequent changes
+      narrative: { chunkLength: 100, changeRate: 0.2, multiplier: 1.3 }    // Long chunks + rare changes
+    },
+    voiceQuality: {
+      poor: { multiplier: 1.5 }  // Poor quality - increase threshold by 50%
+    },
+    bounds: { min: 500, max: 8000 }  // Safety bounds: 0.5s to 8s
+  };
+  
+  // STRATEGY 2: Enhanced Smart Speaker Detection (Legacy - used as fallback)
   const GAP_THRESHOLD_MS = 30000; // 30 seconds - gaps less than this don't trigger speaker change
-  const MIN_SPEAKER_DURATION_MS = 5000; // 5 seconds - minimum time per speaker to maintain consistency
   const SHORT_PAUSE_MS = 3000; // 3 seconds - short natural pause
   const MEDIUM_PAUSE_MS = 10000; // 10 seconds - medium pause (thinking/clinical activity)
   const LONG_PAUSE_MS = 30000; // 30 seconds - long pause (guaranteed speaker change)
-  const MIN_CHUNKS_PER_SPEAKER = 2; // Minimum chunks before allowing speaker change
 
   // Real-time subscription for instant updates
   useTranscriptUpdates(sessionId, (newTranscript) => {
@@ -118,6 +139,96 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
       savedChunks: prev.savedChunks + 1,
     }));
   });
+
+  // Detect conversation type based on recent chunks
+  const detectConversationType = useCallback((): 'rapid-fire' | 'narrative' | 'clinical' => {
+    const recentChunks = recentChunksRef.current.slice(-10); // Last 10 chunks
+    
+    if (recentChunks.length < 5) return 'clinical'; // Default for new sessions
+    
+    const avgChunkLength = recentChunks.reduce((sum, c) => sum + c.length, 0) / recentChunks.length;
+    
+    // Count speaker changes
+    let changes = 0;
+    for (let i = 1; i < recentChunks.length; i++) {
+      if (recentChunks[i].speaker !== recentChunks[i - 1].speaker) changes++;
+    }
+    const changeRate = changes / (recentChunks.length - 1);
+    
+    // Rapid-fire: short chunks + frequent changes
+    if (avgChunkLength < ADAPTIVE_CONFIG.conversationType.rapidFire.chunkLength && 
+        changeRate > ADAPTIVE_CONFIG.conversationType.rapidFire.changeRate) {
+      console.log(`🔥 Rapid-fire conversation detected (avg: ${avgChunkLength.toFixed(0)} chars, ${(changeRate * 100).toFixed(0)}% changes)`);
+      return 'rapid-fire';
+    }
+    
+    // Narrative: long chunks + rare changes
+    if (avgChunkLength > ADAPTIVE_CONFIG.conversationType.narrative.chunkLength && 
+        changeRate < ADAPTIVE_CONFIG.conversationType.narrative.changeRate) {
+      console.log(`📖 Narrative conversation detected (avg: ${avgChunkLength.toFixed(0)} chars, ${(changeRate * 100).toFixed(0)}% changes)`);
+      return 'narrative';
+    }
+    
+    console.log(`🏥 Clinical conversation (avg: ${avgChunkLength.toFixed(0)} chars, ${(changeRate * 100).toFixed(0)}% changes)`);
+    return 'clinical'; // Default middle ground
+  }, []);
+
+  // Calculate adaptive speaker thresholds based on multiple factors
+  const calculateAdaptiveSpeakerThresholds = useCallback((
+    voiceConfidence: number,
+    pitchDifference: number,
+    voiceQuality: 'excellent' | 'good' | 'fair' | 'poor'
+  ): { minDuration: number, minChunks: number } => {
+    
+    // STEP 1: Base threshold from confidence level
+    let minDuration: number;
+    let minChunks: number;
+    
+    if (voiceConfidence >= ADAPTIVE_CONFIG.confidence.high.threshold) {
+      minDuration = ADAPTIVE_CONFIG.confidence.high.minDuration;
+      minChunks = ADAPTIVE_CONFIG.confidence.high.minChunks;
+      console.log(`🟢 HIGH confidence (${(voiceConfidence * 100).toFixed(0)}%) - Base: ${minDuration}ms`);
+    } else if (voiceConfidence >= ADAPTIVE_CONFIG.confidence.medium.threshold) {
+      minDuration = ADAPTIVE_CONFIG.confidence.medium.minDuration;
+      minChunks = ADAPTIVE_CONFIG.confidence.medium.minChunks;
+      console.log(`🟡 MEDIUM confidence (${(voiceConfidence * 100).toFixed(0)}%) - Base: ${minDuration}ms`);
+    } else {
+      minDuration = ADAPTIVE_CONFIG.confidence.low.minDuration;
+      minChunks = ADAPTIVE_CONFIG.confidence.low.minChunks;
+      console.log(`🔴 LOW confidence (${(voiceConfidence * 100).toFixed(0)}%) - Base: ${minDuration}ms`);
+    }
+    
+    // STEP 2: Apply pitch difference multiplier
+    if (pitchDifference >= ADAPTIVE_CONFIG.pitchDifference.high.threshold) {
+      minDuration *= ADAPTIVE_CONFIG.pitchDifference.high.multiplier;
+      console.log(`🎵 Large pitch diff (${pitchDifference.toFixed(0)}Hz) - Reduced to: ${minDuration.toFixed(0)}ms`);
+    } else if (pitchDifference >= ADAPTIVE_CONFIG.pitchDifference.medium.threshold) {
+      minDuration *= ADAPTIVE_CONFIG.pitchDifference.medium.multiplier;
+      console.log(`🎵 Medium pitch diff (${pitchDifference.toFixed(0)}Hz) - Reduced to: ${minDuration.toFixed(0)}ms`);
+    }
+    
+    // STEP 3: Apply conversation type multiplier
+    const conversationType = detectConversationType();
+    if (conversationType === 'rapid-fire') {
+      minDuration *= ADAPTIVE_CONFIG.conversationType.rapidFire.multiplier;
+      console.log(`⚡ Rapid-fire mode - Reduced to: ${minDuration.toFixed(0)}ms`);
+    } else if (conversationType === 'narrative') {
+      minDuration *= ADAPTIVE_CONFIG.conversationType.narrative.multiplier;
+      console.log(`📚 Narrative mode - Increased to: ${minDuration.toFixed(0)}ms`);
+    }
+    
+    // STEP 4: Apply voice quality adjustment
+    if (voiceQuality === 'poor' || voiceQuality === 'fair') {
+      minDuration *= ADAPTIVE_CONFIG.voiceQuality.poor.multiplier;
+      console.log(`🔊 Poor voice quality - Increased to: ${minDuration.toFixed(0)}ms`);
+    }
+    
+    // STEP 5: Apply safety bounds
+    minDuration = Math.max(ADAPTIVE_CONFIG.bounds.min, Math.min(ADAPTIVE_CONFIG.bounds.max, minDuration));
+    console.log(`✅ Final adaptive threshold: ${minDuration.toFixed(0)}ms, ${minChunks} chunks`);
+    
+    return { minDuration, minChunks };
+  }, [detectConversationType]);
 
   // Optimistic UI: Add chunk to local state immediately
   const addChunkToUI = useCallback((text: string, speaker: string, tempId: string, timestamp: number) => {
@@ -250,22 +361,71 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
     return lastSpeakerRef.current;
   }, []);
 
-  // PRIORITY SYSTEM: Voice-based detection FIRST, gap detection as FALLBACK
+  // ADAPTIVE PRIORITY SYSTEM: Voice-based detection with adaptive thresholds
   const determineSpeaker = useCallback((text: string): string => {
-    // PRIORITY 1: Voice analysis (pitch/frequency based) - MOST ACCURATE
-    const voiceSpeaker = detectSpeakerByGender(text);
+    const now = Date.now();
+    const timeSinceLastChange = now - lastSpeakerChangeTimeRef.current;
     
-    if (voiceSpeaker) {
-      lastSpeakerRef.current = voiceSpeaker;
-      lastSpeakerChangeTimeRef.current = Date.now();
-      console.log(`✅ Voice-based detection: ${voiceSpeaker}`);
-      return voiceSpeaker;
+    // Track recent chunks for conversation type detection
+    recentChunksRef.current.push({ length: text.length, speaker: lastSpeakerRef.current });
+    if (recentChunksRef.current.length > 10) {
+      recentChunksRef.current.shift(); // Keep only last 10
     }
     
-    // PRIORITY 2: Gap detection (only when voice analysis unavailable)
+    // PRIORITY 1: Voice analysis with adaptive thresholds
+    const voiceSpeaker = detectSpeakerByGender(text);
+    const characteristics = currentVoiceCharacteristicsRef.current;
+    
+    if (voiceSpeaker && characteristics) {
+      const voiceConfidence = characteristics.confidence || 0;
+      const currentPitch = characteristics.pitch || 0;
+      const voiceQuality = characteristics.voiceQuality || 'fair';
+      
+      // Calculate pitch difference from last speaker
+      const pitchDifference = lastSpeakerPitchRef.current > 0 
+        ? Math.abs(currentPitch - lastSpeakerPitchRef.current) 
+        : 0;
+      
+      // Get adaptive thresholds
+      const { minDuration, minChunks } = calculateAdaptiveSpeakerThresholds(
+        voiceConfidence,
+        pitchDifference,
+        voiceQuality
+      );
+      
+      // Check if speaker change is allowed based on adaptive thresholds
+      const shouldAllowChange = voiceSpeaker !== lastSpeakerRef.current && (
+        timeSinceLastChange >= minDuration && 
+        chunkCountPerSpeakerRef.current >= minChunks
+      );
+      
+      if (shouldAllowChange || voiceSpeaker === lastSpeakerRef.current) {
+        if (voiceSpeaker !== lastSpeakerRef.current) {
+          console.log(`🔄 ADAPTIVE speaker change: ${lastSpeakerRef.current} → ${voiceSpeaker} (threshold: ${minDuration}ms, chunks: ${minChunks})`);
+          lastSpeakerChangeTimeRef.current = now;
+          chunkCountPerSpeakerRef.current = 0;
+        } else {
+          chunkCountPerSpeakerRef.current++;
+        }
+        
+        lastSpeakerRef.current = voiceSpeaker;
+        lastSpeakerPitchRef.current = currentPitch;
+        lastChunkTimeRef.current = now;
+        
+        console.log(`✅ Voice-based (adaptive): ${voiceSpeaker} | Confidence: ${(voiceConfidence * 100).toFixed(0)}% | Pitch: ${currentPitch.toFixed(0)}Hz | Quality: ${voiceQuality}`);
+        return voiceSpeaker;
+      } else {
+        console.log(`⏸️ Speaker change blocked by adaptive threshold (need ${minDuration}ms, have ${timeSinceLastChange}ms)`);
+        chunkCountPerSpeakerRef.current++;
+        lastChunkTimeRef.current = now;
+        return lastSpeakerRef.current;
+      }
+    }
+    
+    // PRIORITY 2: Gap detection fallback (only when voice analysis unavailable)
     console.warn('⚠️ Voice analysis unavailable - using gap detection fallback');
     return determineSpeakerByGaps(text);
-  }, [detectSpeakerByGender, determineSpeakerByGaps]);
+  }, [detectSpeakerByGender, determineSpeakerByGaps, calculateAdaptiveSpeakerThresholds]);
 
   // Batch insert to database
   const savePendingChunks = useCallback(async (chunks: PendingChunk[], retryCount = 0): Promise<any[] | null> => {
