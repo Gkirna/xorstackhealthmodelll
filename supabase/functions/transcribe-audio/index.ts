@@ -42,11 +42,9 @@ serve(async (req) => {
     formData.append('prompt', medicalPrompts[language] || medicalPrompts['en']);
 
     // Call OpenAI Whisper API through Lovable AI Gateway
+    // Note: Don't set Content-Type header - let fetch set it with proper boundary
     const response = await fetch('https://ai.gateway.lovable.dev/v1/audio/transcriptions', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
       body: formData,
     });
 
