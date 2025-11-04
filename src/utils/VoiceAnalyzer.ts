@@ -62,12 +62,18 @@ export class VoiceAnalyzer {
   };
   
   // Advanced analysis parameters - OPTIMIZED for same-gender detection
-  private readonly MIN_PITCH_DIFFERENCE = 20; // Hz difference (reduced from 30 for better same-gender detection)
+  private MIN_PITCH_DIFFERENCE = 20; // Hz difference (reduced from 30 for better same-gender detection)
   private readonly PITCH_SMOOTHING_ALPHA = 0.7;
   private readonly CONFIDENCE_DECAY = 0.95; // Confidence decays over time
+  private mode: 'direct' | 'playback' = 'direct';
   
-  constructor() {
-    // Configuration can be customized
+  constructor(mode: 'direct' | 'playback' = 'direct') {
+    this.mode = mode;
+    // Adjust thresholds for playback mode (degraded audio quality)
+    if (mode === 'playback') {
+      this.MIN_PITCH_DIFFERENCE = 25; // Wider tolerance for degraded audio
+    }
+    console.log(`🎤 VoiceAnalyzer initialized in ${mode} mode`);
   }
 
   /**
@@ -291,16 +297,19 @@ export class VoiceAnalyzer {
   }
 
   /**
-   * Determine gender with high confidence scoring
+   * Determine gender with high confidence scoring (adjusted for mode)
    */
   private determineGenderWithConfidence(pitch: number): { gender: 'male' | 'female' | 'unknown', confidence: number } {
     const { male, female, overlap } = this.GENDER_PITCH_BOUNDARIES;
+    
+    // Lower confidence baseline for playback mode due to audio degradation
+    const confidenceMultiplier = this.mode === 'playback' ? 0.9 : 1.0;
     
     // High confidence female range
     if (pitch >= female.max - 10) {
       return { 
         gender: 'female', 
-        confidence: 0.95 
+        confidence: 0.95 * confidenceMultiplier
       };
     }
     
@@ -308,19 +317,19 @@ export class VoiceAnalyzer {
     if (pitch <= male.min + 10) {
       return { 
         gender: 'male', 
-        confidence: 0.95 
+        confidence: 0.95 * confidenceMultiplier
       };
     }
     
     // Pure female range
     if (pitch > overlap.end) {
-      const confidence = Math.min(0.95, 0.75 + (pitch - overlap.end) / 75);
+      const confidence = Math.min(0.95, 0.75 + (pitch - overlap.end) / 75) * confidenceMultiplier;
       return { gender: 'female', confidence };
     }
     
     // Pure male range
     if (pitch < overlap.start) {
-      const confidence = Math.min(0.95, 0.75 + (overlap.start - pitch) / 80);
+      const confidence = Math.min(0.95, 0.75 + (overlap.start - pitch) / 80) * confidenceMultiplier;
       return { gender: 'male', confidence };
     }
     
@@ -331,12 +340,12 @@ export class VoiceAnalyzer {
     if (femaleDistance > maleDistance) {
       return { 
         gender: 'female', 
-        confidence: 0.65 + (femaleDistance / 15) * 0.2 
+        confidence: (0.65 + (femaleDistance / 15) * 0.2) * confidenceMultiplier
       };
     } else {
       return { 
         gender: 'male', 
-        confidence: 0.65 + (maleDistance / 15) * 0.2 
+        confidence: (0.65 + (maleDistance / 15) * 0.2) * confidenceMultiplier
       };
     }
   }

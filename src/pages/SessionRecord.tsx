@@ -27,7 +27,7 @@ import { AdvancedTranscriptionDashboard } from '@/components/AdvancedTranscripti
 import { useAdvancedTranscription } from '@/hooks/useAdvancedTranscription';
 import type { EnhancedTranscriptionData } from '@/types/advancedTranscription';
 import { TemplateSelectionDialog } from "@/components/session/TemplateSelectionDialog";
-import { UploadRecordingDialog } from "@/components/session/UploadRecordingDialog";
+import { AudioQualityIndicator } from "@/components/AudioQualityIndicator";
 
 const SessionRecord = () => {
   const { id } = useParams();
@@ -59,6 +59,7 @@ const SessionRecord = () => {
   const uploadProcessingRef = useRef<boolean>(false);
   const [enhancedTranscriptionData, setEnhancedTranscriptionData] = useState<EnhancedTranscriptionData | null>(null);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [recordingInputMode, setRecordingInputMode] = useState<'direct' | 'playback'>('direct');
   
   // ALL REFS NEXT
   const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
@@ -96,9 +97,12 @@ const SessionRecord = () => {
     currentVoiceCharacteristics,
     voiceAnalyzer,
     autoCorrector,
+    audioLevel,
+    voiceQuality,
   } = useAudioRecording({
     continuous: true,
     language: getTranscriptionLanguage(language), // Use selected language
+    mode: recordingInputMode, // Pass recording mode
     onTranscriptUpdate: (text: string, isFinal: boolean) => {
       if (isFinal && text.trim()) {
         const currentSpeaker = speakerRef.current;
@@ -776,7 +780,21 @@ const SessionRecord = () => {
           isRecording={isRecording}
           isPaused={isPaused}
           isStartingRecording={isStartingRecording}
+          recordingInputMode={recordingInputMode}
+          onRecordingInputModeChange={setRecordingInputMode}
         />
+
+        {/* Audio Quality Indicator - Show when recording */}
+        {(isRecording || isPaused) && (
+          <div className="px-6 pt-3">
+            <AudioQualityIndicator
+              volume={audioLevel || 0}
+              quality={voiceQuality || 'fair'}
+              isActive={isRecording && !isPaused}
+              mode={recordingInputMode}
+            />
+          </div>
+        )}
 
         {/* Workflow Progress - Hidden from UI but functionality preserved */}
 
@@ -871,18 +889,6 @@ const SessionRecord = () => {
           autoGenerateNote(templateId);
         }}
         isGenerating={isAutoPipelineRunning}
-      />
-
-      {/* Upload Recording Dialog */}
-      <UploadRecordingDialog
-        open={uploadDialogOpen}
-        onOpenChange={(open) => {
-          setUploadDialogOpen(open);
-          if (!open) {
-            setRecordingMode('transcribing');
-          }
-        }}
-        onUpload={handleUploadRecording}
       />
 
       {/* Transcription Loading Overlay */}
