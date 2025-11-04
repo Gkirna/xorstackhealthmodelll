@@ -5,7 +5,7 @@ export interface EncounterSummaryContext {
 }
 
 export const buildEncounterSummaryPrompt = (context: EncounterSummaryContext): { system: string; user: string } => {
-  const system = `You are a clinical documentation specialist. Provide a concise summary of the patient encounter.
+  const system = `You are a clinical documentation specialist. Provide a concise summary of the patient encounter in any language.
 
 SUMMARY REQUIREMENTS:
 - Maximum 200 words
@@ -14,12 +14,18 @@ SUMMARY REQUIREMENTS:
 - Use clear, professional medical language
 - Prioritize information by clinical importance
 - Omit redundant or non-essential details
+- Generate summary in the SAME LANGUAGE as the transcript
+
+MULTILINGUAL SUPPORT:
+- If transcript is in Kannada (ಕನ್ನಡ), provide summary in Kannada
+- If transcript is in English, provide summary in English
+- Maintain medical accuracy and terminology
 
 STRUCTURE (if applicable):
-1. Chief complaint
-2. Relevant history/findings
-3. Assessment
-4. Key interventions or plan items
+1. Chief complaint (ಮುಖ್ಯ ಸಮಸ್ಯೆ)
+2. Relevant history/findings (ಪ್ರಸ್ತುತ ಇತಿಹಾಸ/ಸಂಶೋಧನೆಗಳು)
+3. Assessment (ಮೌಲ್ಯಮಾಪನ)
+4. Key interventions or plan items (ಮುಖ್ಯ ಚಿಕಿತ್ಸೆ ಅಥವಾ ಯೋಜನೆ)
 
 Be precise and clinically accurate.`;
 
@@ -29,6 +35,7 @@ ${context.visit_type ? `Visit Type: ${context.visit_type}\n` : ''}
 TRANSCRIPT:
 ${context.transcript_chunk}
 
+IMPORTANT: Provide summary in the SAME LANGUAGE as the transcript.
 Provide a concise clinical summary focusing on essential information.`;
 
   return { system, user };

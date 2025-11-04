@@ -71,6 +71,12 @@ CRITICAL REQUIREMENTS:
 - Output language: ${context.language}
 - Preserve all clinical details, measurements, and medications mentioned
 
+MULTILINGUAL SUPPORT:
+- If the transcript is in Kannada (ಕನ್ನಡ), generate the clinical note in Kannada
+- If the transcript is in English, generate the note in English
+- Maintain medical accuracy and use proper medical terminology in the target language
+- Preserve all clinical details during language processing
+
 OUTPUT FORMAT:
 Return a valid JSON object with this exact structure:
 {
@@ -85,7 +91,8 @@ IMPORTANT:
 - Each section must be complete and clinically accurate
 - Use bullet points or paragraphs as appropriate for readability
 - Include specific measurements, dosages, and timeframes
-- Maintain professional medical documentation standards`;
+- Maintain professional medical documentation standards
+- Generate the note in the SAME LANGUAGE as the transcript`;
 
   const user = `Generate a ${template.name} from this clinical encounter transcript:
 
@@ -100,6 +107,7 @@ INSTRUCTIONS:
 - Analyze the speaker-labeled dialogue (Doctor: and Patient: prefixes)
 - Extract clinical information systematically
 - Format according to the ${template.name} template
+- IMPORTANT: Generate the note in the SAME LANGUAGE as the transcript (if Kannada transcript, generate Kannada note)
 - Output valid JSON only, no additional text`;
 
   return { system, user };

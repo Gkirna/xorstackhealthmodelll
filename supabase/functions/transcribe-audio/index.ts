@@ -33,12 +33,11 @@ serve(async (req) => {
     const audioBlob = new Blob([binaryAudio], { type: 'audio/webm' });
     formData.append('file', audioBlob, 'audio.webm');
     formData.append('model', 'whisper-1');
-    formData.append('language', 'en'); // Specify English to handle all dialects
+    formData.append('language', 'kn'); // Kannada language
     formData.append('temperature', '0.0'); // Lower temperature for more accurate, deterministic transcriptions
     
-    // Add medical context prompt to improve accuracy for clinical terminology
-    // This helps with medical jargon across all English accents
-    const medicalPrompt = 'This is a medical consultation between a healthcare provider and patient. Common medical terms include: prescription, medication, diagnosis, symptoms, treatment, allergy, dosage, blood pressure, heart rate, diabetes, hypertension, examination.';
+    // Add medical context prompt in Kannada to improve accuracy for clinical terminology
+    const medicalPrompt = 'ಇದು ಆರೋಗ್ಯ ಸೇವಾ ಪೂರೈಕೆದಾರ ಮತ್ತು ರೋಗಿಯ ನಡುವಿನ ವೈದ್ಯಕೀಯ ಸಮಾಲೋಚನೆಯಾಗಿದೆ. ಸಾಮಾನ್ಯ ವೈದ್ಯಕೀಯ ಪದಗಳು: ಔಷಧಿ, ರೋಗನಿರ್ಣಯ, ಲಕ್ಷಣಗಳು, ಚಿಕಿತ್ಸೆ, ಅಲರ್ಜಿ, ಪ್ರಮಾಣ, ರಕ್ತದೊತ್ತಡ, ಹೃದಯ ಬಡಿತ, ಮಧುಮೇಹ, ಅಧಿಕ ರಕ್ತದೊತ್ತಡ, ಪರೀಕ್ಷೆ.';
     formData.append('prompt', medicalPrompt);
 
     // Call OpenAI Whisper API through Lovable AI Gateway
