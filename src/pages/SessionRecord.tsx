@@ -54,6 +54,7 @@ const SessionRecord = () => {
   const [recordingMode, setRecordingMode] = useState("transcribing");
   const [activeTab, setActiveTab] = useState<string>("transcript");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [isUploadTranscribing, setIsUploadTranscribing] = useState(false);
   const [enhancedTranscriptionData, setEnhancedTranscriptionData] = useState<EnhancedTranscriptionData | null>(null);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   
@@ -315,8 +316,8 @@ const SessionRecord = () => {
     console.log('📁 Processing uploaded file:', { name: file.name, size: `${(file.size / (1024 * 1024)).toFixed(2)}MB`, mode });
     
     try {
-      // Show fast transcription message
-      toast.info('Transcribing audio...');
+      // Show loading indicator
+      setIsUploadTranscribing(true);
       
       // Convert file to base64 for transcription
       const reader = new FileReader();
@@ -370,10 +371,13 @@ const SessionRecord = () => {
         } catch (error) {
           console.error('❌ Transcription error:', error);
           toast.error(error instanceof Error ? error.message : 'Failed to transcribe audio');
+        } finally {
+          setIsUploadTranscribing(false);
         }
       };
       
       reader.onerror = () => {
+        setIsUploadTranscribing(false);
         toast.error('Failed to read audio file');
       };
       
@@ -381,6 +385,7 @@ const SessionRecord = () => {
       
     } catch (error) {
       console.error('❌ Upload processing error:', error);
+      setIsUploadTranscribing(false);
       toast.error('Failed to process audio file');
     }
   }, [id, language, autoGenerateNote]);
@@ -826,6 +831,19 @@ const SessionRecord = () => {
         }}
         onUpload={handleUploadRecording}
       />
+
+      {/* Transcription Loading Overlay */}
+      {isUploadTranscribing && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-card border rounded-lg p-8 shadow-lg flex flex-col items-center gap-4">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <div className="text-center">
+              <h3 className="text-lg font-semibold mb-2">Transcribing Audio</h3>
+              <p className="text-sm text-muted-foreground">Please wait while we process your audio...</p>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 };
