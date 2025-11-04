@@ -3,7 +3,6 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { TemplatePreview } from "@/components/session/TemplatePreview";
 
 import { Badge } from "@/components/ui/badge";
 import { Search, Plus, FileText, Eye, Star, Edit, Trash2, Copy } from "lucide-react";
@@ -350,15 +349,17 @@ const Templates = () => {
 
         {/* Preview Dialog */}
         <Dialog open={!!previewTemplate} onOpenChange={() => setPreviewTemplate(null)}>
-          <DialogContent className="max-w-6xl max-h-[85vh]">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>{previewTemplate?.name}</DialogTitle>
               <DialogDescription>
                 {previewTemplate?.description} - {previewTemplate?.category}
               </DialogDescription>
             </DialogHeader>
-            <div className="py-4 overflow-y-auto">
-              <TemplatePreview structure={previewTemplate?.structure} />
+            <div className="space-y-4 py-4">
+              <pre className="bg-muted p-4 rounded-lg overflow-auto text-sm">
+                {JSON.stringify(previewTemplate?.structure || {}, null, 2)}
+              </pre>
             </div>
             <DialogFooter>
               <Button onClick={() => setPreviewTemplate(null)}>Close</Button>

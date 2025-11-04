@@ -210,7 +210,7 @@ export function SessionTopBar({
                 className="px-4 py-2 h-9 flex items-center gap-2"
               >
                 <Mic className="h-4 w-4" />
-                Resume
+                Resume transcribing
               </Button>
             </>
           )}
