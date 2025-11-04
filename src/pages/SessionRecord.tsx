@@ -55,12 +55,14 @@ const SessionRecord = () => {
   const [activeTab, setActiveTab] = useState<string>("transcript");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [isUploadTranscribing, setIsUploadTranscribing] = useState(false);
+  const [uploadTranscriptionTime, setUploadTranscriptionTime] = useState(0);
   const [enhancedTranscriptionData, setEnhancedTranscriptionData] = useState<EnhancedTranscriptionData | null>(null);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   
   // ALL REFS NEXT
   const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
   const timerRef = useRef<number | null>(null);
+  const uploadTimerRef = useRef<number | null>(null);
   const startTimeRef = useRef<Date>(new Date());
   const speakerRef = useRef<'provider' | 'patient'>('provider');
   const transcriptCountRef = useRef(0);
@@ -316,8 +318,14 @@ const SessionRecord = () => {
     console.log('📁 Processing uploaded file:', { name: file.name, size: `${(file.size / (1024 * 1024)).toFixed(2)}MB`, mode });
     
     try {
-      // Show loading indicator
+      // Show loading indicator and start timer
       setIsUploadTranscribing(true);
+      setUploadTranscriptionTime(0);
+      
+      // Start real-time timer
+      uploadTimerRef.current = window.setInterval(() => {
+        setUploadTranscriptionTime(prev => prev + 1);
+      }, 1000);
       
       // Convert file to base64 for transcription
       const reader = new FileReader();
@@ -372,12 +380,24 @@ const SessionRecord = () => {
           console.error('❌ Transcription error:', error);
           toast.error(error instanceof Error ? error.message : 'Failed to transcribe audio');
         } finally {
+          // Clear timer and reset
+          if (uploadTimerRef.current) {
+            clearInterval(uploadTimerRef.current);
+            uploadTimerRef.current = null;
+          }
           setIsUploadTranscribing(false);
+          setUploadTranscriptionTime(0);
         }
       };
       
       reader.onerror = () => {
+        // Clear timer and reset
+        if (uploadTimerRef.current) {
+          clearInterval(uploadTimerRef.current);
+          uploadTimerRef.current = null;
+        }
         setIsUploadTranscribing(false);
+        setUploadTranscriptionTime(0);
         toast.error('Failed to read audio file');
       };
       
@@ -385,7 +405,13 @@ const SessionRecord = () => {
       
     } catch (error) {
       console.error('❌ Upload processing error:', error);
+      // Clear timer and reset
+      if (uploadTimerRef.current) {
+        clearInterval(uploadTimerRef.current);
+        uploadTimerRef.current = null;
+      }
       setIsUploadTranscribing(false);
+      setUploadTranscriptionTime(0);
       toast.error('Failed to process audio file');
     }
   }, [id, language, autoGenerateNote]);
@@ -617,6 +643,10 @@ const SessionRecord = () => {
     
     return () => {
       orchestratorRef.current = null;
+      // Clear upload timer on unmount
+      if (uploadTimerRef.current) {
+        clearInterval(uploadTimerRef.current);
+      }
     };
   }, []);
 
@@ -835,11 +865,17 @@ const SessionRecord = () => {
       {/* Transcription Loading Overlay */}
       {isUploadTranscribing && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-card border rounded-lg p-8 shadow-lg flex flex-col items-center gap-4">
+          <div className="bg-card border rounded-lg p-8 shadow-lg flex flex-col items-center gap-4 min-w-[320px]">
             <Loader2 className="h-12 w-12 animate-spin text-primary" />
             <div className="text-center">
               <h3 className="text-lg font-semibold mb-2">Transcribing Audio</h3>
-              <p className="text-sm text-muted-foreground">Please wait while we process your audio...</p>
+              <p className="text-sm text-muted-foreground mb-3">Please wait while we process your audio...</p>
+              <div className="flex items-center justify-center gap-2 text-2xl font-mono font-bold text-primary">
+                <span>{String(Math.floor(uploadTranscriptionTime / 60)).padStart(2, '0')}</span>
+                <span className="animate-pulse">:</span>
+                <span>{String(uploadTranscriptionTime % 60).padStart(2, '0')}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">Elapsed time</p>
             </div>
           </div>
         </div>
