@@ -18,6 +18,12 @@ serve(async (req) => {
       throw new Error('No audio data provided');
     }
 
+    // Get LOVABLE_API_KEY for authentication
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      throw new Error('LOVABLE_API_KEY not configured');
+    }
+
     console.log('🎙️ Starting fast audio transcription...', { language });
 
     // Convert base64 to binary
@@ -41,10 +47,12 @@ serve(async (req) => {
     };
     formData.append('prompt', medicalPrompts[language] || medicalPrompts['en']);
 
-    // Call OpenAI Whisper API through Lovable AI Gateway
-    // Note: Don't set Content-Type header - let fetch set it with proper boundary
+    // Call OpenAI Whisper API through Lovable AI Gateway with authentication
     const response = await fetch('https://ai.gateway.lovable.dev/v1/audio/transcriptions', {
       method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      },
       body: formData,
     });
 
