@@ -784,7 +784,8 @@ const SessionRecord = () => {
           onRecordingInputModeChange={setRecordingInputMode}
         />
 
-        {/* Audio Quality Indicator - Show when recording in direct mode only */}
+        {/* Audio Quality Indicator - Hidden but monitoring runs in background */}
+        {/* 
         {(isRecording || isPaused) && recordingInputMode === 'direct' && (
           <div className="px-6 pt-3">
             <AudioQualityIndicator
@@ -795,6 +796,7 @@ const SessionRecord = () => {
             />
           </div>
         )}
+        */}
 
         {/* Workflow Progress - Hidden from UI but functionality preserved */}
 
