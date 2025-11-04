@@ -5,6 +5,7 @@ import Login from "./Login";
 import OnboardingProfile from "./OnboardingProfile";
 import Dashboard from "./Dashboard";
 import SessionNew from "./SessionNew";
+import SessionUploadAudio from "./SessionUploadAudio";
 import SessionRecord from "./SessionRecord";
 import SessionReview from "./SessionReview";
 import Sessions from "./Sessions";
@@ -22,6 +23,8 @@ const Index = () => {
       return <ProtectedRoute><Dashboard /></ProtectedRoute>;
     case "/session/new": 
       return <ProtectedRoute><SessionNew /></ProtectedRoute>;
+    case "/session/upload-audio": 
+      return <ProtectedRoute><SessionUploadAudio /></ProtectedRoute>;
     case "/sessions": 
       return <ProtectedRoute><Sessions /></ProtectedRoute>;
     default:

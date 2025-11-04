@@ -23,7 +23,7 @@ export function useAudioUpload(options: AudioUploadOptions = {}) {
     sessionId,
     onTranscriptGenerated,
     onAudioUploaded,
-    maxFileSize = 50, // 50MB default
+    maxFileSize = 100, // Increased to 100MB for longer sessions
     allowedFormats = [
       '.mp3', '.wav', '.m4a', '.webm', '.ogg', '.aac', '.flac', 
       '.mp4', '.avi', '.mov', '.wmv' // Support video files (audio will be extracted)
@@ -136,11 +136,16 @@ export function useAudioUpload(options: AudioUploadOptions = {}) {
       console.log('🎯 Starting transcription for uploaded audio...');
       setState(prev => ({ ...prev, uploadProgress: 70 }));
       
+      // For large files, show estimated processing time
+      toast.info('Processing audio... This may take a few minutes for longer recordings.');
+      
       // Download the audio file to convert to base64
       const audioResponse = await fetch(audioUrl);
       const audioBlob = await audioResponse.blob();
       
-      setState(prev => ({ ...prev, uploadProgress: 80 }));
+      console.log('📦 Audio blob size:', (audioBlob.size / (1024 * 1024)).toFixed(2), 'MB');
+      
+      setState(prev => ({ ...prev, uploadProgress: 75 }));
       
       // Convert to base64
       const reader = new FileReader();
@@ -154,10 +159,10 @@ export function useAudioUpload(options: AudioUploadOptions = {}) {
         reader.readAsDataURL(audioBlob);
       });
 
-      setState(prev => ({ ...prev, uploadProgress: 85 }));
+      setState(prev => ({ ...prev, uploadProgress: 80 }));
       console.log('📤 Calling transcription edge function...');
 
-      // Call Supabase edge function
+      // Call Supabase edge function with longer timeout expectation
       const { data, error } = await supabase.functions.invoke('transcribe-audio', {
         body: {
           audio: base64Audio,
@@ -172,8 +177,9 @@ export function useAudioUpload(options: AudioUploadOptions = {}) {
       const transcriptText = data?.text || '';
       
       if (transcriptText) {
-        console.log('✅ Transcription completed:', transcriptText.substring(0, 100) + '...');
-        toast.success('Transcription completed');
+        const wordCount = transcriptText.split(' ').length;
+        console.log('✅ Transcription completed:', wordCount, 'words');
+        toast.success(`Transcription completed! ${wordCount} words transcribed.`);
         
         if (onTranscriptGenerated) {
           onTranscriptGenerated(transcriptText);
