@@ -130,14 +130,14 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     try {
       console.log('🎤 Starting audio streaming...');
 
-      // Get microphone access
+      // Get microphone access with optimized settings for speaker playback
       mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({
         audio: {
           sampleRate: 16000,
           channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: false, // Disabled for speaker audio
+          noiseSuppression: false,  // Disabled to preserve speech
+          autoGainControl: true,    // Enabled to boost speaker audio
         },
       });
 
