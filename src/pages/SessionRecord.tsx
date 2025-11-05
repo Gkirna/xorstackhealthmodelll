@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { useSession, useUpdateSession } from "@/hooks/useSessions";
 import { useTranscription } from "@/hooks/useTranscription";
 import { useAudioRecording } from "@/hooks/useAudioRecording";
+import { useAssemblyAIStreaming } from "@/hooks/useAssemblyAIStreaming";
+import { useMicrophoneSelection } from "@/hooks/useMicrophoneSelection";
 import { useTranscriptUpdates, useSessionUpdates } from "@/hooks/useRealtime";
 import { WorkflowOrchestrator } from "@/utils/WorkflowOrchestrator";
 import { WorkflowProgress } from "@/components/WorkflowProgress";
@@ -49,7 +51,6 @@ const SessionRecord = () => {
   const [patientName, setPatientName] = useState("");
   const [sessionDate, setSessionDate] = useState(new Date());
   const [language, setLanguage] = useState("en");
-  const [microphone, setMicrophone] = useState("default");
   const [elapsedTime, setElapsedTime] = useState("00:00:00");
   const [recordingMode, setRecordingMode] = useState("transcribing");
   const [activeTab, setActiveTab] = useState<string>("transcript");
@@ -60,6 +61,7 @@ const SessionRecord = () => {
   const [enhancedTranscriptionData, setEnhancedTranscriptionData] = useState<EnhancedTranscriptionData | null>(null);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [recordingInputMode, setRecordingInputMode] = useState<'direct' | 'playback'>('direct');
+  const [isRecordingForAssembly, setIsRecordingForAssembly] = useState(false);
   
   // ALL REFS NEXT
   const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
@@ -68,6 +70,9 @@ const SessionRecord = () => {
   const startTimeRef = useRef<Date>(new Date());
   const speakerRef = useRef<'provider' | 'patient'>('provider');
   const transcriptCountRef = useRef(0);
+
+  // Microphone selection hook
+  const { microphones, selectedMicId, setSelectedMicId } = useMicrophoneSelection();
 
   // Language code mapping: simple code -> locale code for transcription
   const getTranscriptionLanguage = (lang: string): string => {
@@ -127,6 +132,32 @@ const SessionRecord = () => {
   console.log('🔗 Connecting useTranscription with voice gender:', currentVoiceGender || 'unknown');
   const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats, updateVoiceCharacteristics } = useTranscription(id || '', currentVoiceGender || 'unknown');
   
+  // AssemblyAI streaming for playback mode
+  const assemblyAIStreaming = useAssemblyAIStreaming({
+    enabled: recordingInputMode === 'playback' && isRecordingForAssembly,
+    onPartialTranscript: (text: string) => {
+      console.log('🎯 Partial transcript from AssemblyAI:', text.substring(0, 50));
+    },
+    onFinalTranscript: (text: string) => {
+      if (text.trim()) {
+        const currentSpeaker = speakerRef.current;
+        transcriptCountRef.current++;
+        
+        console.log(`💬 Final transcript #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
+        
+        const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
+        setTranscript(prev => prev ? `${prev}\n\n${speakerLabel} : ${text}` : `${speakerLabel} : ${text}`);
+        
+        // Alternate speaker for next chunk
+        speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
+      }
+    },
+    onError: (error: string) => {
+      console.error('AssemblyAI streaming error:', error);
+      toast.error(`Streaming error: ${error}`);
+    },
+  });
+  
   // Sync voice characteristics from audio recording to transcription hook
   useEffect(() => {
     if (currentVoiceCharacteristics) {
@@ -142,7 +173,9 @@ const SessionRecord = () => {
     console.log('🎯 handleStartTranscribing called:', {
       isStartingRecording,
       isRecording,
-      recordingMode
+      isRecordingForAssembly,
+      recordingMode,
+      recordingInputMode
     });
     
     if (isStartingRecording) {
@@ -150,11 +183,17 @@ const SessionRecord = () => {
       return;
     }
 
-    if (isRecording) {
+    if (isRecording || isRecordingForAssembly) {
       console.log('🛑 Stopping recording...');
       toast.success('Stopping transcription...');
       await saveAllPendingChunks();
-      stopRecording();
+      
+      if (recordingInputMode === 'playback' && isRecordingForAssembly) {
+        assemblyAIStreaming.stopStreaming();
+        setIsRecordingForAssembly(false);
+      } else {
+        stopRecording();
+      }
       
       // Auto-generate clinical note after stopping
       setTimeout(async () => {
@@ -171,21 +210,48 @@ const SessionRecord = () => {
     }
 
     if (recordingMode === 'dictating' || recordingMode === 'transcribing') {
-      console.log('🎤 Starting recording in mode:', recordingMode);
+      console.log('🎤 Starting recording in mode:', recordingMode, 'input:', recordingInputMode);
       setIsStartingRecording(true);
       
       try {
         setActiveTab('transcript');
         speakerRef.current = 'provider';
         transcriptCountRef.current = 0;
-        toast.success('Starting live transcription... Speak now!');
         
-        console.log('📞 Calling startRecording()...');
-        await startRecording();
-        console.log('✅ startRecording() completed');
+        if (recordingInputMode === 'playback') {
+          toast.success('Starting playback transcription... Play audio now!');
+          console.log('📞 Calling assemblyAIStreaming.connect()...');
+          
+          // Connect to AssemblyAI
+          if (!assemblyAIStreaming.isConnected) {
+            await assemblyAIStreaming.connect();
+            
+            // Wait for connection (max 5 seconds)
+            let attempts = 0;
+            while (!assemblyAIStreaming.isConnected && attempts < 10) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+              attempts++;
+            }
+            
+            if (!assemblyAIStreaming.isConnected) {
+              throw new Error('Failed to connect to transcription service');
+            }
+          }
+          
+          console.log('📞 Calling assemblyAIStreaming.startStreaming()...');
+          await assemblyAIStreaming.startStreaming(selectedMicId);
+          setIsRecordingForAssembly(true);
+          console.log('✅ AssemblyAI streaming started');
+        } else {
+          toast.success('Starting live transcription... Speak now!');
+          console.log('📞 Calling startRecording()...');
+          await startRecording();
+          console.log('✅ startRecording() completed');
+        }
       } catch (error) {
         console.error('❌ Failed to start recording:', error);
         toast.error('Failed to start recording. Please try again.');
+        setIsRecordingForAssembly(false);
       } finally {
         setIsStartingRecording(false);
       }
@@ -197,7 +263,7 @@ const SessionRecord = () => {
     if (hasManualInput) {
       await autoGenerateNote();
     }
-  }, [isStartingRecording, isRecording, recordingMode, transcript, context, saveAllPendingChunks, stopRecording, startRecording]);
+  }, [isStartingRecording, isRecording, isRecordingForAssembly, recordingMode, recordingInputMode, transcript, context, saveAllPendingChunks, stopRecording, startRecording, assemblyAIStreaming, selectedMicId]);
 
   const autoGenerateNote = useCallback(async (selectedTemplateId?: string) => {
     if (!id || !orchestratorRef.current) return;
@@ -280,13 +346,22 @@ const SessionRecord = () => {
 
   const handlePauseRecording = useCallback(() => {
     console.log('🎯 PAUSE BUTTON CLICKED - Calling pauseRecording()');
-    pauseRecording();
-  }, [pauseRecording]);
+    if (recordingInputMode === 'playback' && isRecordingForAssembly) {
+      // For AssemblyAI, we'll just stop sending audio
+      toast.info('Pausing playback transcription');
+    } else {
+      pauseRecording();
+    }
+  }, [pauseRecording, recordingInputMode, isRecordingForAssembly]);
 
   const handleResumeRecording = useCallback(() => {
     console.log('🎯 RESUME BUTTON CLICKED - Calling resumeRecording()');
-    resumeRecording();
-  }, [resumeRecording]);
+    if (recordingInputMode === 'playback' && isRecordingForAssembly) {
+      toast.info('Resuming playback transcription');
+    } else {
+      resumeRecording();
+    }
+  }, [resumeRecording, recordingInputMode, isRecordingForAssembly]);
 
   const handleStopRecording = useCallback(async () => {
     console.log('🎯 STOP BUTTON CLICKED - Stopping recording and opening template selection');
@@ -296,13 +371,18 @@ const SessionRecord = () => {
     await saveAllPendingChunks();
     
     // Stop the recording
-    stopRecording();
+    if (recordingInputMode === 'playback' && isRecordingForAssembly) {
+      assemblyAIStreaming.stopStreaming();
+      setIsRecordingForAssembly(false);
+    } else {
+      stopRecording();
+    }
     
     // Open template selection dialog
     setTimeout(() => {
       setTemplateDialogOpen(true);
     }, 300);
-  }, [saveAllPendingChunks, stopRecording]);
+  }, [saveAllPendingChunks, stopRecording, recordingInputMode, isRecordingForAssembly, assemblyAIStreaming]);
 
   const handleRecordingModeChange = useCallback((mode: string) => {
     setRecordingMode(mode);
@@ -768,8 +848,8 @@ const SessionRecord = () => {
           onSessionDateChange={handleSessionDateChange}
           language={language}
           onLanguageChange={setLanguage}
-          microphone={microphone}
-          onMicrophoneChange={setMicrophone}
+          microphone={selectedMicId}
+          onMicrophoneChange={setSelectedMicId}
           elapsedTime={elapsedTime}
           recordingMode={recordingMode}
           onRecordingModeChange={handleRecordingModeChange}
@@ -777,11 +857,12 @@ const SessionRecord = () => {
           onPauseRecording={handlePauseRecording}
           onResumeRecording={handleResumeRecording}
           onStopRecording={handleStopRecording}
-          isRecording={isRecording}
+          isRecording={isRecording || isRecordingForAssembly}
           isPaused={isPaused}
           isStartingRecording={isStartingRecording}
           recordingInputMode={recordingInputMode}
           onRecordingInputModeChange={setRecordingInputMode}
+          availableMicrophones={microphones}
         />
 
         {/* Audio Quality Indicator - Hidden but monitoring runs in background */}

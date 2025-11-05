@@ -35,6 +35,18 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const hasConnectedRef = useRef<boolean>(false);
+  
+  // Use refs for callbacks to prevent re-renders
+  const onPartialTranscriptRef = useRef(onPartialTranscript);
+  const onFinalTranscriptRef = useRef(onFinalTranscript);
+  const onErrorRef = useRef(onError);
+  
+  useEffect(() => {
+    onPartialTranscriptRef.current = onPartialTranscript;
+    onFinalTranscriptRef.current = onFinalTranscript;
+    onErrorRef.current = onError;
+  }, [onPartialTranscript, onFinalTranscript, onError]);
 
   // Connect to AssemblyAI streaming via edge function
   const connect = useCallback(async () => {
@@ -68,22 +80,22 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
           } else if (data.type === 'session_started') {
             setState(prev => ({ ...prev, sessionId: data.session_id }));
           } else if (data.type === 'partial') {
-            if (onPartialTranscript) {
-              onPartialTranscript(data.text);
+            if (onPartialTranscriptRef.current) {
+              onPartialTranscriptRef.current(data.text);
             }
           } else if (data.type === 'final') {
-            if (onFinalTranscript) {
-              onFinalTranscript(data.text);
+            if (onFinalTranscriptRef.current) {
+              onFinalTranscriptRef.current(data.text);
             }
           } else if (data.type === 'error') {
             console.error('❌ Streaming error:', data.message);
             setState(prev => ({ ...prev, error: data.message }));
-            if (onError) {
-              onError(data.message);
+            if (onErrorRef.current) {
+              onErrorRef.current(data.message);
             }
           } else if (data.type === 'session_ended') {
             console.log('🛑 Streaming session ended');
-            setState(prev => ({ ...prev, isStreaming: false }));
+            // Don't stop streaming on session_ended - let user control it
           }
         } catch (error) {
           console.error('❌ Error parsing message:', error);
@@ -97,8 +109,8 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
           error: 'Connection error',
           isConnected: false,
         }));
-        if (onError) {
-          onError('WebSocket connection error');
+        if (onErrorRef.current) {
+          onErrorRef.current('WebSocket connection error');
         }
       };
 
@@ -114,31 +126,43 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       console.error('❌ Error connecting:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       setState(prev => ({ ...prev, error: errorMsg }));
-      if (onError) {
-        onError(errorMsg);
+      if (onErrorRef.current) {
+        onErrorRef.current(errorMsg);
       }
     }
-  }, [enabled, onPartialTranscript, onFinalTranscript, onError]);
+  }, [enabled]);
 
   // Start streaming audio
-  const startStreaming = useCallback(async () => {
+  const startStreaming = useCallback(async (deviceId?: string) => {
     if (!state.isConnected || !wsRef.current) {
       console.warn('⚠️ Not connected to streaming service');
+      return;
+    }
+
+    if (state.isStreaming) {
+      console.log('⚠️ Already streaming, ignoring duplicate start');
       return;
     }
 
     try {
       console.log('🎤 Starting audio streaming...');
 
-      // Get microphone access
+      // Get microphone access with optional device selection
+      const audioConstraints: MediaTrackConstraints = {
+        sampleRate: 16000,
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      };
+
+      // Add device ID if provided
+      if (deviceId && deviceId !== 'default') {
+        audioConstraints.deviceId = { exact: deviceId };
+      }
+
       mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 16000,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audio: audioConstraints,
       });
 
       // Create audio context
@@ -185,11 +209,11 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       console.error('❌ Error starting stream:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       setState(prev => ({ ...prev, error: errorMsg }));
-      if (onError) {
-        onError(errorMsg);
+      if (onErrorRef.current) {
+        onErrorRef.current(errorMsg);
       }
     }
-  }, [state.isConnected, onError]);
+  }, [state.isConnected, state.isStreaming]);
 
   // Stop streaming
   const stopStreaming = useCallback(() => {
@@ -238,14 +262,17 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     }));
   }, [stopStreaming]);
 
-  // Auto-connect when enabled
+  // Auto-connect when enabled (only once)
   useEffect(() => {
-    if (enabled && !state.isConnected) {
+    if (enabled && !hasConnectedRef.current) {
+      hasConnectedRef.current = true;
       connect();
     }
 
     return () => {
-      disconnect();
+      if (enabled) {
+        disconnect();
+      }
     };
   }, [enabled]);
 

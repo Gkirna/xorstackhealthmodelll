@@ -25,6 +25,12 @@ import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Check } from "lucide-react";
 
+interface MicrophoneDevice {
+  deviceId: string;
+  label: string;
+  groupId: string;
+}
+
 interface SessionTopBarProps {
   patientName: string;
   onPatientNameChange: (name: string) => void;
@@ -46,6 +52,7 @@ interface SessionTopBarProps {
   isStartingRecording?: boolean;
   recordingInputMode?: 'direct' | 'playback';
   onRecordingInputModeChange?: (mode: 'direct' | 'playback') => void;
+  availableMicrophones?: MicrophoneDevice[];
 }
 
 export function SessionTopBar({
@@ -69,6 +76,7 @@ export function SessionTopBar({
   isStartingRecording = false,
   recordingInputMode = 'direct',
   onRecordingInputModeChange,
+  availableMicrophones = [],
 }: SessionTopBarProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(patientName);
@@ -305,9 +313,19 @@ export function SessionTopBar({
               </div>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="default">Default Microphone</SelectItem>
-              <SelectItem value="headset">Headset Microphone</SelectItem>
-              <SelectItem value="external">External USB Mic</SelectItem>
+              {availableMicrophones.length > 0 ? (
+                availableMicrophones.map((mic) => (
+                  <SelectItem key={mic.deviceId} value={mic.deviceId}>
+                    {mic.label}
+                  </SelectItem>
+                ))
+              ) : (
+                <>
+                  <SelectItem value="default">Default Microphone</SelectItem>
+                  <SelectItem value="headset">Headset Microphone</SelectItem>
+                  <SelectItem value="external">External USB Mic</SelectItem>
+                </>
+              )}
             </SelectContent>
           </Select>
         </div>
