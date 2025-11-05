@@ -289,7 +289,8 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
         disconnect();
       }
     };
-  }, [enabled, connect, disconnect]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled]);
 
   return {
     ...state,

@@ -268,18 +268,18 @@ const SessionRecord = () => {
         // Start AssemblyAI streaming for playback mode
         if (recordingInputMode === 'playback') {
           setIsRecordingForAssembly(true);
-          // Connection happens automatically via the hook's useEffect
-          // Just wait a moment for it to connect, then start streaming
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Wait up to 3 seconds for connection
+          let attempts = 0;
+          while (!assemblyAIStreaming.isConnected && attempts < 6) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            attempts++;
+          }
           
           if (assemblyAIStreaming.isConnected) {
             await assemblyAIStreaming.startStreaming();
             console.log('✅ AssemblyAI streaming started for playback mode');
           } else {
-            console.warn('⚠️ AssemblyAI not connected yet, retrying...');
-            await assemblyAIStreaming.connect();
-            await assemblyAIStreaming.startStreaming();
-            console.log('✅ AssemblyAI streaming started for playback mode (after retry)');
+            throw new Error('Failed to connect to AssemblyAI streaming service');
           }
         } else {
           // Use Web Speech API for direct mode
@@ -288,7 +288,8 @@ const SessionRecord = () => {
         }
       } catch (error) {
         console.error('❌ Failed to start recording:', error);
-        toast.error('Failed to start recording. Please try again.');
+        setIsRecordingForAssembly(false);
+        toast.error('Failed to start recording: ' + (error instanceof Error ? error.message : 'Please try again'));
       } finally {
         setIsStartingRecording(false);
       }
@@ -300,7 +301,8 @@ const SessionRecord = () => {
     if (hasManualInput) {
       await autoGenerateNote();
     }
-  }, [isStartingRecording, isRecording, isRecordingForAssembly, recordingMode, recordingInputMode, transcript, context, saveAllPendingChunks, stopRecording, startRecording, assemblyAIStreaming.connect, assemblyAIStreaming.disconnect, assemblyAIStreaming.startStreaming, assemblyAIStreaming.stopStreaming]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStartingRecording, isRecording, recordingMode, recordingInputMode, transcript, context]);
 
   const autoGenerateNote = useCallback(async (selectedTemplateId?: string) => {
     if (!id || !orchestratorRef.current) return;
@@ -389,7 +391,8 @@ const SessionRecord = () => {
     } else {
       pauseRecording();
     }
-  }, [recordingInputMode, isRecordingForAssembly, assemblyAIStreaming, pauseRecording]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordingInputMode, isRecordingForAssembly]);
 
   const handleResumeRecording = useCallback(() => {
     console.log('🎯 RESUME BUTTON CLICKED - Mode:', recordingInputMode);
@@ -399,25 +402,32 @@ const SessionRecord = () => {
     } else {
       resumeRecording();
     }
-  }, [recordingInputMode, isRecordingForAssembly, assemblyAIStreaming, resumeRecording]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordingInputMode, isRecordingForAssembly]);
 
   const handleStopRecording = useCallback(async () => {
     console.log('🎯 STOP BUTTON CLICKED - Stopping recording and opening template selection');
     toast.info('Stopping transcription...');
     
-    // Save any pending chunks first
+    // Stop AssemblyAI streaming if active
+    if (recordingInputMode === 'playback' && isRecordingForAssembly) {
+      assemblyAIStreaming.stopStreaming();
+      setIsRecordingForAssembly(false);
+    } else {
+      stopRecording();
+    }
+    
+    // Save any pending chunks
     if (saveAllPendingChunks) {
       await saveAllPendingChunks();
     }
-    
-    // Stop the recording
-    stopRecording();
     
     // Open template selection dialog
     setTimeout(() => {
       setTemplateDialogOpen(true);
     }, 300);
-  }, [saveAllPendingChunks, stopRecording]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordingInputMode, isRecordingForAssembly]);
 
   const handleRecordingModeChange = useCallback((mode: string) => {
     setRecordingMode(mode);
