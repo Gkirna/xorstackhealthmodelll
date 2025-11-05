@@ -132,7 +132,7 @@ const SessionRecord = () => {
     if (currentVoiceCharacteristics) {
       updateVoiceCharacteristics(currentVoiceCharacteristics);
     }
-  }, []); // Empty deps - only run once, updates happen through the ref
+  }, [currentVoiceCharacteristics, updateVoiceCharacteristics]);
   
   // Advanced transcription
   const { processAudioWithFullAnalysis, isProcessing } = useAdvancedTranscription();

@@ -82,6 +82,11 @@ export class VoiceAnalyzer {
   async initializeWithContext(audioContext: AudioContext, analyser: AnalyserNode): Promise<VoiceCharacteristics> {
     try {
       console.log('🎤 VoiceAnalyzer.initializeWithContext() - using shared AudioContext');
+      
+      if (!analyser) {
+        throw new Error('Analyser node is required');
+      }
+      
       this.audioContext = audioContext;
       this.analyser = analyser;
       
@@ -99,11 +104,24 @@ export class VoiceAnalyzer {
       
       console.log('🎤 Voice analyzer initialization with shared context complete');
       
-      // Wait a bit for audio data to flow
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait longer for audio data to flow before first analysis
+      await new Promise(resolve => setTimeout(resolve, 300));
       
-      // Analyze initial voice sample
-      return await this.analyzeVoiceSample();
+      // Try to analyze initial voice sample, but don't fail if no voice detected yet
+      try {
+        return await this.analyzeVoiceSample();
+      } catch (sampleError) {
+        console.warn('⚠️ Initial voice sample analysis failed (non-critical):', sampleError);
+        // Return default characteristics
+        return {
+          gender: 'unknown',
+          pitch: 0,
+          confidence: 0,
+          speakerId: 'silence',
+          voiceQuality: 'poor',
+          volume: 0
+        };
+      }
     } catch (error) {
       console.error('❌ Failed to initialize voice analyzer with shared context:', error);
       throw error;
