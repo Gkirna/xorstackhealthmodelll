@@ -15,6 +15,7 @@ interface StreamingState {
   isStreaming: boolean;
   error: string | null;
   sessionId: string | null;
+  audioLevel: number;
 }
 
 export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
@@ -32,6 +33,7 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     isStreaming: false,
     error: null,
     sessionId: null,
+    audioLevel: 0,
   });
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -40,6 +42,8 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const hasConnectedRef = useRef(false);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioLevelIntervalRef = useRef<number | null>(null);
 
   // Connect to AssemblyAI streaming via edge function
   const connect = useCallback(async () => {
@@ -141,13 +145,13 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     try {
       console.log('🎤 Starting audio streaming with device:', sourceDeviceId || deviceId || 'default');
 
-      // Audio constraints for capturing audio
+      // Audio constraints optimized for speaker playback capture
       const audioConstraints: MediaTrackConstraints = {
-        sampleRate: 16000,
+        sampleRate: 24000, // Increased to 24kHz for better quality
         channelCount: 1,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
+        echoCancellation: false, // ✅ CRITICAL: Must be false to capture speaker audio
+        noiseSuppression: false, // ✅ Allow all audio through for speaker capture
+        autoGainControl: true,   // Keep this to boost quiet speaker audio
       };
 
       // If a specific device is provided, use it
@@ -160,9 +164,15 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
         audio: audioConstraints,
       });
 
-      // Create audio context
-      audioContextRef.current = new AudioContext({ sampleRate: 16000 });
+      // Create audio context with 24kHz sample rate
+      audioContextRef.current = new AudioContext({ sampleRate: 24000 });
       sourceRef.current = audioContextRef.current.createMediaStreamSource(mediaStreamRef.current);
+      
+      // Create analyser for audio level monitoring
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      analyserRef.current.fftSize = 256;
+      analyserRef.current.smoothingTimeConstant = 0.8;
+      
       processorRef.current = audioContextRef.current.createScriptProcessor(4096, 1, 1);
 
       // Process audio chunks
@@ -195,12 +205,25 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
         }));
       };
 
-      sourceRef.current.connect(processorRef.current);
+      // Connect audio nodes
+      sourceRef.current.connect(analyserRef.current);
+      analyserRef.current.connect(processorRef.current);
       processorRef.current.connect(audioContextRef.current.destination);
 
+      // Start audio level monitoring
+      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+      audioLevelIntervalRef.current = window.setInterval(() => {
+        if (analyserRef.current) {
+          analyserRef.current.getByteFrequencyData(dataArray);
+          const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+          const normalized = Math.min(100, (average / 128) * 100);
+          setState(prev => ({ ...prev, audioLevel: normalized }));
+        }
+      }, 100);
+
       setState(prev => ({ ...prev, isStreaming: true }));
-      console.log('✅ Audio streaming started');
-      toast.success('Real-time transcription active');
+      console.log('✅ Audio streaming started - listening to external speaker');
+      toast.success('🎤 Listening to speaker audio...');
     } catch (error) {
       console.error('❌ Error starting stream:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -215,6 +238,17 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
   // Stop streaming
   const stopStreaming = useCallback(() => {
     console.log('🛑 Stopping audio streaming...');
+
+    // Stop audio level monitoring
+    if (audioLevelIntervalRef.current) {
+      clearInterval(audioLevelIntervalRef.current);
+      audioLevelIntervalRef.current = null;
+    }
+
+    if (analyserRef.current) {
+      analyserRef.current.disconnect();
+      analyserRef.current = null;
+    }
 
     if (sourceRef.current) {
       sourceRef.current.disconnect();
@@ -240,7 +274,7 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       wsRef.current.send(JSON.stringify({ type: 'terminate' }));
     }
 
-    setState(prev => ({ ...prev, isStreaming: false }));
+    setState(prev => ({ ...prev, isStreaming: false, audioLevel: 0 }));
   }, []);
 
   // Disconnect WebSocket

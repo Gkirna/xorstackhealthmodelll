@@ -60,7 +60,7 @@ serve(async (req) => {
     const langCode = languageMap[language] || 'en';
 
     // Connect to AssemblyAI streaming API with enhanced parameters and selected language
-    const assemblyAIUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&formatted_finals=true&punctuate=true&format_text=true&disfluencies=false&language_code=${langCode}&token=${ASSEMBLYAI_API_KEY}`;
+    const assemblyAIUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=24000&formatted_finals=true&punctuate=true&format_text=true&disfluencies=false&language_code=${langCode}&word_boost=["medical","patient","doctor","diagnosis","treatment","prescription","symptoms","medication"]&token=${ASSEMBLYAI_API_KEY}`;
     
     assemblyAISocket = new WebSocket(assemblyAIUrl);
 

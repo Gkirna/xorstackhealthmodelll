@@ -29,6 +29,7 @@ import { useAdvancedTranscription } from '@/hooks/useAdvancedTranscription';
 import type { EnhancedTranscriptionData } from '@/types/advancedTranscription';
 import { TemplateSelectionDialog } from "@/components/session/TemplateSelectionDialog";
 import { AudioQualityIndicator } from "@/components/AudioQualityIndicator";
+import { AudioLevelIndicator } from "@/components/AudioLevelIndicator";
 
 const SessionRecord = () => {
   const { id } = useParams();
@@ -871,19 +872,25 @@ const SessionRecord = () => {
           onRecordingInputModeChange={setRecordingInputMode}
         />
 
-        {/* Audio Quality Indicator - Hidden but monitoring runs in background */}
-        {/* 
-        {(isRecording || isPaused) && recordingInputMode === 'direct' && (
-          <div className="px-6 pt-3">
-            <AudioQualityIndicator
-              volume={audioLevel || 0}
-              quality={voiceQuality || 'fair'}
-              isActive={isRecording && !isPaused}
-              mode={recordingInputMode}
-            />
+        {/* Audio Level Indicator for Playback Mode */}
+        {assemblyAIStreaming.isStreaming && recordingInputMode === 'playback' && (
+          <div className="px-6 pt-3 pb-2 bg-primary/5 border-b border-border">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="text-sm font-medium text-foreground">
+                    🎤 Listening to external speaker...
+                  </span>
+                </div>
+                <AudioLevelIndicator level={assemblyAIStreaming.audioLevel} />
+              </div>
+              <div className="text-xs text-muted-foreground">
+                💡 Ensure your mobile speaker volume is adequate
+              </div>
+            </div>
           </div>
         )}
-        */}
 
         {/* Workflow Progress - Hidden from UI but functionality preserved */}
 
