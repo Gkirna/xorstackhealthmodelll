@@ -267,20 +267,29 @@ const SessionRecord = () => {
         
         // Start AssemblyAI streaming for playback mode
         if (recordingInputMode === 'playback') {
-          setIsRecordingForAssembly(true);
-          // Wait up to 3 seconds for connection
-          let attempts = 0;
-          while (!assemblyAIStreaming.isConnected && attempts < 6) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-            attempts++;
+          // Ensure connection before starting
+          if (!assemblyAIStreaming.isConnected) {
+            await assemblyAIStreaming.connect();
           }
           
-          if (assemblyAIStreaming.isConnected) {
-            await assemblyAIStreaming.startStreaming();
-            console.log('✅ AssemblyAI streaming started for playback mode');
-          } else {
-            throw new Error('Failed to connect to AssemblyAI streaming service');
+          // Wait up to 5 seconds for connection with better feedback
+          let attempts = 0;
+          while (!assemblyAIStreaming.isConnected && attempts < 10) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            attempts++;
+            if (attempts === 5) {
+              toast.info('Establishing high-accuracy connection...');
+            }
           }
+          
+          if (!assemblyAIStreaming.isConnected) {
+            throw new Error('Failed to connect to high-accuracy transcription service. Please try again.');
+          }
+          
+          // Start streaming and mark as recording
+          setIsRecordingForAssembly(true);
+          await assemblyAIStreaming.startStreaming();
+          console.log('✅ AssemblyAI streaming started for playback mode');
         } else {
           // Use Web Speech API for direct mode
           await startRecording();

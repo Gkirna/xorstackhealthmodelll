@@ -39,6 +39,28 @@ serve(async (req) => {
 
   let assemblyAISocket: WebSocket | null = null;
   let isConnected = false;
+  let audioQueue: string[] = [];
+  let processingQueue = false;
+
+  // Process queued audio data
+  const processAudioQueue = () => {
+    if (processingQueue || audioQueue.length === 0 || !isConnected || !assemblyAISocket) {
+      return;
+    }
+
+    processingQueue = true;
+    
+    while (audioQueue.length > 0 && isConnected && assemblyAISocket?.readyState === WebSocket.OPEN) {
+      const audioData = audioQueue.shift();
+      if (audioData) {
+        assemblyAISocket.send(JSON.stringify({
+          audio_data: audioData,
+        }));
+      }
+    }
+    
+    processingQueue = false;
+  };
 
   clientSocket.onopen = () => {
     console.log('✅ Client WebSocket connected');
@@ -46,7 +68,7 @@ serve(async (req) => {
     // Connect to AssemblyAI streaming API with multi-accent English support
     // Using generic 'en' instead of 'en_us' for better global accent recognition
     // Enhanced word boosting for medical terms AND common slang across English dialects
-    const assemblyAIUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&formatted_finals=true&language_code=en&word_boost=diagnosis,prescription,symptom,treatment,medication,patient,doctor,history,examination,yeah,nah,gonna,wanna,gotta,kinda,sorta,innit,bruv,mate,y'all,ain't,reckon,bloody,cheers,ta,crikey,bloke,eh,aye&boost_param=high&token=${ASSEMBLYAI_API_KEY}`;
+    const assemblyAIUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&formatted_finals=true&language_code=en&word_boost=diagnosis,prescription,symptom,treatment,medication,patient,doctor,history,examination,consultation,therapy,yeah,nah,gonna,wanna,gotta,kinda,sorta,innit,bruv,mate,y'all,ain't,reckon,bloody,cheers,ta,crikey,bloke,eh,aye,yep,nope,dunno,lemme,gimme&boost_param=high&token=${ASSEMBLYAI_API_KEY}`;
     
     assemblyAISocket = new WebSocket(assemblyAIUrl);
 
@@ -60,6 +82,12 @@ serve(async (req) => {
         status: 'connected',
         message: 'High Accuracy Mode active - Multi-accent English optimized',
       }));
+      
+      // Process any queued audio data
+      setTimeout(() => {
+        console.log(`📦 Processing ${audioQueue.length} queued audio chunks`);
+        processAudioQueue();
+      }, 100);
     };
 
     assemblyAISocket.onmessage = (event) => {
@@ -116,24 +144,31 @@ serve(async (req) => {
   };
 
   clientSocket.onmessage = (event) => {
-    if (!isConnected || !assemblyAISocket) {
-      console.warn('⚠️ Received audio before AssemblyAI connection ready');
-      return;
-    }
-
     try {
       const data = JSON.parse(event.data);
       
       // Forward audio data to AssemblyAI
       if (data.type === 'audio' && data.audio) {
-        assemblyAISocket.send(JSON.stringify({
-          audio_data: data.audio, // Base64 PCM16 audio
-        }));
+        if (!isConnected || !assemblyAISocket) {
+          // Queue audio data until connection is ready
+          audioQueue.push(data.audio);
+          if (audioQueue.length > 100) {
+            // Prevent queue overflow - remove oldest
+            audioQueue.shift();
+          }
+          return;
+        }
+        
+        // Add to queue and process
+        audioQueue.push(data.audio);
+        processAudioQueue();
       } else if (data.type === 'terminate') {
         // Client requested termination
-        assemblyAISocket.send(JSON.stringify({
-          terminate_session: true,
-        }));
+        if (assemblyAISocket && assemblyAISocket.readyState === WebSocket.OPEN) {
+          assemblyAISocket.send(JSON.stringify({
+            terminate_session: true,
+          }));
+        }
       }
     } catch (error) {
       console.error('❌ Error processing client message:', error);
