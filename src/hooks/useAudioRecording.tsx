@@ -100,6 +100,24 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const stallDetectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const preCheckFailCountRef = useRef<number>(0);
 
+  // Use refs for callbacks to avoid re-initialization
+  const onTranscriptUpdateRef = useRef(onTranscriptUpdate);
+  const onFinalTranscriptChunkRef = useRef(onFinalTranscriptChunk);
+  const onSpeechDetectionRef = useRef(onSpeechDetection);
+  const onTranscriptionStalledRef = useRef(onTranscriptionStalled);
+  const onSuggestUploadModeRef = useRef(onSuggestUploadMode);
+  const onAudioQualityChangeRef = useRef(onAudioQualityChange);
+  
+  // Update refs when callbacks change
+  useEffect(() => {
+    onTranscriptUpdateRef.current = onTranscriptUpdate;
+    onFinalTranscriptChunkRef.current = onFinalTranscriptChunk;
+    onSpeechDetectionRef.current = onSpeechDetection;
+    onTranscriptionStalledRef.current = onTranscriptionStalled;
+    onSuggestUploadModeRef.current = onSuggestUploadMode;
+    onAudioQualityChangeRef.current = onAudioQualityChange;
+  }, [onTranscriptUpdate, onFinalTranscriptChunk, onSpeechDetection, onTranscriptionStalled, onSuggestUploadMode, onAudioQualityChange]);
+  
   // Initialize transcription engine
   useEffect(() => {
     console.log(`🎙️ Initializing real-time transcription engine for language: ${language}`);
@@ -136,20 +154,20 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
             currentVoiceGenderRef.current === 'female' ? 'patient' : 'provider'
           );
           
-          if (onFinalTranscriptChunk) {
-            onFinalTranscriptChunk(correctedTranscript);
+          if (onFinalTranscriptChunkRef.current) {
+            onFinalTranscriptChunkRef.current(correctedTranscript);
           }
           setState(prev => ({ ...prev, interimTranscript: '' }));
           
-          if (onTranscriptUpdate) {
-            onTranscriptUpdate(correctedTranscript, true);
+          if (onTranscriptUpdateRef.current) {
+            onTranscriptUpdateRef.current(correctedTranscript, true);
           }
         } else {
           console.log('⏳ Interim transcript update');
           setState(prev => ({ ...prev, interimTranscript: transcript }));
           
-          if (onTranscriptUpdate) {
-            onTranscriptUpdate(transcript, false);
+          if (onTranscriptUpdateRef.current) {
+            onTranscriptUpdateRef.current(transcript, false);
           }
         }
       },
@@ -257,7 +275,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       console.log('✅ Audio recorder cleanup complete');
     };
-  }, [continuous, onFinalTranscriptChunk, onTranscriptUpdate, language, mode]);
+  }, [continuous, language, mode]); // Removed onFinalTranscriptChunk and onTranscriptUpdate to prevent re-render loop
   
   // Audio level monitoring function
   const startAudioLevelMonitoring = useCallback(() => {
@@ -304,23 +322,23 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           
           console.log(`🎧 Audio Level: ${avgLevel.toFixed(0)}%, Quality: ${quality}`);
           
-          if (onSpeechDetection) {
-            onSpeechDetection({
+          if (onSpeechDetectionRef.current) {
+            onSpeechDetectionRef.current({
               detected: prev.isSpeechDetected,
               audioLevel: avgLevel,
               quality,
             });
           }
           
-          if (onAudioQualityChange) {
-            onAudioQualityChange(quality);
+          if (onAudioQualityChangeRef.current) {
+            onAudioQualityChangeRef.current(quality);
           }
           
           return prev;
         });
       }
     }, 500);
-  }, [mode, onSpeechDetection, onAudioQualityChange]);
+  }, [mode]); // Removed callback dependencies
   
   // Stall detection for playback mode
   const startStallDetection = useCallback(() => {
@@ -336,8 +354,8 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           const stallDuration = Math.floor(timeSinceLastChunk / 1000);
           console.log(`⚠️ No transcription for ${stallDuration}s - Audio level: ${prev.averageAudioLevel.toFixed(0)}%`);
           
-          if (onTranscriptionStalled) {
-            onTranscriptionStalled({
+          if (onTranscriptionStalledRef.current) {
+            onTranscriptionStalledRef.current({
               duration: stallDuration,
               audioLevel: prev.averageAudioLevel,
               suggestion: 'No transcription progress detected. Consider switching to Upload Mode.',
@@ -348,8 +366,8 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           if (timeSinceLastChunk > 20000 && prev.transcriptChunkCount === 0) {
             console.log('💡 Suggestion: No transcription progress. Consider Upload Mode for better accuracy.');
             
-            if (onSuggestUploadMode) {
-              onSuggestUploadMode('No transcription detected after 20s. Upload Mode recommended for pre-recorded audio.');
+            if (onSuggestUploadModeRef.current) {
+              onSuggestUploadModeRef.current('No transcription detected after 20s. Upload Mode recommended for pre-recorded audio.');
             }
           }
         }
@@ -362,7 +380,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         return prev;
       });
     }, 1000);
-  }, [onTranscriptionStalled, onSuggestUploadMode]);
+  }, []); // Removed callback dependencies
 
   const startRecording = useCallback(async () => {
     try {
@@ -779,7 +797,19 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       toast.error(errorMessage, { duration: 5000 });
       if (onError) onError(errorMessage);
     }
-  }, [state.transcriptSupported, onRecordingComplete, onError, sampleRate, deviceId]);
+  }, []);
+
+  const clearRecording = useCallback(() => {
+    if (state.recordedUrl) {
+      URL.revokeObjectURL(state.recordedUrl);
+    }
+    setState(prev => ({
+      ...prev,
+      recordedBlob: null,
+      recordedUrl: null,
+      audioLevel: 0,
+    }));
+  }, [state.recordedUrl]);
 
   const pauseRecording = useCallback(() => {
     console.log('⏸️ Pause recording called, current state:', mediaRecorderRef.current?.state);
@@ -974,29 +1004,6 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   }, []);
 
 
-  const clearRecording = useCallback(() => {
-    if (state.recordedUrl) {
-      URL.revokeObjectURL(state.recordedUrl);
-    }
-    
-    // Clean up voice analyzer if still active
-    if (voiceAnalyzerRef.current) {
-      voiceAnalyzerRef.current.cleanup();
-      voiceAnalyzerRef.current = null;
-    }
-    
-    currentVoiceGenderRef.current = 'unknown';
-    currentVoiceCharacteristicsRef.current = null;
-    
-    setState(prev => ({
-      ...prev,
-      recordedBlob: null,
-      recordedUrl: null,
-      interimTranscript: '',
-      duration: 0,
-    }));
-    chunksRef.current = [];
-  }, [state.recordedUrl]);
 
   const formatDuration = useCallback((seconds: number) => {
     const mins = Math.floor(seconds / 60);
