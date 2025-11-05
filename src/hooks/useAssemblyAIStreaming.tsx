@@ -35,11 +35,18 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const hasConnectedRef = useRef(false);
 
   // Connect to AssemblyAI streaming via edge function
   const connect = useCallback(async () => {
     if (!enabled) {
       console.log('⚠️ AssemblyAI streaming not enabled');
+      return;
+    }
+
+    // Don't reconnect if already connected
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      console.log('✅ Already connected to AssemblyAI');
       return;
     }
 
@@ -236,18 +243,26 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       isConnected: false,
       sessionId: null,
     }));
+    
+    // Reset connection flag
+    hasConnectedRef.current = false;
   }, [stopStreaming]);
 
   // Auto-connect when enabled
   useEffect(() => {
-    if (enabled && !state.isConnected) {
+    if (enabled && !state.isConnected && !hasConnectedRef.current) {
+      hasConnectedRef.current = true;
       connect();
     }
 
+    // Only disconnect on unmount
     return () => {
-      disconnect();
+      if (enabled) {
+        disconnect();
+        hasConnectedRef.current = false;
+      }
     };
-  }, [enabled]);
+  }, [enabled]); // Only depend on enabled changing
 
   return {
     ...state,
