@@ -364,15 +364,21 @@ const SessionRecord = () => {
     }
   }, [pauseRecording, recordingInputMode, assemblyAIStreaming]);
 
-  const handleResumeRecording = useCallback(() => {
-    console.log('🎯 RESUME BUTTON CLICKED');
+  const handleResumeRecording = useCallback(async () => {
+    console.log('🎯 RESUME BUTTON CLICKED - Playback mode:', recordingInputMode === 'playback');
     if (recordingInputMode === 'playback') {
-      assemblyAIStreaming.startStreaming();
-      toast.info('Resumed playback transcription');
+      try {
+        console.log('▶️ Resuming playback streaming with mic:', microphone);
+        await assemblyAIStreaming.startStreaming(microphone !== 'default' ? microphone : undefined);
+        toast.success('Resumed playback transcription');
+      } catch (error) {
+        console.error('❌ Failed to resume streaming:', error);
+        toast.error('Failed to resume playback transcription');
+      }
     } else {
       resumeRecording();
     }
-  }, [resumeRecording, recordingInputMode, assemblyAIStreaming]);
+  }, [resumeRecording, recordingInputMode, assemblyAIStreaming, microphone]);
 
   const handleStopRecording = useCallback(async () => {
     console.log('🎯 STOP BUTTON CLICKED - Stopping recording and opening template selection');

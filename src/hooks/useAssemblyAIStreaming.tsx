@@ -64,8 +64,11 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const projectId = supabaseUrl.split('//')[1].split('.')[0];
       const wsUrl = `wss://${projectId}.supabase.co/functions/v1/assemblyai-realtime?language=${language}`;
+      
+      console.log('📡 WebSocket URL:', wsUrl);
 
       wsRef.current = new WebSocket(wsUrl);
+      console.log('🔗 WebSocket created, waiting for connection...');
 
       wsRef.current.onopen = () => {
         console.log('✅ WebSocket connection established');
