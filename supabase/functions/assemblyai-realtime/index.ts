@@ -43,10 +43,8 @@ serve(async (req) => {
   clientSocket.onopen = () => {
     console.log('✅ Client WebSocket connected');
 
-    // Connect to AssemblyAI streaming API with multi-accent English support
-    // Using generic 'en' instead of 'en_us' for better global accent recognition
-    // Enhanced word boosting for medical terms AND common slang across English dialects
-    const assemblyAIUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&formatted_finals=true&language_code=en&word_boost=diagnosis,prescription,symptom,treatment,medication,patient,doctor,history,examination,yeah,nah,gonna,wanna,gotta,kinda,sorta,innit,bruv,mate,y'all,ain't,reckon,bloody,cheers,ta,crikey,bloke,eh,aye&boost_param=high&token=${ASSEMBLYAI_API_KEY}`;
+    // Connect to AssemblyAI streaming API
+    const assemblyAIUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&formatted_finals=true&token=${ASSEMBLYAI_API_KEY}`;
     
     assemblyAISocket = new WebSocket(assemblyAIUrl);
 
@@ -58,7 +56,7 @@ serve(async (req) => {
       clientSocket.send(JSON.stringify({
         type: 'connection',
         status: 'connected',
-        message: 'High Accuracy Mode active - Multi-accent English optimized',
+        message: 'High Accuracy Mode active',
       }));
     };
 
