@@ -66,15 +66,15 @@ export class RealTimeTranscription {
     this.recognition.lang = this.config.lang;
     this.recognition.maxAlternatives = 10; // Maximum alternatives for best accuracy
     
-    // Advanced audio processing settings for optimal performance
-    if ('audioConstraints' in this.recognition) {
-      (this.recognition as any).audioConstraints = {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        sampleRate: 48000,
-        channelCount: 1
-      };
+    // Detect if running on mobile
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    console.log(`📱 Device type: ${isMobile ? 'Mobile' : 'Desktop'}`);
+    
+    // Mobile-optimized settings for better performance
+    if (isMobile) {
+      // On mobile, reduce alternatives to improve performance
+      this.recognition.maxAlternatives = 5;
+      console.log('📱 Mobile optimizations applied');
     }
 
     this.recognition.onstart = () => {
@@ -237,29 +237,30 @@ export class RealTimeTranscription {
       let shouldRestart = false;
       
       switch (event.error) {
-        case 'no-speech':
-          errorMessage = 'No speech detected. Listening...';
-          shouldRestart = true;
-          break;
-        case 'audio-capture':
-          errorMessage = 'Microphone not accessible. Please check permissions.';
-          break;
-        case 'not-allowed':
-          errorMessage = 'Microphone permission denied. Please grant access.';
-          break;
-        case 'network':
-          errorMessage = 'Network error. Please check your connection.';
-          shouldRestart = true;
-          break;
-        case 'aborted':
-          errorMessage = 'Transcription aborted.';
-          break;
-        case 'service-not-allowed':
-          errorMessage = 'Speech recognition service not allowed.';
-          break;
-        default:
-          errorMessage = `Transcription error: ${event.error}`;
-      }
+      case 'no-speech':
+        errorMessage = 'No speech detected. Please check your audio and try again.';
+        shouldRestart = true;
+        break;
+      case 'audio-capture':
+        errorMessage = 'Microphone not accessible. Please check permissions and ensure your device microphone is working.';
+        break;
+      case 'not-allowed':
+        errorMessage = 'Microphone permission denied. Please grant microphone access in your browser settings.';
+        break;
+      case 'network':
+        errorMessage = 'Network error. Please check your internet connection.';
+        shouldRestart = true;
+        break;
+      case 'aborted':
+        // Don't show error for intentional aborts
+        console.log('🔇 Transcription intentionally aborted');
+        return; // Exit early, don't restart
+      case 'service-not-allowed':
+        errorMessage = 'Speech recognition service not available. Please try again later.';
+        break;
+      default:
+        errorMessage = `Transcription error: ${event.error}`;
+    }
 
       if (this.config.onError) {
         this.config.onError(errorMessage);
@@ -409,7 +410,8 @@ export class RealTimeTranscription {
     if (this.isListening && this.recognition) {
       try {
         console.log('⏸️ Pausing speech recognition');
-        this.recognition.abort(); // Use abort instead of stop to prevent auto-restart
+        // Use stop instead of abort to allow clean restart
+        this.recognition.stop();
         this.isListening = false;
       } catch (error) {
         console.error('Error pausing recognition:', error);

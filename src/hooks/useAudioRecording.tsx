@@ -240,27 +240,30 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       console.log('✅ All cleanup complete, requesting microphone...');
       console.log(`🎤 Recording mode: ${mode}`);
       
-      // Advanced audio constraints with browser-specific optimizations
+      // Critical: Different audio constraints for playback vs direct mode
+      // Playback mode MUST disable echo cancellation to hear speakers
       const constraints: MediaStreamConstraints = {
         audio: mode === 'playback' ? {
-          echoCancellation: { exact: true },
-          noiseSuppression: { exact: true },
-          autoGainControl: { exact: true },
+          // CRITICAL for playback: Disable echo cancellation so mic can hear speakers
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: true, // Keep AGC to boost quiet audio
           sampleRate: { ideal: 48000 },
           channelCount: { ideal: 1 },
           ...(deviceId && { deviceId: { exact: deviceId } }),
-          // Browser-specific enhancements for playback mode
+          // Mobile-specific optimizations for playback mode
           advanced: [
-            { echoCancellation: true },
-            { noiseSuppression: true },
+            { echoCancellation: false },  // Must be false for playback
+            { noiseSuppression: false },  // Must be false for playback
             { autoGainControl: true },
-            { googEchoCancellation: true } as any,
-            { googNoiseSuppression: true } as any,
+            { googEchoCancellation: false } as any,  // Chrome-specific
+            { googNoiseSuppression: false } as any,  // Chrome-specific
             { googAutoGainControl: true } as any,
-            { googHighpassFilter: true } as any,
-            { googTypingNoiseDetection: true } as any
+            { googHighpassFilter: false } as any,  // Don't filter low frequencies
+            { googTypingNoiseDetection: false } as any
           ] as any
         } : {
+          // Direct mode: Enable all noise reduction
           echoCancellation: { exact: true },
           noiseSuppression: { exact: true },
           autoGainControl: { exact: true },

@@ -80,16 +80,20 @@ export class VoiceAnalyzer {
   constructor(mode: 'direct' | 'playback' = 'direct') {
     this.mode = mode;
     
+    // Detect if on mobile for additional optimizations
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
     // Advanced adaptive thresholds optimized for each mode
     if (mode === 'playback') {
       // Enhanced for playback mode with better tolerance
-      this.MIN_PITCH_DIFFERENCE = 22;
-      this.MIN_PITCH_MALE = 60;
-      this.MAX_PITCH_MALE = 220;
-      this.MIN_PITCH_FEMALE = 135;
-      this.MAX_PITCH_FEMALE = 400;
-      this.CONFIDENCE_THRESHOLD = 0.48;
-      this.adaptiveThreshold = 0.42;
+      // Mobile playback has even more degraded audio
+      this.MIN_PITCH_DIFFERENCE = isMobile ? 25 : 22;
+      this.MIN_PITCH_MALE = isMobile ? 50 : 60;
+      this.MAX_PITCH_MALE = isMobile ? 230 : 220;
+      this.MIN_PITCH_FEMALE = isMobile ? 120 : 135;
+      this.MAX_PITCH_FEMALE = isMobile ? 420 : 400;
+      this.CONFIDENCE_THRESHOLD = isMobile ? 0.40 : 0.48;
+      this.adaptiveThreshold = isMobile ? 0.35 : 0.42;
     } else {
       // Optimized for direct mode with precision
       this.MIN_PITCH_DIFFERENCE = 20;
@@ -101,7 +105,7 @@ export class VoiceAnalyzer {
       this.adaptiveThreshold = 0.60;
     }
     
-    console.log(`🎤 Advanced VoiceAnalyzer initialized (${mode} mode):`, {
+    console.log(`🎤 Advanced VoiceAnalyzer initialized (${mode} mode, ${isMobile ? 'Mobile' : 'Desktop'}):`, {
       pitchDiff: this.MIN_PITCH_DIFFERENCE,
       maleRange: [this.MIN_PITCH_MALE, this.MAX_PITCH_MALE],
       femaleRange: [this.MIN_PITCH_FEMALE, this.MAX_PITCH_FEMALE],

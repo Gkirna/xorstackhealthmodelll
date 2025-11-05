@@ -189,9 +189,17 @@ const SessionRecord = () => {
         setActiveTab('transcript');
         speakerRef.current = 'provider';
         transcriptCountRef.current = 0;
-        toast.success('Starting live transcription... Speak now!');
         
-        console.log('📞 Calling startRecording()...');
+        // Show mode-specific guidance
+        if (recordingInputMode === 'playback') {
+          toast.info('Playback Mode: Play your audio now. Ensure volume is up and microphone can hear speakers.', {
+            duration: 5000
+          });
+        } else {
+          toast.success('Starting live transcription... Speak now!');
+        }
+        
+        console.log(`📞 Calling startRecording() in ${recordingInputMode} mode...`);
         await startRecording();
         console.log('✅ startRecording() completed');
       } catch (error) {
