@@ -67,13 +67,51 @@ export class VoiceAnalyzer {
   private readonly CONFIDENCE_DECAY = 0.95; // Confidence decays over time
   private mode: 'direct' | 'playback' = 'direct';
   
+  // Pitch ranges for gender detection (in Hz) - optimized for each mode
+  private readonly MIN_PITCH_MALE: number;
+  private readonly MAX_PITCH_MALE: number;
+  private readonly MIN_PITCH_FEMALE: number;
+  private readonly MAX_PITCH_FEMALE: number;
+  private readonly CONFIDENCE_THRESHOLD: number;
+  private recentPitches: number[] = [];
+  private recentEnergies: number[] = [];
+  private adaptiveThreshold: number;
+  
   constructor(mode: 'direct' | 'playback' = 'direct') {
     this.mode = mode;
-    // Adjust thresholds for playback mode (degraded audio quality)
+    
+    // Detect if on mobile for additional optimizations
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    // Advanced adaptive thresholds optimized for each mode
     if (mode === 'playback') {
-      this.MIN_PITCH_DIFFERENCE = 25; // Wider tolerance for degraded audio
+      // Enhanced for playback mode with better tolerance
+      // Mobile playback has even more degraded audio
+      this.MIN_PITCH_DIFFERENCE = isMobile ? 25 : 20;
+      this.MIN_PITCH_MALE = isMobile ? 50 : 60;
+      this.MAX_PITCH_MALE = isMobile ? 230 : 220;
+      this.MIN_PITCH_FEMALE = isMobile ? 120 : 135;
+      this.MAX_PITCH_FEMALE = isMobile ? 420 : 400;
+      this.CONFIDENCE_THRESHOLD = isMobile ? 0.40 : 0.48;
+      this.adaptiveThreshold = isMobile ? 0.35 : 0.42;
+    } else {
+      // Optimized for direct mode with precision
+      this.MIN_PITCH_DIFFERENCE = 20;
+      this.MIN_PITCH_MALE = 80;
+      this.MAX_PITCH_MALE = 190;
+      this.MIN_PITCH_FEMALE = 155;
+      this.MAX_PITCH_FEMALE = 275;
+      this.CONFIDENCE_THRESHOLD = 0.65;
+      this.adaptiveThreshold = 0.60;
     }
-    console.log(`🎤 VoiceAnalyzer initialized in ${mode} mode`);
+    
+    console.log(`🎤 Advanced VoiceAnalyzer initialized (${mode} mode, ${isMobile ? 'Mobile' : 'Desktop'}):`, {
+      pitchDiff: this.MIN_PITCH_DIFFERENCE,
+      maleRange: [this.MIN_PITCH_MALE, this.MAX_PITCH_MALE],
+      femaleRange: [this.MIN_PITCH_FEMALE, this.MAX_PITCH_FEMALE],
+      confidence: this.CONFIDENCE_THRESHOLD,
+      adaptive: this.adaptiveThreshold
+    });
   }
 
   /**
@@ -158,7 +196,7 @@ export class VoiceAnalyzer {
   }
 
   /**
-   * Analyze a voice sample and return characteristics
+   * Analyze a voice sample and return characteristics with adaptive learning
    */
   async analyzeVoiceSample(): Promise<VoiceCharacteristics> {
     if (!this.analyser) {
@@ -184,6 +222,16 @@ export class VoiceAnalyzer {
     // Volume detection
     const volume = this.detectVolume(dataArray);
     
+    // Store recent values for adaptive learning
+    this.recentPitches.push(pitch);
+    this.recentEnergies.push(volume);
+    
+    // Keep only last 50 samples
+    if (this.recentPitches.length > 50) {
+      this.recentPitches.shift();
+      this.recentEnergies.shift();
+    }
+    
     // Detect voice activity
     const isVoiceActive = this.detectVoiceActivity(dataArray);
     
@@ -198,18 +246,35 @@ export class VoiceAnalyzer {
       };
     }
     
-    // Determine gender with high accuracy
-    const { gender, confidence } = this.determineGenderWithConfidence(pitch);
+    // Advanced gender detection with adaptive confidence
+    const avgRecentPitch = this.recentPitches.length > 5
+      ? this.recentPitches.slice(-10).reduce((a, b) => a + b, 0) / Math.min(10, this.recentPitches.length)
+      : pitch;
+    
+    const effectivePitch = (pitch * 0.6 + avgRecentPitch * 0.4);
+    const { gender, confidence } = this.determineGenderWithConfidence(effectivePitch);
+    
+    // Apply adaptive threshold
+    if (confidence < this.adaptiveThreshold) {
+      return {
+        gender: 'unknown',
+        pitch: effectivePitch,
+        confidence: 0,
+        speakerId: 'silence',
+        voiceQuality: this.assessVoiceQuality(dataArray, effectivePitch, volume),
+        volume
+      };
+    }
     
     // Determine voice quality
-    const voiceQuality = this.assessVoiceQuality(dataArray, pitch, volume);
+    const voiceQuality = this.assessVoiceQuality(dataArray, effectivePitch, volume);
     
     // Identify or create speaker
-    const speakerId = this.identifySpeaker(pitch, gender === 'unknown' ? 'male' : gender);
+    const speakerId = this.identifySpeaker(effectivePitch, gender === 'unknown' ? 'male' : gender);
     
     return {
       gender,
-      pitch,
+      pitch: effectivePitch,
       confidence,
       speakerId,
       voiceQuality,

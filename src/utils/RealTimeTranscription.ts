@@ -7,11 +7,13 @@ export interface TranscriptionConfig {
   continuous?: boolean;
   interimResults?: boolean;
   lang?: string;
+  mode?: 'direct' | 'playback';
   onResult?: (transcript: string, isFinal: boolean) => void;
   onError?: (error: string) => void;
   onStart?: () => void;
   onEnd?: () => void;
   onSpeakerChange?: (speaker: 'Doctor' | 'Patient') => void;
+  onSpeechActivity?: () => void;
 }
 
 interface ConversationTurn {
@@ -34,12 +36,17 @@ export class RealTimeTranscription {
   private pauseThreshold: number = 2000; // 2 seconds pause indicates speaker change
   private consecutiveSentences: number = 0;
   private sentenceCountBeforeSwitch: number = 2; // Switch speaker after 2-3 sentences
+  private lastResultReceivedAt: number = 0;
+  private resultCount: number = 0;
+  private mode: 'direct' | 'playback' = 'direct';
 
   constructor(config: TranscriptionConfig = {}) {
+    this.mode = config.mode || 'direct';
     this.config = {
       continuous: true,
       interimResults: true,
       lang: config.lang || 'kn-IN', // Default to Kannada (Karnataka, India)
+      mode: this.mode,
       ...config
     };
 
@@ -64,7 +71,19 @@ export class RealTimeTranscription {
     this.recognition.continuous = this.config.continuous;
     this.recognition.interimResults = this.config.interimResults;
     this.recognition.lang = this.config.lang;
-    this.recognition.maxAlternatives = 5; // Increased for better accuracy in medical context
+    // Playback mode: more alternatives to handle degraded audio
+    this.recognition.maxAlternatives = this.mode === 'playback' ? 15 : 10;
+    
+    // Detect if running on mobile
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    console.log(`📱 Device type: ${isMobile ? 'Mobile' : 'Desktop'}`);
+    
+    // Mobile-optimized settings for better performance
+    if (isMobile) {
+      // On mobile, reduce alternatives to improve performance
+      this.recognition.maxAlternatives = 5;
+      console.log('📱 Mobile optimizations applied');
+    }
 
     this.recognition.onstart = () => {
       console.log('Speech recognition started');
@@ -75,6 +94,15 @@ export class RealTimeTranscription {
     };
 
     this.recognition.onresult = (event: any) => {
+      // Track speech activity
+      this.lastResultReceivedAt = Date.now();
+      this.resultCount++;
+      
+      // Fire speech activity callback
+      if (this.config.onSpeechActivity) {
+        this.config.onSpeechActivity();
+      }
+      
       let interimTranscript = '';
       let finalTranscript = '';
       let finalConfidence = 0;
@@ -86,29 +114,64 @@ export class RealTimeTranscription {
         let bestTranscript = result[0].transcript;
         let bestConfidence = result[0].confidence || 0;
         
-        // Enhanced medical terminology detection
+        // Comprehensive medical terminology database
         const medicalTerms = [
-          'diabetes', 'hypertension', 'medication', 'prescription', 'diagnosis',
-          'symptoms', 'treatment', 'patient', 'doctor', 'blood pressure',
-          'temperature', 'heart rate', 'pulse', 'fever', 'pain', 'allergy',
-          'tablet', 'capsule', 'injection', 'test', 'report', 'scan',
-          'x-ray', 'mri', 'ct', 'ultrasound', 'ecg', 'lab', 'blood test'
+          // Common conditions
+          'diabetes', 'hypertension', 'asthma', 'copd', 'arthritis', 'migraine',
+          'depression', 'anxiety', 'obesity', 'cholesterol', 'thyroid', 'anemia',
+          // Medications
+          'medication', 'prescription', 'tablet', 'capsule', 'injection', 'syrup',
+          'antibiotic', 'painkiller', 'insulin', 'metformin', 'aspirin', 'ibuprofen',
+          // Symptoms
+          'symptoms', 'fever', 'pain', 'headache', 'nausea', 'vomiting', 'diarrhea',
+          'cough', 'cold', 'fatigue', 'weakness', 'dizziness', 'breathlessness',
+          // Medical procedures
+          'diagnosis', 'treatment', 'surgery', 'therapy', 'consultation', 'examination',
+          'checkup', 'followup', 'screening', 'vaccination', 'immunization',
+          // Vital signs
+          'blood pressure', 'temperature', 'heart rate', 'pulse', 'oxygen',
+          'saturation', 'spo2', 'glucose', 'weight', 'bmi',
+          // Medical tests
+          'test', 'report', 'scan', 'x-ray', 'mri', 'ct', 'ultrasound', 'ecg',
+          'ekg', 'lab', 'blood test', 'urine test', 'biopsy', 'endoscopy',
+          // Medical professionals
+          'doctor', 'patient', 'nurse', 'specialist', 'surgeon', 'physician',
+          // Body parts
+          'chest', 'abdomen', 'back', 'knee', 'shoulder', 'neck', 'head',
+          // Other
+          'allergy', 'chronic', 'acute', 'severe', 'mild', 'moderate'
         ];
         
-        // Check all alternatives (up to 5 now)
-        for (let j = 1; j < result.length && j < 5; j++) {
+        // Advanced alternative selection with weighted scoring
+        for (let j = 1; j < result.length && j < 10; j++) {
           const altConfidence = result[j].confidence || 0;
           const altTranscript = result[j].transcript;
           const altLower = altTranscript.toLowerCase();
           
           // Count medical terms in alternative
           let medicalTermCount = 0;
+          let medicalTermScore = 0;
           medicalTerms.forEach(term => {
-            if (altLower.includes(term)) medicalTermCount++;
+            if (altLower.includes(term)) {
+              medicalTermCount++;
+              // Weight longer medical terms higher
+              medicalTermScore += term.length / 10;
+            }
           });
           
-          // Prefer alternatives with medical terms or significantly higher confidence
-          if (altConfidence > bestConfidence * 1.15 || medicalTermCount > 0) {
+          // Calculate weighted score: confidence + medical term bonus
+          // Playback mode: increase medical term weighting due to degraded audio
+          const medicalBonus = this.mode === 'playback' ? 0.15 : 0.05;
+          const currentScore = bestConfidence + (bestTranscript.toLowerCase().split(' ').filter(word => 
+            medicalTerms.some(term => word.includes(term))
+          ).length * medicalBonus);
+          
+          const altBonus = this.mode === 'playback' ? 0.15 : 0.1;
+          const altScore = altConfidence + (medicalTermScore * altBonus);
+          
+          // Playback mode: lower confidence threshold for alternatives
+          const confThreshold = this.mode === 'playback' ? 0.6 : 0.8;
+          if (altScore > currentScore || (medicalTermCount > 2 && altConfidence > bestConfidence * confThreshold)) {
             bestTranscript = altTranscript;
             bestConfidence = altConfidence;
           }
@@ -194,66 +257,123 @@ export class RealTimeTranscription {
       let errorMessage = 'Transcription error occurred';
       let shouldRestart = false;
       
+      // Playback-specific error messages
+      const isPlaybackMode = this.mode === 'playback';
+      
       switch (event.error) {
-        case 'no-speech':
-          errorMessage = 'No speech detected. Listening...';
-          shouldRestart = true;
-          break;
-        case 'audio-capture':
-          errorMessage = 'Microphone not accessible. Please check permissions.';
-          break;
-        case 'not-allowed':
-          errorMessage = 'Microphone permission denied. Please grant access.';
-          break;
-        case 'network':
-          errorMessage = 'Network error. Please check your connection.';
-          shouldRestart = true;
-          break;
-        case 'aborted':
-          errorMessage = 'Transcription aborted.';
-          break;
-        case 'service-not-allowed':
-          errorMessage = 'Speech recognition service not allowed.';
-          break;
-        default:
-          errorMessage = `Transcription error: ${event.error}`;
-      }
+      case 'no-speech':
+        errorMessage = isPlaybackMode 
+          ? 'No speech detected from speakers. Increase volume or move laptop closer to mobile speaker.'
+          : 'No speech detected. Please check your audio and try again.';
+        shouldRestart = true;
+        break;
+      case 'audio-capture':
+        errorMessage = isPlaybackMode
+          ? 'Microphone cannot access audio. Check laptop microphone is enabled.'
+          : 'Microphone not accessible. Please check permissions and ensure your device microphone is working.';
+        break;
+      case 'not-allowed':
+        errorMessage = 'Microphone permission required. Grant access in browser settings.';
+        break;
+      case 'network':
+        errorMessage = 'Network error. Please check your internet connection.';
+        shouldRestart = true;
+        break;
+      case 'aborted':
+        // Don't show error for intentional aborts
+        console.log('🔇 Transcription intentionally aborted');
+        return; // Exit early, don't restart
+      case 'service-not-allowed':
+        errorMessage = 'Speech recognition service not available. Please try again later.';
+        break;
+      default:
+        errorMessage = `Transcription error: ${event.error}`;
+    }
 
       if (this.config.onError) {
         this.config.onError(errorMessage);
       }
 
-      // Auto-restart on certain errors in continuous mode
-      if (this.config.continuous && shouldRestart && this.isListening) {
-        console.log('⏳ Auto-restarting recognition in 500ms...');
+      // Advanced auto-restart with mode-aware delays
+      if (this.config.continuous && shouldRestart) {
+        // Playback mode: faster restarts since gaps are common
+        const restartDelay = this.mode === 'playback' ? 100 : (event.error === 'network' ? 500 : 200);
+        console.log(`⏳ Auto-restarting recognition in ${restartDelay}ms (${this.mode} mode)...`);
         setTimeout(() => {
           if (this.isListening) {
             try {
               console.log('🔄 Restarting recognition...');
+              this.isListening = false;
               this.recognition.start();
             } catch (e) {
               console.error('Failed to restart:', e);
+              // Exponential backoff retry
+              setTimeout(() => {
+                if (!this.isListening) {
+                  try {
+                    this.recognition.start();
+                  } catch (retryError) {
+                    console.error('Restart retry failed:', retryError);
+                    // Final retry after longer delay
+                    setTimeout(() => {
+                      if (!this.isListening) {
+                        try {
+                          this.recognition.start();
+                        } catch (finalError) {
+                          console.error('Final restart failed:', finalError);
+                        }
+                      }
+                    }, 3000);
+                  }
+                }
+              }, 1500);
             }
           }
-        }, 500);
+        }, restartDelay);
       }
     };
 
     this.recognition.onend = () => {
-      console.log('Speech recognition ended');
+      console.log('Speech recognition ended, was listening:', this.isListening);
+      const wasListening = this.isListening;
       this.isListening = false;
       
       if (this.config.onEnd) {
         this.config.onEnd();
       }
 
-      // Auto-restart if continuous mode
-      if (this.config.continuous && this.isListening) {
-        try {
-          this.recognition.start();
-        } catch (e) {
-          console.error('Failed to restart recognition:', e);
-        }
+      // Advanced auto-restart with adaptive delay
+      if (this.config.continuous && wasListening) {
+        console.log('🔄 Continuous mode - restarting in 150ms...');
+        setTimeout(() => {
+          try {
+            this.recognition.start();
+            this.isListening = true;
+            console.log('✅ Recognition restarted successfully');
+          } catch (e) {
+            console.error('Failed to restart recognition:', e);
+            // Progressive retry with increasing delays
+            setTimeout(() => {
+              try {
+                this.recognition.start();
+                this.isListening = true;
+                console.log('✅ Recognition restarted on second attempt');
+              } catch (retryError) {
+                console.error('Second restart attempt failed:', retryError);
+                // Final attempt with longer delay
+                setTimeout(() => {
+                  try {
+                    this.recognition.start();
+                    this.isListening = true;
+                    console.log('✅ Recognition restarted on final attempt');
+                  } catch (finalError) {
+                    console.error('All restart attempts failed:', finalError);
+                  }
+                }, 2000);
+              }
+            }, 800);
+          }
+        }, 150);
       }
     };
   }
@@ -319,7 +439,8 @@ export class RealTimeTranscription {
     if (this.isListening && this.recognition) {
       try {
         console.log('⏸️ Pausing speech recognition');
-        this.recognition.abort(); // Use abort instead of stop to prevent auto-restart
+        // Use stop instead of abort to allow clean restart
+        this.recognition.stop();
         this.isListening = false;
       } catch (error) {
         console.error('Error pausing recognition:', error);
