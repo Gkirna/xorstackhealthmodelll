@@ -12,104 +12,51 @@ serve(async (req) => {
   }
 
   try {
-    const { audio, session_id, language = 'en' } = await req.json();
+    const { audio, session_id } = await req.json();
 
     if (!audio) {
       throw new Error('No audio data provided');
     }
 
-    // Get AssemblyAI API key
-    const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
-    if (!ASSEMBLYAI_API_KEY) {
-      throw new Error('ASSEMBLYAI_API_KEY not configured');
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      throw new Error('LOVABLE_API_KEY not configured');
     }
 
-    console.log('🎙️ Starting AssemblyAI transcription...', { language });
+    console.log('🎙️ Starting audio transcription...');
 
     // Convert base64 to binary
     const binaryAudio = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
     
-    // Step 1: Upload audio to AssemblyAI
-    console.log('📤 Uploading audio to AssemblyAI...');
-    const uploadResponse = await fetch('https://api.assemblyai.com/v2/upload', {
+    // Create form data with enhanced settings for global English accents
+    const formData = new FormData();
+    const audioBlob = new Blob([binaryAudio], { type: 'audio/webm' });
+    formData.append('file', audioBlob, 'audio.webm');
+    formData.append('model', 'whisper-1');
+    formData.append('language', 'kn'); // Kannada language
+    formData.append('temperature', '0.0'); // Lower temperature for more accurate, deterministic transcriptions
+    
+    // Add medical context prompt in Kannada to improve accuracy for clinical terminology
+    const medicalPrompt = 'ಇದು ಆರೋಗ್ಯ ಸೇವಾ ಪೂರೈಕೆದಾರ ಮತ್ತು ರೋಗಿಯ ನಡುವಿನ ವೈದ್ಯಕೀಯ ಸಮಾಲೋಚನೆಯಾಗಿದೆ. ಸಾಮಾನ್ಯ ವೈದ್ಯಕೀಯ ಪದಗಳು: ಔಷಧಿ, ರೋಗನಿರ್ಣಯ, ಲಕ್ಷಣಗಳು, ಚಿಕಿತ್ಸೆ, ಅಲರ್ಜಿ, ಪ್ರಮಾಣ, ರಕ್ತದೊತ್ತಡ, ಹೃದಯ ಬಡಿತ, ಮಧುಮೇಹ, ಅಧಿಕ ರಕ್ತದೊತ್ತಡ, ಪರೀಕ್ಷೆ.';
+    formData.append('prompt', medicalPrompt);
+
+    // Call OpenAI Whisper API through Lovable AI Gateway
+    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
-        'authorization': ASSEMBLYAI_API_KEY,
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
       },
-      body: binaryAudio,
+      body: formData,
     });
 
-    if (!uploadResponse.ok) {
-      const errorText = await uploadResponse.text();
-      console.error('❌ Upload error:', errorText);
-      throw new Error(`Upload failed: ${uploadResponse.status}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Transcription API error:', errorText);
+      throw new Error(`Transcription failed: ${response.status}`);
     }
 
-    const { upload_url } = await uploadResponse.json();
-    console.log('✅ Audio uploaded successfully');
-
-    // Step 2: Request transcription
-    console.log('🎯 Requesting transcription...');
-    const languageCode = language === 'hi' ? 'hi' : language === 'kn' ? 'kn' : 'en';
-    
-    const transcriptResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
-      method: 'POST',
-      headers: {
-        'authorization': ASSEMBLYAI_API_KEY,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        audio_url: upload_url,
-        language_code: languageCode,
-        speaker_labels: true,
-      }),
-    });
-
-    if (!transcriptResponse.ok) {
-      const errorText = await transcriptResponse.text();
-      console.error('❌ Transcription request error:', errorText);
-      throw new Error(`Transcription request failed: ${transcriptResponse.status}`);
-    }
-
-    const { id: transcriptId } = await transcriptResponse.json();
-    console.log('⏳ Polling for transcription results...', transcriptId);
-
-    // Step 3: Poll for results (with timeout)
-    let transcriptResult;
-    let attempts = 0;
-    const maxAttempts = 60; // 60 seconds max wait
-    
-    while (attempts < maxAttempts) {
-      const pollingResponse = await fetch(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, {
-        headers: {
-          'authorization': ASSEMBLYAI_API_KEY,
-        },
-      });
-
-      if (!pollingResponse.ok) {
-        throw new Error(`Polling failed: ${pollingResponse.status}`);
-      }
-
-      transcriptResult = await pollingResponse.json();
-      
-      if (transcriptResult.status === 'completed') {
-        console.log('✅ Transcription completed!');
-        break;
-      } else if (transcriptResult.status === 'error') {
-        console.error('❌ Transcription error:', transcriptResult.error);
-        throw new Error(`Transcription error: ${transcriptResult.error}`);
-      }
-      
-      // Wait 1 second before next poll
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      attempts++;
-    }
-
-    if (attempts >= maxAttempts) {
-      throw new Error('Transcription timeout - took too long');
-    }
-
-    const transcriptText = transcriptResult.text;
+    const result = await response.json();
+    const transcriptText = result.text;
 
     console.log('✅ Transcription successful, length:', transcriptText.length);
 

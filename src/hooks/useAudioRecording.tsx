@@ -17,7 +17,6 @@ interface AudioRecordingOptions {
   sampleRate?: number;
   deviceId?: string;
   language?: string; // Language code for transcription (e.g., 'kn-IN', 'en-IN')
-  mode?: 'direct' | 'playback'; // Recording mode: direct conversation or playback transcription
 }
 
 interface RecordingState {
@@ -31,7 +30,6 @@ interface RecordingState {
   audioLevel: number;
   recordedBlob: Blob | null;
   recordedUrl: string | null;
-  voiceQuality: 'excellent' | 'good' | 'fair' | 'poor';
 }
 
 export function useAudioRecording(options: AudioRecordingOptions = {}) {
@@ -44,7 +42,6 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     sampleRate = 48000,
     deviceId,
     language = 'kn-IN', // Default to Kannada
-    mode = 'direct', // Default to direct recording
   } = options;
 
   const [state, setState] = useState<RecordingState>({
@@ -58,7 +55,6 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     audioLevel: 0,
     recordedBlob: null,
     recordedUrl: null,
-    voiceQuality: 'fair',
   });
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -75,15 +71,9 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const currentVoiceCharacteristicsRef = useRef<any>(null);
   const autoCorrectorRef = useRef<MedicalAutoCorrector>(new MedicalAutoCorrector());
 
-  // Initialize transcription engine - only once on mount
+  // Initialize transcription engine
   useEffect(() => {
     console.log(`🎙️ Initializing real-time transcription engine for language: ${language}`);
-    
-    // Only initialize if not already done
-    if (transcriptionRef.current) {
-      console.log('⚠️ Transcription already initialized, skipping...');
-      return;
-    }
     
     transcriptionRef.current = new RealTimeTranscription({
       continuous,
@@ -147,10 +137,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     } else {
       console.log('✅ Real-time transcription is supported');
     }
-  }, []); // Empty deps - initialize only once
 
-  // Cleanup only on unmount
-  useEffect(() => {
     return () => {
       console.log('🧹 Cleaning up audio recorder on unmount...');
       
@@ -205,12 +192,11 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       // Stop transcription
       if (transcriptionRef.current) {
         transcriptionRef.current.destroy();
-        transcriptionRef.current = null;
       }
       
       console.log('✅ Audio recorder cleanup complete');
     };
-  }, []); // Empty deps - only on mount/unmount
+  }, [continuous, onFinalTranscriptChunk, onTranscriptUpdate, language]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -248,24 +234,9 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       analyserRef.current = null;
       
       console.log('✅ All cleanup complete, requesting microphone...');
-      console.log(`🎤 Recording mode: ${mode}`);
       
-      // Enhanced audio constraints for playback mode
       const constraints: MediaStreamConstraints = {
-        audio: mode === 'playback' ? {
-          echoCancellation: true, // Aggressive echo cancellation
-          noiseSuppression: true, // Strong noise suppression
-          autoGainControl: true, // Adaptive gain control
-          sampleRate: sampleRate,
-          channelCount: 1,
-          ...(deviceId && { deviceId: { exact: deviceId } }),
-          // Additional constraints for playback mode
-          advanced: [
-            { echoCancellation: { exact: true } },
-            { noiseSuppression: { exact: true } },
-            { autoGainControl: { exact: true } }
-          ]
-        } : {
+        audio: {
           echoCancellation: { ideal: true },
           noiseSuppression: { ideal: true },
           autoGainControl: { ideal: true },
@@ -404,7 +375,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       // Initialize voice analyzer (non-critical, can fail gracefully)
       try {
         console.log('🎤 Initializing voice analyzer...');
-        voiceAnalyzerRef.current = new VoiceAnalyzer(mode);
+        voiceAnalyzerRef.current = new VoiceAnalyzer();
         const characteristics = await voiceAnalyzerRef.current.initializeWithContext(sharedContext, analyserRef.current);
         console.log('✅ Voice analyzer initialized');
         
@@ -416,9 +387,6 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           speakerId: characteristics.speakerId,
           voiceQuality: characteristics.voiceQuality
         });
-        
-        // Update state with voice quality
-        setState(prev => ({ ...prev, voiceQuality: characteristics.voiceQuality }));
         
         if (characteristics.gender !== 'unknown') {
           currentVoiceGenderRef.current = characteristics.gender;
@@ -434,35 +402,31 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
             console.log(`🔄 Voice analysis running (${intervalCount} iterations)`);
           }
           
-          if (!voiceAnalyzerRef.current) {
-            return; // Skip silently if not ready
-          }
-          
-          try {
-            const updated = await voiceAnalyzerRef.current.analyzeVoiceSample();
-            currentVoiceCharacteristicsRef.current = updated;
+          if (voiceAnalyzerRef.current) {
+            try {
+              const updated = await voiceAnalyzerRef.current.analyzeVoiceSample();
+              currentVoiceCharacteristicsRef.current = updated;
               
-            // Update state with voice quality
-            setState(prev => ({ ...prev, voiceQuality: updated.voiceQuality }));
-            
-            // Update gender with adjusted confidence threshold based on mode
-            const confidenceThreshold = mode === 'playback' ? 0.6 : 0.75;
-            if (updated.gender !== 'unknown' && updated.confidence > confidenceThreshold) {
-              const previousGender = currentVoiceGenderRef.current;
-              currentVoiceGenderRef.current = updated.gender;
-              if (previousGender !== updated.gender) {
-                console.log(`🎭 Voice update: ${updated.gender} (${updated.pitch.toFixed(0)}Hz, ${updated.speakerId})`);
+              // Update gender with higher confidence threshold for accuracy
+              if (updated.gender !== 'unknown' && updated.confidence > 0.75) {
+                const previousGender = currentVoiceGenderRef.current;
+                currentVoiceGenderRef.current = updated.gender;
+                if (previousGender !== updated.gender) {
+                  console.log(`🎭 Voice update: ${updated.gender} (${updated.pitch.toFixed(0)}Hz, ${updated.speakerId})`);
+                }
               }
-            }
-            
-            // Log speaker changes
-            if (updated.speakerId !== 'silence' && updated.confidence > 0.7) {
-              if (intervalCount % 5 === 0) { // Log every 1.5 seconds
-                console.log(`👤 Active speaker: ${updated.speakerId} (pitch: ${updated.pitch.toFixed(0)}Hz, confidence: ${(updated.confidence * 100).toFixed(0)}%)`);
+              
+              // Log speaker changes
+              if (updated.speakerId !== 'silence' && updated.confidence > 0.7) {
+                if (intervalCount % 5 === 0) { // Log every 1.5 seconds
+                  console.log(`👤 Active speaker: ${updated.speakerId} (pitch: ${updated.pitch.toFixed(0)}Hz, confidence: ${(updated.confidence * 100).toFixed(0)}%)`);
+                }
               }
+            } catch (error) {
+              console.error('❌ Voice analysis error in interval:', error);
             }
-          } catch (error) {
-            // Silently handle analysis errors
+          } else {
+            console.warn('⚠️ voiceAnalyzerRef.current is null in interval');
           }
         }, 300); // 300ms for more responsive updates
         

@@ -6,8 +6,6 @@ interface StreamingOptions {
   onFinalTranscript?: (text: string) => void;
   onError?: (error: string) => void;
   enabled?: boolean;
-  language?: string;
-  deviceId?: string;
 }
 
 interface StreamingState {
@@ -15,7 +13,6 @@ interface StreamingState {
   isStreaming: boolean;
   error: string | null;
   sessionId: string | null;
-  audioLevel: number;
 }
 
 export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
@@ -24,8 +21,6 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     onFinalTranscript,
     onError,
     enabled = false,
-    language = 'en',
-    deviceId,
   } = options;
 
   const [state, setState] = useState<StreamingState>({
@@ -33,7 +28,6 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     isStreaming: false,
     error: null,
     sessionId: null,
-    audioLevel: 0,
   });
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -41,9 +35,6 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const hasConnectedRef = useRef(false);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const audioLevelIntervalRef = useRef<number | null>(null);
 
   // Connect to AssemblyAI streaming via edge function
   const connect = useCallback(async () => {
@@ -52,26 +43,17 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       return;
     }
 
-    // Don't reconnect if already connected
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      console.log('✅ Already connected to AssemblyAI');
-      return;
-    }
-
     try {
-      console.log('🔌 Connecting to AssemblyAI real-time streaming with language:', language);
+      console.log('🔌 Connecting to AssemblyAI real-time streaming...');
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const projectId = supabaseUrl.split('//')[1].split('.')[0];
-      const wsUrl = `wss://${projectId}.supabase.co/functions/v1/assemblyai-realtime?language=${language}`;
-      
-      console.log('📡 WebSocket URL:', wsUrl);
+      const wsUrl = `wss://${projectId}.supabase.co/functions/v1/assemblyai-realtime`;
 
       wsRef.current = new WebSocket(wsUrl);
-      console.log('🔗 WebSocket created, waiting for connection...');
 
       wsRef.current.onopen = () => {
-        console.log('✅ WebSocket connection established to edge function');
+        console.log('✅ WebSocket connection established');
         setState(prev => ({ ...prev, isConnected: true, error: null }));
       };
 
@@ -110,14 +92,13 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
 
       wsRef.current.onerror = (error) => {
         console.error('❌ WebSocket error:', error);
-        const errorMsg = 'Failed to connect to transcription service. Please check your internet connection.';
         setState(prev => ({ 
           ...prev, 
-          error: errorMsg,
+          error: 'Connection error',
           isConnected: false,
         }));
         if (onError) {
-          onError(errorMsg);
+          onError('WebSocket connection error');
         }
       };
 
@@ -137,46 +118,32 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
         onError(errorMsg);
       }
     }
-  }, [enabled]); // Stable - only enabled matters
+  }, [enabled, onPartialTranscript, onFinalTranscript, onError]);
 
   // Start streaming audio
-  const startStreaming = useCallback(async (sourceDeviceId?: string) => {
+  const startStreaming = useCallback(async () => {
     if (!state.isConnected || !wsRef.current) {
       console.warn('⚠️ Not connected to streaming service');
       return;
     }
 
     try {
-      console.log('🎤 Starting audio streaming with device:', sourceDeviceId || deviceId || 'default');
+      console.log('🎤 Starting audio streaming...');
 
-      // Audio constraints optimized for speaker playback capture
-      const audioConstraints: MediaTrackConstraints = {
-        sampleRate: 24000, // Increased to 24kHz for better quality
-        channelCount: 1,
-        echoCancellation: false, // ✅ CRITICAL: Must be false to capture speaker audio
-        noiseSuppression: false, // ✅ Allow all audio through for speaker capture
-        autoGainControl: true,   // Keep this to boost quiet speaker audio
-      };
-
-      // If a specific device is provided, use it
-      if (sourceDeviceId || deviceId) {
-        audioConstraints.deviceId = { exact: sourceDeviceId || deviceId };
-      }
-
-      // Get audio access (microphone or system audio)
+      // Get microphone access
       mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({
-        audio: audioConstraints,
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
       });
 
-      // Create audio context with 24kHz sample rate
-      audioContextRef.current = new AudioContext({ sampleRate: 24000 });
+      // Create audio context
+      audioContextRef.current = new AudioContext({ sampleRate: 16000 });
       sourceRef.current = audioContextRef.current.createMediaStreamSource(mediaStreamRef.current);
-      
-      // Create analyser for audio level monitoring
-      analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 256;
-      analyserRef.current.smoothingTimeConstant = 0.8;
-      
       processorRef.current = audioContextRef.current.createScriptProcessor(4096, 1, 1);
 
       // Process audio chunks
@@ -209,39 +176,11 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
         }));
       };
 
-      // Connect audio nodes
-      sourceRef.current.connect(analyserRef.current);
-      analyserRef.current.connect(processorRef.current);
+      sourceRef.current.connect(processorRef.current);
       processorRef.current.connect(audioContextRef.current.destination);
 
-      // Start audio level monitoring (throttled to reduce re-renders)
-      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-      let lastUpdate = 0;
-      const UPDATE_INTERVAL = 500; // Update only every 500ms instead of 100ms
-      
-      audioLevelIntervalRef.current = window.setInterval(() => {
-        const now = Date.now();
-        if (now - lastUpdate < UPDATE_INTERVAL) return;
-        lastUpdate = now;
-        
-        if (analyserRef.current) {
-          analyserRef.current.getByteFrequencyData(dataArray);
-          const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-          const normalized = Math.min(100, (average / 128) * 100);
-          
-          // Only update if change is significant (>5%) to prevent unnecessary re-renders
-          setState(prev => {
-            if (Math.abs(prev.audioLevel - normalized) > 5) {
-              return { ...prev, audioLevel: normalized };
-            }
-            return prev;
-          });
-        }
-      }, 100);
-
       setState(prev => ({ ...prev, isStreaming: true }));
-      console.log('✅ Audio streaming started - listening to external speaker');
-      toast.success('🎤 Listening to speaker audio...');
+      console.log('✅ Audio streaming started');
     } catch (error) {
       console.error('❌ Error starting stream:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -249,24 +188,12 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       if (onError) {
         onError(errorMsg);
       }
-      toast.error('Failed to start audio capture: ' + errorMsg);
     }
-  }, [state.isConnected, deviceId, onError]);
+  }, [state.isConnected, onError]);
 
   // Stop streaming
   const stopStreaming = useCallback(() => {
     console.log('🛑 Stopping audio streaming...');
-
-    // Stop audio level monitoring
-    if (audioLevelIntervalRef.current) {
-      clearInterval(audioLevelIntervalRef.current);
-      audioLevelIntervalRef.current = null;
-    }
-
-    if (analyserRef.current) {
-      analyserRef.current.disconnect();
-      analyserRef.current = null;
-    }
 
     if (sourceRef.current) {
       sourceRef.current.disconnect();
@@ -292,7 +219,7 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       wsRef.current.send(JSON.stringify({ type: 'terminate' }));
     }
 
-    setState(prev => ({ ...prev, isStreaming: false, audioLevel: 0 }));
+    setState(prev => ({ ...prev, isStreaming: false }));
   }, []);
 
   // Disconnect WebSocket
@@ -309,26 +236,18 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       isConnected: false,
       sessionId: null,
     }));
-    
-    // Reset connection flag
-    hasConnectedRef.current = false;
   }, [stopStreaming]);
 
   // Auto-connect when enabled
   useEffect(() => {
-    if (enabled && !state.isConnected && !hasConnectedRef.current) {
-      hasConnectedRef.current = true;
+    if (enabled && !state.isConnected) {
       connect();
     }
 
-    // Only disconnect on unmount
     return () => {
-      if (enabled) {
-        disconnect();
-        hasConnectedRef.current = false;
-      }
+      disconnect();
     };
-  }, [enabled]); // Only depend on enabled changing
+  }, [enabled]);
 
   return {
     ...state,

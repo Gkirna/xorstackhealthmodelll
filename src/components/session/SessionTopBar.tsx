@@ -44,8 +44,6 @@ interface SessionTopBarProps {
   isRecording?: boolean;
   isPaused?: boolean;
   isStartingRecording?: boolean;
-  recordingInputMode?: 'direct' | 'playback';
-  onRecordingInputModeChange?: (mode: 'direct' | 'playback') => void;
 }
 
 export function SessionTopBar({
@@ -67,8 +65,6 @@ export function SessionTopBar({
   isRecording = false,
   isPaused = false,
   isStartingRecording = false,
-  recordingInputMode = 'direct',
-  onRecordingInputModeChange,
 }: SessionTopBarProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(patientName);
@@ -259,25 +255,6 @@ export function SessionTopBar({
               <SelectItem value="de">German</SelectItem>
             </SelectContent>
           </Select>
-
-          {/* Input Mode Selector */}
-          {recordingMode === 'transcribing' && onRecordingInputModeChange && (
-            <>
-              <div className="w-px h-4 bg-border" />
-              <Select value={recordingInputMode} onValueChange={onRecordingInputModeChange}>
-                <SelectTrigger className="h-8 w-auto gap-2 border-0 bg-transparent hover:bg-accent text-sm text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <Mic className="h-4 w-4" />
-                    <SelectValue />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="direct">Direct Recording</SelectItem>
-                  <SelectItem value="playback">Playback Mode</SelectItem>
-                </SelectContent>
-              </Select>
-            </>
-          )}
         </div>
 
         <div className="flex items-center gap-2">

@@ -10,7 +10,6 @@ import { toast } from "sonner";
 import { useSession, useUpdateSession } from "@/hooks/useSessions";
 import { useTranscription } from "@/hooks/useTranscription";
 import { useAudioRecording } from "@/hooks/useAudioRecording";
-import { useAssemblyAIStreaming } from "@/hooks/useAssemblyAIStreaming";
 import { useTranscriptUpdates, useSessionUpdates } from "@/hooks/useRealtime";
 import { WorkflowOrchestrator } from "@/utils/WorkflowOrchestrator";
 import { WorkflowProgress } from "@/components/WorkflowProgress";
@@ -28,8 +27,7 @@ import { AdvancedTranscriptionDashboard } from '@/components/AdvancedTranscripti
 import { useAdvancedTranscription } from '@/hooks/useAdvancedTranscription';
 import type { EnhancedTranscriptionData } from '@/types/advancedTranscription';
 import { TemplateSelectionDialog } from "@/components/session/TemplateSelectionDialog";
-import { AudioQualityIndicator } from "@/components/AudioQualityIndicator";
-import { AudioLevelIndicator } from "@/components/AudioLevelIndicator";
+import { UploadRecordingDialog } from "@/components/session/UploadRecordingDialog";
 
 const SessionRecord = () => {
   const { id } = useParams();
@@ -56,17 +54,12 @@ const SessionRecord = () => {
   const [recordingMode, setRecordingMode] = useState("transcribing");
   const [activeTab, setActiveTab] = useState<string>("transcript");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [isUploadTranscribing, setIsUploadTranscribing] = useState(false);
-  const [uploadTranscriptionTime, setUploadTranscriptionTime] = useState(0);
-  const uploadProcessingRef = useRef<boolean>(false);
   const [enhancedTranscriptionData, setEnhancedTranscriptionData] = useState<EnhancedTranscriptionData | null>(null);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
-  const [recordingInputMode, setRecordingInputMode] = useState<'direct' | 'playback'>('direct');
   
   // ALL REFS NEXT
   const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
   const timerRef = useRef<number | null>(null);
-  const uploadTimerRef = useRef<number | null>(null);
   const startTimeRef = useRef<Date>(new Date());
   const speakerRef = useRef<'provider' | 'patient'>('provider');
   const transcriptCountRef = useRef(0);
@@ -85,41 +78,6 @@ const SessionRecord = () => {
   };
 
   // CUSTOM HOOKS NEXT
-  // Stable callbacks for AssemblyAI streaming
-  const handlePartialTranscript = useCallback((text: string) => {
-    console.log('📝 Partial transcript:', text.substring(0, 50));
-  }, []);
-
-  const handleFinalTranscript = useCallback((text: string) => {
-    if (text.trim()) {
-      const currentSpeaker = speakerRef.current;
-      transcriptCountRef.current++;
-      
-      console.log(`💬 Final transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
-      
-      const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
-      setTranscript(prev => prev ? `${prev}\n\n${speakerLabel}: ${text}` : `${speakerLabel}: ${text}`);
-      
-      // Alternate speaker for next chunk
-      speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
-    }
-  }, []);
-
-  const handleStreamingError = useCallback((error: string) => {
-    console.error('Streaming error:', error);
-    toast.error(error);
-  }, []);
-
-  // AssemblyAI streaming for playback mode
-  const assemblyAIStreaming = useAssemblyAIStreaming({
-    onPartialTranscript: handlePartialTranscript,
-    onFinalTranscript: handleFinalTranscript,
-    onError: handleStreamingError,
-    enabled: recordingInputMode === 'playback',
-    language: language, // Pass selected language
-    deviceId: microphone !== 'default' ? microphone : undefined,
-  });
-
   // IMPORTANT: First declare useAudioRecording to get voice characteristics
   const {
     startRecording,
@@ -134,14 +92,10 @@ const SessionRecord = () => {
     currentVoiceCharacteristics,
     voiceAnalyzer,
     autoCorrector,
-    audioLevel,
-    voiceQuality,
   } = useAudioRecording({
     continuous: true,
     language: getTranscriptionLanguage(language), // Use selected language
-    mode: recordingInputMode, // Pass recording mode
-    deviceId: microphone !== 'default' ? microphone : undefined,
-    onTranscriptUpdate: useCallback((text: string, isFinal: boolean) => {
+    onTranscriptUpdate: (text: string, isFinal: boolean) => {
       if (isFinal && text.trim()) {
         const currentSpeaker = speakerRef.current;
         transcriptCountRef.current++;
@@ -153,24 +107,24 @@ const SessionRecord = () => {
         
         speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
       }
-    }, []),
+    },
     // onRecordingComplete will be set via ref to avoid re-renders
-    onError: useCallback((error: string) => {
+    onError: (error: string) => {
       console.error('Recording error:', error);
       toast.error(error);
-    }, []),
+    },
   });
   
   // NOW use useTranscription with the currentVoiceGender from useAudioRecording
   console.log('🔗 Connecting useTranscription with voice gender:', currentVoiceGender || 'unknown');
   const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats, updateVoiceCharacteristics } = useTranscription(id || '', currentVoiceGender || 'unknown');
   
-  // Sync voice characteristics from audio recording to transcription hook (stable - only run once)
+  // Sync voice characteristics from audio recording to transcription hook
   useEffect(() => {
     if (currentVoiceCharacteristics) {
       updateVoiceCharacteristics(currentVoiceCharacteristics);
     }
-  }, []); // Empty deps - updateVoiceCharacteristics is stable, characteristics sync happens via ref
+  }, [currentVoiceCharacteristics]); // Removed updateVoiceCharacteristics from deps - it's stable
   
   // Advanced transcription
   const { processAudioWithFullAnalysis, isProcessing } = useAdvancedTranscription();
@@ -180,10 +134,7 @@ const SessionRecord = () => {
     console.log('🎯 handleStartTranscribing called:', {
       isStartingRecording,
       isRecording,
-      recordingMode,
-      recordingInputMode,
-      assemblyAIConnected: assemblyAIStreaming.isConnected,
-      assemblyAIStreaming: assemblyAIStreaming.isStreaming,
+      recordingMode
     });
     
     if (isStartingRecording) {
@@ -191,17 +142,11 @@ const SessionRecord = () => {
       return;
     }
 
-    // Handle stopping for both modes
-    if (isRecording || assemblyAIStreaming.isStreaming) {
-      console.log('🛑 Stopping transcription...');
+    if (isRecording) {
+      console.log('🛑 Stopping recording...');
       toast.success('Stopping transcription...');
-      
-      if (recordingInputMode === 'playback') {
-        assemblyAIStreaming.stopStreaming();
-      } else {
-        await saveAllPendingChunks();
-        stopRecording();
-      }
+      await saveAllPendingChunks();
+      stopRecording();
       
       // Auto-generate clinical note after stopping
       setTimeout(async () => {
@@ -218,63 +163,21 @@ const SessionRecord = () => {
     }
 
     if (recordingMode === 'dictating' || recordingMode === 'transcribing') {
-      console.log('🎤 Starting recording in mode:', recordingMode, 'input:', recordingInputMode);
+      console.log('🎤 Starting recording in mode:', recordingMode);
       setIsStartingRecording(true);
       
       try {
         setActiveTab('transcript');
         speakerRef.current = 'provider';
         transcriptCountRef.current = 0;
+        toast.success('Starting live transcription... Speak now!');
         
-        if (recordingInputMode === 'playback') {
-          // Playback mode - use AssemblyAI streaming
-          console.log('🔌 Playback mode - connecting to AssemblyAI...');
-          toast.info('Connecting to transcription service...');
-          
-          try {
-            // Connect if not already connected
-            if (!assemblyAIStreaming.isConnected) {
-              console.log('🔌 Initiating connection...');
-              await assemblyAIStreaming.connect();
-              
-              // Wait for connection with timeout
-              const maxWaitMs = 10000; // 10 seconds
-              const checkIntervalMs = 200;
-              let waitedMs = 0;
-              
-              while (!assemblyAIStreaming.isConnected && waitedMs < maxWaitMs) {
-                await new Promise(resolve => setTimeout(resolve, checkIntervalMs));
-                waitedMs += checkIntervalMs;
-                console.log(`⏳ Waiting for connection... (${waitedMs}ms)`);
-              }
-              
-              if (!assemblyAIStreaming.isConnected) {
-                console.error('❌ Connection timeout after', waitedMs, 'ms');
-                throw new Error('Connection timeout. Please check your internet connection and try again.');
-              }
-              
-              console.log('✅ Connected to transcription service');
-            }
-            
-            console.log('🎤 Starting audio streaming with mic:', microphone);
-            await assemblyAIStreaming.startStreaming(microphone !== 'default' ? microphone : undefined);
-            console.log('✅ Audio streaming started successfully');
-            toast.success(`Listening in ${language.toUpperCase()} - speak now!`);
-          } catch (error) {
-            console.error('❌ Failed to start playback mode:', error);
-            throw error; // Re-throw to be caught by outer try-catch
-          }
-        } else {
-          // Direct mode - use regular recording
-          toast.success(`Recording in ${language.toUpperCase()}`);
-          console.log('🎤 Direct mode - starting microphone recording...');
-          toast.success('Starting live transcription... Speak now!');
-          await startRecording();
-          console.log('✅ startRecording() completed');
-        }
+        console.log('📞 Calling startRecording()...');
+        await startRecording();
+        console.log('✅ startRecording() completed');
       } catch (error) {
         console.error('❌ Failed to start recording:', error);
-        toast.error(error instanceof Error ? error.message : 'Failed to start recording. Please try again.');
+        toast.error('Failed to start recording. Please try again.');
       } finally {
         setIsStartingRecording(false);
       }
@@ -286,7 +189,7 @@ const SessionRecord = () => {
     if (hasManualInput) {
       await autoGenerateNote();
     }
-  }, [isStartingRecording, isRecording, recordingMode, recordingInputMode, transcript, context, saveAllPendingChunks, stopRecording, startRecording, assemblyAIStreaming]);
+  }, [isStartingRecording, isRecording, recordingMode, transcript, context, saveAllPendingChunks, stopRecording, startRecording]);
 
   const autoGenerateNote = useCallback(async (selectedTemplateId?: string) => {
     if (!id || !orchestratorRef.current) return;
@@ -368,48 +271,30 @@ const SessionRecord = () => {
   }, [id, transcript, context, template]);
 
   const handlePauseRecording = useCallback(() => {
-    console.log('🎯 PAUSE BUTTON CLICKED');
-    if (recordingInputMode === 'playback') {
-      assemblyAIStreaming.stopStreaming();
-      toast.info('Paused playback transcription');
-    } else {
-      pauseRecording();
-    }
-  }, [pauseRecording, recordingInputMode, assemblyAIStreaming]);
+    console.log('🎯 PAUSE BUTTON CLICKED - Calling pauseRecording()');
+    pauseRecording();
+  }, [pauseRecording]);
 
-  const handleResumeRecording = useCallback(async () => {
-    console.log('🎯 RESUME BUTTON CLICKED - Playback mode:', recordingInputMode === 'playback');
-    if (recordingInputMode === 'playback') {
-      try {
-        console.log('▶️ Resuming playback streaming with mic:', microphone);
-        await assemblyAIStreaming.startStreaming(microphone !== 'default' ? microphone : undefined);
-        toast.success('Resumed playback transcription');
-      } catch (error) {
-        console.error('❌ Failed to resume streaming:', error);
-        toast.error('Failed to resume playback transcription');
-      }
-    } else {
-      resumeRecording();
-    }
-  }, [resumeRecording, recordingInputMode, assemblyAIStreaming, microphone]);
+  const handleResumeRecording = useCallback(() => {
+    console.log('🎯 RESUME BUTTON CLICKED - Calling resumeRecording()');
+    resumeRecording();
+  }, [resumeRecording]);
 
   const handleStopRecording = useCallback(async () => {
     console.log('🎯 STOP BUTTON CLICKED - Stopping recording and opening template selection');
     toast.info('Stopping transcription...');
     
-    if (recordingInputMode === 'playback') {
-      assemblyAIStreaming.stopStreaming();
-    } else {
-      // Save any pending chunks first
-      await saveAllPendingChunks();
-      stopRecording();
-    }
+    // Save any pending chunks first
+    await saveAllPendingChunks();
+    
+    // Stop the recording
+    stopRecording();
     
     // Open template selection dialog
     setTimeout(() => {
       setTemplateDialogOpen(true);
     }, 300);
-  }, [saveAllPendingChunks, stopRecording, recordingInputMode, assemblyAIStreaming]);
+  }, [saveAllPendingChunks, stopRecording]);
 
   const handleRecordingModeChange = useCallback((mode: string) => {
     setRecordingMode(mode);
@@ -430,51 +315,32 @@ const SessionRecord = () => {
     console.log('📁 Processing uploaded file:', { name: file.name, size: `${(file.size / (1024 * 1024)).toFixed(2)}MB`, mode });
     
     try {
-      // Mark as processing
-      uploadProcessingRef.current = true;
-      
-      // Show loading indicator and start timer
-      setIsUploadTranscribing(true);
-      setUploadTranscriptionTime(0);
-      
-      // Start real-time timer
-      uploadTimerRef.current = window.setInterval(() => {
-        setUploadTranscriptionTime(prev => prev + 1);
-      }, 1000);
-      
-      console.log('🎤 Starting file transcription...');
+      // Import and use the audio upload hook functionality
+      toast.info(`Processing ${file.name}... This may take a few minutes.`);
       
       // Convert file to base64 for transcription
       const reader = new FileReader();
       reader.onload = async () => {
-        console.log('📄 File read complete, calling transcription API...');
         try {
           const base64 = reader.result as string;
           const base64Data = base64.split(',')[1];
           
-          // Get the selected language code (en, hi, kn)
-          const langCode = language === 'en-IN' ? 'en' : 
-                           language === 'hi-IN' ? 'hi' : 
-                           language === 'kn-IN' ? 'kn' : 'en';
-          
-          // Call transcription edge function with language
+          // Call transcription edge function
           const { data, error } = await supabase.functions.invoke('transcribe-audio', {
             body: {
               audio: base64Data,
               session_id: id,
-              language: langCode,
             },
           });
 
           if (error) throw error;
 
-          console.log('✅ Transcription API successful');
-          
           const transcriptText = data?.text || '';
           
           if (transcriptText) {
             const wordCount = transcriptText.split(' ').length;
             console.log('✅ Transcription completed:', wordCount, 'words');
+            toast.success(`Transcription completed! ${wordCount} words transcribed.`);
             
             // Add speaker labels based on mode
             const labeledTranscript = mode === 'dictate' 
@@ -488,8 +354,6 @@ const SessionRecord = () => {
             setTranscript(labeledTranscript);
             setActiveTab('transcript');
             
-            toast.success(`Transcription completed! ${wordCount} words transcribed.`);
-            
             // Auto-generate note after a brief delay
             setTimeout(() => {
               autoGenerateNote();
@@ -500,29 +364,10 @@ const SessionRecord = () => {
         } catch (error) {
           console.error('❌ Transcription error:', error);
           toast.error(error instanceof Error ? error.message : 'Failed to transcribe audio');
-        } finally {
-          // Clear timer and reset
-          if (uploadTimerRef.current) {
-            clearInterval(uploadTimerRef.current);
-            uploadTimerRef.current = null;
-          }
-          uploadProcessingRef.current = false;
-          setIsUploadTranscribing(false);
-          setUploadTranscriptionTime(0);
-          setUploadDialogOpen(false);
         }
       };
       
       reader.onerror = () => {
-        console.error('❌ File read error');
-        // Clear timer and reset
-        if (uploadTimerRef.current) {
-          clearInterval(uploadTimerRef.current);
-          uploadTimerRef.current = null;
-        }
-        uploadProcessingRef.current = false;
-        setIsUploadTranscribing(false);
-        setUploadTranscriptionTime(0);
         toast.error('Failed to read audio file');
       };
       
@@ -530,25 +375,9 @@ const SessionRecord = () => {
       
     } catch (error) {
       console.error('❌ Upload processing error:', error);
-      // Clear timer and reset
-      if (uploadTimerRef.current) {
-        clearInterval(uploadTimerRef.current);
-        uploadTimerRef.current = null;
-      }
-      uploadProcessingRef.current = false;
-      setIsUploadTranscribing(false);
-      setUploadTranscriptionTime(0);
       toast.error('Failed to process audio file');
     }
-  }, [id, language, autoGenerateNote]);
-
-  // Handle dismissing the transcription overlay (background processing)
-  const handleDismissTranscription = useCallback(() => {
-    console.log('👋 Dismissing transcription overlay, continuing in background...');
-    setIsUploadTranscribing(false);
-    toast.info('Transcription continuing in background');
-    navigate('/session/new');
-  }, [navigate]);
+  }, [id, autoGenerateNote]);
 
   const handleGenerateNote = useCallback(async () => {
     if (!transcript.trim()) {
@@ -777,10 +606,6 @@ const SessionRecord = () => {
     
     return () => {
       orchestratorRef.current = null;
-      // Clear upload timer on unmount
-      if (uploadTimerRef.current) {
-        clearInterval(uploadTimerRef.current);
-      }
     };
   }, []);
 
@@ -887,11 +712,7 @@ const SessionRecord = () => {
           isRecording={isRecording}
           isPaused={isPaused}
           isStartingRecording={isStartingRecording}
-          recordingInputMode={recordingInputMode}
-          onRecordingInputModeChange={setRecordingInputMode}
         />
-
-        {/* Audio monitoring runs silently in background */}
 
         {/* Workflow Progress - Hidden from UI but functionality preserved */}
 
@@ -946,7 +767,7 @@ const SessionRecord = () => {
                 transcript={transcript}
                 onTranscriptChange={setTranscript}
                 stats={stats}
-                isTranscribing={recordingInputMode === 'playback' ? assemblyAIStreaming.isStreaming : isTranscribing}
+                isTranscribing={isTranscribing}
               />
             </TabsContent>
 
@@ -988,31 +809,17 @@ const SessionRecord = () => {
         isGenerating={isAutoPipelineRunning}
       />
 
-      {/* Transcription Loading Overlay */}
-      {isUploadTranscribing && (
-        <div 
-          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center cursor-pointer"
-          onClick={handleDismissTranscription}
-        >
-          <div 
-            className="bg-card border rounded-lg p-8 shadow-lg flex flex-col items-center gap-4 min-w-[320px] cursor-default"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <div className="text-center">
-              <h3 className="text-lg font-semibold mb-2">Transcribing Audio</h3>
-              <p className="text-sm text-muted-foreground mb-3">Processing your audio in real-time...</p>
-              <div className="flex items-center justify-center gap-2 text-2xl font-mono font-bold text-primary">
-                <span>{String(Math.floor(uploadTranscriptionTime / 60)).padStart(2, '0')}</span>
-                <span className="animate-pulse">:</span>
-                <span>{String(uploadTranscriptionTime % 60).padStart(2, '0')}</span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">Elapsed time</p>
-              <p className="text-xs text-muted-foreground mt-4 italic">Click outside to continue in background</p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Upload Recording Dialog */}
+      <UploadRecordingDialog
+        open={uploadDialogOpen}
+        onOpenChange={(open) => {
+          setUploadDialogOpen(open);
+          if (!open) {
+            setRecordingMode('transcribing');
+          }
+        }}
+        onUpload={handleUploadRecording}
+      />
     </AppLayout>
   );
 };
