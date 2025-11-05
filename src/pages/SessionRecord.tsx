@@ -125,23 +125,14 @@ const SessionRecord = () => {
   
   // NOW use useTranscription with the currentVoiceGender from useAudioRecording
   console.log('🔗 Connecting useTranscription with voice gender:', currentVoiceGender || 'unknown');
-  const transcriptionHook = useTranscription(id || '', currentVoiceGender || 'unknown');
-  const { 
-    transcriptChunks = [], 
-    addTranscriptChunk, 
-    loadTranscripts, 
-    getFullTranscript, 
-    saveAllPendingChunks, 
-    stats = { totalChunks: 0, savedChunks: 0, pendingChunks: 0, failedChunks: 0, averageLatency: 0 }, 
-    updateVoiceCharacteristics 
-  } = transcriptionHook || {};
+  const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats, updateVoiceCharacteristics } = useTranscription(id || '', currentVoiceGender || 'unknown');
   
   // Sync voice characteristics from audio recording to transcription hook
   useEffect(() => {
-    if (currentVoiceCharacteristics && updateVoiceCharacteristics) {
+    if (currentVoiceCharacteristics) {
       updateVoiceCharacteristics(currentVoiceCharacteristics);
     }
-  }, [currentVoiceCharacteristics, updateVoiceCharacteristics]);
+  }, [currentVoiceCharacteristics]); // Removed updateVoiceCharacteristics from deps - it's stable
   
   // Advanced transcription
   const { processAudioWithFullAnalysis, isProcessing } = useAdvancedTranscription();
@@ -162,9 +153,7 @@ const SessionRecord = () => {
     if (isRecording) {
       console.log('🛑 Stopping recording...');
       toast.success('Stopping transcription...');
-      if (saveAllPendingChunks) {
-        await saveAllPendingChunks();
-      }
+      await saveAllPendingChunks();
       stopRecording();
       
       // Auto-generate clinical note after stopping
@@ -189,17 +178,9 @@ const SessionRecord = () => {
         setActiveTab('transcript');
         speakerRef.current = 'provider';
         transcriptCountRef.current = 0;
+        toast.success('Starting live transcription... Speak now!');
         
-        // Show mode-specific guidance
-        if (recordingInputMode === 'playback') {
-          toast.info('Playback Mode: Play your audio now. Ensure volume is up and microphone can hear speakers.', {
-            duration: 5000
-          });
-        } else {
-          toast.success('Starting live transcription... Speak now!');
-        }
-        
-        console.log(`📞 Calling startRecording() in ${recordingInputMode} mode...`);
+        console.log('📞 Calling startRecording()...');
         await startRecording();
         console.log('✅ startRecording() completed');
       } catch (error) {
@@ -312,9 +293,7 @@ const SessionRecord = () => {
     toast.info('Stopping transcription...');
     
     // Save any pending chunks first
-    if (saveAllPendingChunks) {
-      await saveAllPendingChunks();
-    }
+    await saveAllPendingChunks();
     
     // Stop the recording
     stopRecording();
@@ -710,9 +689,7 @@ const SessionRecord = () => {
       
       // Auto-stop and generate note
       (async () => {
-        if (saveAllPendingChunks) {
-          await saveAllPendingChunks();
-        }
+        await saveAllPendingChunks();
         stopRecording();
         
         setTimeout(async () => {
@@ -741,24 +718,20 @@ const SessionRecord = () => {
   }, []);
 
   useEffect(() => {
-    if (id && loadTranscripts) {
+    if (id) {
       loadTranscripts();
     }
-  }, [id, loadTranscripts]);
+  }, [id]); // Removed loadTranscripts from deps - only load on id change
 
   useEffect(() => {
-    if (getFullTranscript) {
-      const fullTranscript = getFullTranscript();
-      if (fullTranscript) {
-        setTranscript(fullTranscript);
-      }
+    const fullTranscript = getFullTranscript();
+    if (fullTranscript) {
+      setTranscript(fullTranscript);
     }
-  }, [transcriptChunks, getFullTranscript]);
+  }, [transcriptChunks]); // Removed getFullTranscript from deps - only update when chunks change
 
   useTranscriptUpdates(id || '', (newTranscript) => {
-    if (loadTranscripts) {
-      loadTranscripts();
-    }
+    loadTranscripts();
   });
 
   if (isLoading) {
