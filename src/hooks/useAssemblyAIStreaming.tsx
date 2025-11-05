@@ -11,6 +11,7 @@ interface StreamingOptions {
 interface StreamingState {
   isConnected: boolean;
   isStreaming: boolean;
+  isPaused: boolean;
   error: string | null;
   sessionId: string | null;
 }
@@ -26,6 +27,7 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
   const [state, setState] = useState<StreamingState>({
     isConnected: false,
     isStreaming: false,
+    isPaused: false,
     error: null,
     sessionId: null,
   });
@@ -61,7 +63,9 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const projectId = supabaseUrl.split('//')[1].split('.')[0];
-      const wsUrl = `wss://${projectId}.supabase.co/functions/v1/assemblyai-realtime`;
+      const wsUrl = `wss://${projectId}.functions.supabase.co/assemblyai-realtime`;
+      
+      console.log('🌐 WebSocket URL:', wsUrl);
 
       wsRef.current = new WebSocket(wsUrl);
 
@@ -165,6 +169,11 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
           return;
         }
 
+        // Skip processing if paused
+        if (state.isPaused) {
+          return;
+        }
+
         const inputData = e.inputBuffer.getChannelData(0);
         
         // Convert Float32Array to Int16Array (PCM16)
@@ -202,7 +211,7 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
         onErrorRef.current(errorMsg);
       }
     }
-  }, [state.isConnected]);
+  }, [state.isConnected, state.isPaused]);
 
   // Stop streaming
   const stopStreaming = useCallback(() => {
@@ -233,6 +242,18 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     }
 
     setState(prev => ({ ...prev, isStreaming: false }));
+  }, []);
+
+  // Pause streaming (mute audio processing)
+  const pauseStreaming = useCallback(() => {
+    console.log('⏸️ Pausing AssemblyAI streaming...');
+    setState(prev => ({ ...prev, isPaused: true }));
+  }, []);
+
+  // Resume streaming
+  const resumeStreaming = useCallback(() => {
+    console.log('▶️ Resuming AssemblyAI streaming...');
+    setState(prev => ({ ...prev, isPaused: false }));
   }, []);
 
   // Disconnect WebSocket
@@ -272,5 +293,7 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     disconnect,
     startStreaming,
     stopStreaming,
+    pauseStreaming,
+    resumeStreaming,
   };
 }

@@ -373,14 +373,24 @@ const SessionRecord = () => {
   }, [id, transcript, context, template]);
 
   const handlePauseRecording = useCallback(() => {
-    console.log('🎯 PAUSE BUTTON CLICKED - Calling pauseRecording()');
-    pauseRecording();
-  }, [pauseRecording]);
+    console.log('🎯 PAUSE BUTTON CLICKED - Mode:', recordingInputMode);
+    if (recordingInputMode === 'playback' && assemblyAIStreaming.isStreaming) {
+      assemblyAIStreaming.pauseStreaming();
+      toast.info('Playback transcription paused');
+    } else {
+      pauseRecording();
+    }
+  }, [recordingInputMode, assemblyAIStreaming, pauseRecording]);
 
   const handleResumeRecording = useCallback(() => {
-    console.log('🎯 RESUME BUTTON CLICKED - Calling resumeRecording()');
-    resumeRecording();
-  }, [resumeRecording]);
+    console.log('🎯 RESUME BUTTON CLICKED - Mode:', recordingInputMode);
+    if (recordingInputMode === 'playback' && assemblyAIStreaming.isStreaming) {
+      assemblyAIStreaming.resumeStreaming();
+      toast.success('Playback transcription resumed');
+    } else {
+      resumeRecording();
+    }
+  }, [recordingInputMode, assemblyAIStreaming, resumeRecording]);
 
   const handleStopRecording = useCallback(async () => {
     console.log('🎯 STOP BUTTON CLICKED - Stopping recording and opening template selection');
@@ -879,8 +889,8 @@ const SessionRecord = () => {
           onPauseRecording={handlePauseRecording}
           onResumeRecording={handleResumeRecording}
           onStopRecording={handleStopRecording}
-          isRecording={isRecording}
-          isPaused={isPaused}
+          isRecording={isRecording || isRecordingForAssembly}
+          isPaused={recordingInputMode === 'playback' ? assemblyAIStreaming.isPaused : isPaused}
           isStartingRecording={isStartingRecording}
           recordingInputMode={recordingInputMode}
           onRecordingInputModeChange={setRecordingInputMode}
