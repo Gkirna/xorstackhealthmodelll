@@ -434,35 +434,35 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
             console.log(`🔄 Voice analysis running (${intervalCount} iterations)`);
           }
           
-          if (voiceAnalyzerRef.current) {
-            try {
-              const updated = await voiceAnalyzerRef.current.analyzeVoiceSample();
-              currentVoiceCharacteristicsRef.current = updated;
+          if (!voiceAnalyzerRef.current) {
+            return; // Skip silently if not ready
+          }
+          
+          try {
+            const updated = await voiceAnalyzerRef.current.analyzeVoiceSample();
+            currentVoiceCharacteristicsRef.current = updated;
               
-              // Update state with voice quality
-              setState(prev => ({ ...prev, voiceQuality: updated.voiceQuality }));
-              
-              // Update gender with adjusted confidence threshold based on mode
-              const confidenceThreshold = mode === 'playback' ? 0.6 : 0.75;
-              if (updated.gender !== 'unknown' && updated.confidence > confidenceThreshold) {
-                const previousGender = currentVoiceGenderRef.current;
-                currentVoiceGenderRef.current = updated.gender;
-                if (previousGender !== updated.gender) {
-                  console.log(`🎭 Voice update: ${updated.gender} (${updated.pitch.toFixed(0)}Hz, ${updated.speakerId})`);
-                }
+            // Update state with voice quality
+            setState(prev => ({ ...prev, voiceQuality: updated.voiceQuality }));
+            
+            // Update gender with adjusted confidence threshold based on mode
+            const confidenceThreshold = mode === 'playback' ? 0.6 : 0.75;
+            if (updated.gender !== 'unknown' && updated.confidence > confidenceThreshold) {
+              const previousGender = currentVoiceGenderRef.current;
+              currentVoiceGenderRef.current = updated.gender;
+              if (previousGender !== updated.gender) {
+                console.log(`🎭 Voice update: ${updated.gender} (${updated.pitch.toFixed(0)}Hz, ${updated.speakerId})`);
               }
-              
-              // Log speaker changes
-              if (updated.speakerId !== 'silence' && updated.confidence > 0.7) {
-                if (intervalCount % 5 === 0) { // Log every 1.5 seconds
-                  console.log(`👤 Active speaker: ${updated.speakerId} (pitch: ${updated.pitch.toFixed(0)}Hz, confidence: ${(updated.confidence * 100).toFixed(0)}%)`);
-                }
-              }
-            } catch (error) {
-              console.error('❌ Voice analysis error in interval:', error);
             }
-          } else {
-            console.warn('⚠️ voiceAnalyzerRef.current is null in interval');
+            
+            // Log speaker changes
+            if (updated.speakerId !== 'silence' && updated.confidence > 0.7) {
+              if (intervalCount % 5 === 0) { // Log every 1.5 seconds
+                console.log(`👤 Active speaker: ${updated.speakerId} (pitch: ${updated.pitch.toFixed(0)}Hz, confidence: ${(updated.confidence * 100).toFixed(0)}%)`);
+              }
+            }
+          } catch (error) {
+            // Silently handle analysis errors
           }
         }, 300); // 300ms for more responsive updates
         
