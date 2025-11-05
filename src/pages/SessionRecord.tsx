@@ -116,7 +116,32 @@ const SessionRecord = () => {
         speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
       }
     },
-    // onRecordingComplete will be set via ref to avoid re-renders
+    onSpeechDetection: (data) => {
+      // Log speech detection events
+      if (data.detected) {
+        console.log(`🎤 Speech Detected - Level: ${data.audioLevel.toFixed(0)}%, Quality: ${data.quality}`);
+      }
+    },
+    onTranscriptionStalled: (data) => {
+      // Log stall warnings
+      console.log(`⚠️ Transcription stalled for ${data.duration}s - Audio: ${data.audioLevel.toFixed(0)}%`);
+      console.log(`💡 ${data.suggestion}`);
+    },
+    onSuggestUploadMode: (reason) => {
+      // Log upload mode suggestions
+      console.log(`💡 Upload Mode Suggested: ${reason}`);
+      if (recordingInputMode === 'playback') {
+        toast.info('Tip: Upload Mode provides better accuracy for pre-recorded audio', {
+          duration: 5000,
+        });
+      }
+    },
+    onAudioQualityChange: (quality) => {
+      // Log quality changes
+      if (recordingInputMode === 'playback') {
+        console.log(`🎧 Audio Quality: ${quality}`);
+      }
+    },
     onError: (error: string) => {
       console.error('Recording error:', error);
       toast.error(error);

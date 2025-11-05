@@ -87,7 +87,7 @@ export class VoiceAnalyzer {
     if (mode === 'playback') {
       // Enhanced for playback mode with better tolerance
       // Mobile playback has even more degraded audio
-      this.MIN_PITCH_DIFFERENCE = isMobile ? 25 : 22;
+      this.MIN_PITCH_DIFFERENCE = isMobile ? 25 : 20;
       this.MIN_PITCH_MALE = isMobile ? 50 : 60;
       this.MAX_PITCH_MALE = isMobile ? 230 : 220;
       this.MIN_PITCH_FEMALE = isMobile ? 120 : 135;

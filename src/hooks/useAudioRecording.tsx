@@ -18,6 +18,10 @@ interface AudioRecordingOptions {
   deviceId?: string;
   language?: string; // Language code for transcription (e.g., 'kn-IN', 'en-IN')
   mode?: 'direct' | 'playback'; // Recording mode: direct conversation or playback transcription
+  onSpeechDetection?: (data: { detected: boolean; audioLevel: number; quality: string }) => void;
+  onTranscriptionStalled?: (data: { duration: number; audioLevel: number; suggestion: string }) => void;
+  onSuggestUploadMode?: (reason: string) => void;
+  onAudioQualityChange?: (quality: 'poor' | 'fair' | 'good' | 'excellent') => void;
 }
 
 interface RecordingState {
@@ -32,6 +36,13 @@ interface RecordingState {
   recordedBlob: Blob | null;
   recordedUrl: string | null;
   voiceQuality: 'excellent' | 'good' | 'fair' | 'poor';
+  audioLevelHistory: number[];
+  isSpeechDetected: boolean;
+  lastSpeechDetectedAt: number;
+  averageAudioLevel: number;
+  audioQualityScore: 'poor' | 'fair' | 'good' | 'excellent';
+  transcriptChunkCount: number;
+  lastChunkReceivedAt: number;
 }
 
 export function useAudioRecording(options: AudioRecordingOptions = {}) {
@@ -45,6 +56,10 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     deviceId,
     language = 'kn-IN', // Default to Kannada
     mode = 'direct', // Default to direct recording
+    onSpeechDetection,
+    onTranscriptionStalled,
+    onSuggestUploadMode,
+    onAudioQualityChange,
   } = options;
 
   const [state, setState] = useState<RecordingState>({
@@ -59,6 +74,13 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     recordedBlob: null,
     recordedUrl: null,
     voiceQuality: 'fair',
+    audioLevelHistory: [],
+    isSpeechDetected: false,
+    lastSpeechDetectedAt: 0,
+    averageAudioLevel: 0,
+    audioQualityScore: 'poor',
+    transcriptChunkCount: 0,
+    lastChunkReceivedAt: 0,
   });
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -74,6 +96,9 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const voiceAnalysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const currentVoiceCharacteristicsRef = useRef<any>(null);
   const autoCorrectorRef = useRef<MedicalAutoCorrector>(new MedicalAutoCorrector());
+  const speechDetectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const stallDetectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const preCheckFailCountRef = useRef<number>(0);
 
   // Initialize transcription engine
   useEffect(() => {
@@ -83,6 +108,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       continuous,
       interimResults: true,
       lang: language, // Use language from options
+      mode, // Pass mode for optimization
       onResult: async (transcript, isFinal) => {
         console.log('📝 Transcription result:', { 
           text: transcript.substring(0, 50) + '...', 
@@ -92,6 +118,16 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         
         if (isFinal) {
           console.log('✅ Final transcript chunk received');
+          
+          // Update chunk tracking
+          const now = Date.now();
+          setState(prev => ({
+            ...prev,
+            transcriptChunkCount: prev.transcriptChunkCount + 1,
+            lastChunkReceivedAt: now,
+            isSpeechDetected: true,
+            lastSpeechDetectedAt: now,
+          }));
           
           // Apply medical auto-correction before sending to callback
           const correctedTranscript = autoCorrectorRef.current.correctTranscript(
@@ -116,6 +152,15 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
             onTranscriptUpdate(transcript, false);
           }
         }
+      },
+      onSpeechActivity: () => {
+        // Track when speech is detected by transcription engine
+        const now = Date.now();
+        setState(prev => ({
+          ...prev,
+          isSpeechDetected: true,
+          lastSpeechDetectedAt: now,
+        }));
       },
       onError: (error) => {
         console.error('❌ Transcription error:', error);
@@ -156,6 +201,18 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       if (voiceAnalysisIntervalRef.current) {
         clearInterval(voiceAnalysisIntervalRef.current);
         voiceAnalysisIntervalRef.current = null;
+      }
+      
+      // Stop speech detection monitoring
+      if (speechDetectionIntervalRef.current) {
+        clearInterval(speechDetectionIntervalRef.current);
+        speechDetectionIntervalRef.current = null;
+      }
+      
+      // Stop stall detection
+      if (stallDetectionIntervalRef.current) {
+        clearInterval(stallDetectionIntervalRef.current);
+        stallDetectionIntervalRef.current = null;
       }
       
       // Stop MediaRecorder
@@ -200,7 +257,112 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       console.log('✅ Audio recorder cleanup complete');
     };
-  }, [continuous, onFinalTranscriptChunk, onTranscriptUpdate, language]);
+  }, [continuous, onFinalTranscriptChunk, onTranscriptUpdate, language, mode]);
+  
+  // Audio level monitoring function
+  const startAudioLevelMonitoring = useCallback(() => {
+    console.log('🎧 Starting audio level monitoring for speech detection...');
+    
+    // Monitor audio levels and speech detection every 500ms
+    speechDetectionIntervalRef.current = setInterval(() => {
+      if (!analyserRef.current) return;
+      
+      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+      analyserRef.current.getByteFrequencyData(dataArray);
+      
+      const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+      const normalized = Math.min(100, (average / 255) * 100);
+      
+      // Update audio level history (keep last 10 values)
+      setState(prev => {
+        const newHistory = [...prev.audioLevelHistory, normalized].slice(-10);
+        const avgLevel = newHistory.reduce((a, b) => a + b, 0) / newHistory.length;
+        
+        // Determine quality based on average level
+        let quality: 'poor' | 'fair' | 'good' | 'excellent' = 'poor';
+        if (avgLevel > 30) quality = 'excellent';
+        else if (avgLevel > 15) quality = 'good';
+        else if (avgLevel > 5) quality = 'fair';
+        
+        // Detect speech (threshold based on mode)
+        const speechThreshold = mode === 'playback' ? 5 : 10;
+        const isSpeech = normalized > speechThreshold;
+        
+        return {
+          ...prev,
+          audioLevelHistory: newHistory,
+          averageAudioLevel: avgLevel,
+          audioQualityScore: quality,
+        };
+      });
+      
+      // Fire callback every 2 seconds
+      if (Date.now() % 2000 < 500) {
+        setState(prev => {
+          const quality = prev.audioQualityScore;
+          const avgLevel = prev.averageAudioLevel;
+          
+          console.log(`🎧 Audio Level: ${avgLevel.toFixed(0)}%, Quality: ${quality}`);
+          
+          if (onSpeechDetection) {
+            onSpeechDetection({
+              detected: prev.isSpeechDetected,
+              audioLevel: avgLevel,
+              quality,
+            });
+          }
+          
+          if (onAudioQualityChange) {
+            onAudioQualityChange(quality);
+          }
+          
+          return prev;
+        });
+      }
+    }, 500);
+  }, [mode, onSpeechDetection, onAudioQualityChange]);
+  
+  // Stall detection for playback mode
+  const startStallDetection = useCallback(() => {
+    console.log('🔍 Starting transcription stall detection for playback mode...');
+    
+    stallDetectionIntervalRef.current = setInterval(() => {
+      setState(prev => {
+        const now = Date.now();
+        const timeSinceLastChunk = now - prev.lastChunkReceivedAt;
+        
+        // If no chunks received for 15+ seconds during recording
+        if (prev.isRecording && timeSinceLastChunk > 15000 && prev.lastChunkReceivedAt > 0) {
+          const stallDuration = Math.floor(timeSinceLastChunk / 1000);
+          console.log(`⚠️ No transcription for ${stallDuration}s - Audio level: ${prev.averageAudioLevel.toFixed(0)}%`);
+          
+          if (onTranscriptionStalled) {
+            onTranscriptionStalled({
+              duration: stallDuration,
+              audioLevel: prev.averageAudioLevel,
+              suggestion: 'No transcription progress detected. Consider switching to Upload Mode.',
+            });
+          }
+          
+          // After 20 seconds with zero chunks, suggest upload mode
+          if (timeSinceLastChunk > 20000 && prev.transcriptChunkCount === 0) {
+            console.log('💡 Suggestion: No transcription progress. Consider Upload Mode for better accuracy.');
+            
+            if (onSuggestUploadMode) {
+              onSuggestUploadMode('No transcription detected after 20s. Upload Mode recommended for pre-recorded audio.');
+            }
+          }
+        }
+        
+        // Log progress every 10 seconds
+        if (prev.isRecording && now % 10000 < 1000) {
+          console.log(`📝 Transcript chunks: ${prev.transcriptChunkCount}, Last: ${Math.floor(timeSinceLastChunk / 1000)}s ago`);
+        }
+        
+        return prev;
+      });
+    }, 1000);
+  }, [onTranscriptionStalled, onSuggestUploadMode]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -247,20 +409,20 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           // CRITICAL for playback: Disable echo cancellation so mic can hear speakers
           echoCancellation: false,
           noiseSuppression: false,
-          autoGainControl: true, // Keep AGC to boost quiet audio
-          sampleRate: { ideal: 48000 },
-          channelCount: { ideal: 1 },
+          autoGainControl: true, // Boost quiet speaker audio
+          sampleRate: { ideal: 48000, min: 44100 },
           ...(deviceId && { deviceId: { exact: deviceId } }),
-          // Mobile-specific optimizations for playback mode
+          // Enhanced browser-specific optimizations
           advanced: [
-            { echoCancellation: false },  // Must be false for playback
-            { noiseSuppression: false },  // Must be false for playback
+            { echoCancellation: false },
+            { noiseSuppression: false },
             { autoGainControl: true },
-            { googEchoCancellation: false } as any,  // Chrome-specific
-            { googNoiseSuppression: false } as any,  // Chrome-specific
-            { googAutoGainControl: true } as any,
-            { googHighpassFilter: false } as any,  // Don't filter low frequencies
-            { googTypingNoiseDetection: false } as any
+            { googEchoCancellation: false } as any,
+            { googNoiseSuppression: false } as any,
+            { googAutoGainControl2: true } as any, // Enhanced AGC
+            { googHighpassFilter: false } as any,
+            { googTypingNoiseDetection: false } as any,
+            { googAudioMirroring: false } as any
           ] as any
         } : {
           // Direct mode: Enable all noise reduction
@@ -393,11 +555,29 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       analyserRef.current = sharedContext.createAnalyser();
       const source = sharedContext.createMediaStreamSource(stream);
-      source.connect(analyserRef.current);
-      analyserRef.current.fftSize = 4096;
-      analyserRef.current.smoothingTimeConstant = 0.8;
+      
+      // Apply dynamic range compression for playback mode
+      if (mode === 'playback') {
+        const compressor = sharedContext.createDynamicsCompressor();
+        compressor.threshold.value = -30;
+        compressor.knee.value = 20;
+        compressor.ratio.value = 8;
+        compressor.attack.value = 0.003;
+        compressor.release.value = 0.25;
+        source.connect(compressor);
+        compressor.connect(analyserRef.current);
+        console.log('🎚️ Dynamic compression enabled for playback mode');
+      } else {
+        source.connect(analyserRef.current);
+      }
+      
+      analyserRef.current.fftSize = mode === 'playback' ? 8192 : 4096;
+      analyserRef.current.smoothingTimeConstant = mode === 'playback' ? 0.6 : 0.8;
       
       console.log('✅ AudioContext setup complete');
+      
+      // Start audio level monitoring for speech detection
+      startAudioLevelMonitoring();
       
       // Initialize voice analyzer (non-critical, can fail gracefully)
       try {

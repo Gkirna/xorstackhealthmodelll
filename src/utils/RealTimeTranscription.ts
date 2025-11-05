@@ -7,11 +7,13 @@ export interface TranscriptionConfig {
   continuous?: boolean;
   interimResults?: boolean;
   lang?: string;
+  mode?: 'direct' | 'playback';
   onResult?: (transcript: string, isFinal: boolean) => void;
   onError?: (error: string) => void;
   onStart?: () => void;
   onEnd?: () => void;
   onSpeakerChange?: (speaker: 'Doctor' | 'Patient') => void;
+  onSpeechActivity?: () => void;
 }
 
 interface ConversationTurn {
@@ -34,12 +36,17 @@ export class RealTimeTranscription {
   private pauseThreshold: number = 2000; // 2 seconds pause indicates speaker change
   private consecutiveSentences: number = 0;
   private sentenceCountBeforeSwitch: number = 2; // Switch speaker after 2-3 sentences
+  private lastResultReceivedAt: number = 0;
+  private resultCount: number = 0;
+  private mode: 'direct' | 'playback' = 'direct';
 
   constructor(config: TranscriptionConfig = {}) {
+    this.mode = config.mode || 'direct';
     this.config = {
       continuous: true,
       interimResults: true,
       lang: config.lang || 'kn-IN', // Default to Kannada (Karnataka, India)
+      mode: this.mode,
       ...config
     };
 
@@ -64,7 +71,8 @@ export class RealTimeTranscription {
     this.recognition.continuous = this.config.continuous;
     this.recognition.interimResults = this.config.interimResults;
     this.recognition.lang = this.config.lang;
-    this.recognition.maxAlternatives = 10; // Maximum alternatives for best accuracy
+    // Playback mode: more alternatives to handle degraded audio
+    this.recognition.maxAlternatives = this.mode === 'playback' ? 15 : 10;
     
     // Detect if running on mobile
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -86,6 +94,15 @@ export class RealTimeTranscription {
     };
 
     this.recognition.onresult = (event: any) => {
+      // Track speech activity
+      this.lastResultReceivedAt = Date.now();
+      this.resultCount++;
+      
+      // Fire speech activity callback
+      if (this.config.onSpeechActivity) {
+        this.config.onSpeechActivity();
+      }
+      
       let interimTranscript = '';
       let finalTranscript = '';
       let finalConfidence = 0;
@@ -143,14 +160,18 @@ export class RealTimeTranscription {
           });
           
           // Calculate weighted score: confidence + medical term bonus
+          // Playback mode: increase medical term weighting due to degraded audio
+          const medicalBonus = this.mode === 'playback' ? 0.15 : 0.05;
           const currentScore = bestConfidence + (bestTranscript.toLowerCase().split(' ').filter(word => 
             medicalTerms.some(term => word.includes(term))
-          ).length * 0.05);
+          ).length * medicalBonus);
           
-          const altScore = altConfidence + (medicalTermScore * 0.1);
+          const altBonus = this.mode === 'playback' ? 0.15 : 0.1;
+          const altScore = altConfidence + (medicalTermScore * altBonus);
           
-          // Prefer alternatives with better overall score
-          if (altScore > currentScore || (medicalTermCount > 2 && altConfidence > bestConfidence * 0.8)) {
+          // Playback mode: lower confidence threshold for alternatives
+          const confThreshold = this.mode === 'playback' ? 0.6 : 0.8;
+          if (altScore > currentScore || (medicalTermCount > 2 && altConfidence > bestConfidence * confThreshold)) {
             bestTranscript = altTranscript;
             bestConfidence = altConfidence;
           }
@@ -236,16 +257,23 @@ export class RealTimeTranscription {
       let errorMessage = 'Transcription error occurred';
       let shouldRestart = false;
       
+      // Playback-specific error messages
+      const isPlaybackMode = this.mode === 'playback';
+      
       switch (event.error) {
       case 'no-speech':
-        errorMessage = 'No speech detected. Please check your audio and try again.';
+        errorMessage = isPlaybackMode 
+          ? 'No speech detected from speakers. Increase volume or move laptop closer to mobile speaker.'
+          : 'No speech detected. Please check your audio and try again.';
         shouldRestart = true;
         break;
       case 'audio-capture':
-        errorMessage = 'Microphone not accessible. Please check permissions and ensure your device microphone is working.';
+        errorMessage = isPlaybackMode
+          ? 'Microphone cannot access audio. Check laptop microphone is enabled.'
+          : 'Microphone not accessible. Please check permissions and ensure your device microphone is working.';
         break;
       case 'not-allowed':
-        errorMessage = 'Microphone permission denied. Please grant microphone access in your browser settings.';
+        errorMessage = 'Microphone permission required. Grant access in browser settings.';
         break;
       case 'network':
         errorMessage = 'Network error. Please check your internet connection.';
@@ -266,10 +294,11 @@ export class RealTimeTranscription {
         this.config.onError(errorMessage);
       }
 
-      // Advanced auto-restart with exponential backoff
+      // Advanced auto-restart with mode-aware delays
       if (this.config.continuous && shouldRestart) {
-        const restartDelay = event.error === 'network' ? 500 : 200;
-        console.log(`⏳ Auto-restarting recognition in ${restartDelay}ms...`);
+        // Playback mode: faster restarts since gaps are common
+        const restartDelay = this.mode === 'playback' ? 100 : (event.error === 'network' ? 500 : 200);
+        console.log(`⏳ Auto-restarting recognition in ${restartDelay}ms (${this.mode} mode)...`);
         setTimeout(() => {
           if (this.isListening) {
             try {
