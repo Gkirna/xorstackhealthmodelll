@@ -39,32 +39,12 @@ serve(async (req) => {
 
   let assemblyAISocket: WebSocket | null = null;
   let isConnected = false;
-  const audioQueue: string[] = []; // Buffer audio until connected
 
   clientSocket.onopen = () => {
     console.log('✅ Client WebSocket connected');
 
-    // Connect to AssemblyAI streaming API with enhanced parameters for medical transcription
-    const params = new URLSearchParams({
-      sample_rate: '16000',
-      encoding: 'pcm_s16le',
-      word_boost: JSON.stringify([
-        // Medical terms
-        'diagnosis', 'prognosis', 'prescription', 'medication', 'treatment', 'symptoms', 'patient',
-        'examination', 'laboratory', 'radiology', 'surgery', 'anesthesia', 'vital signs',
-        // Common medications
-        'aspirin', 'ibuprofen', 'paracetamol', 'amoxicillin', 'metformin', 'insulin',
-        // Anatomy
-        'heart', 'lung', 'liver', 'kidney', 'brain', 'spine', 'abdomen', 'thorax',
-      ]),
-      punctuate: 'true',
-      format_text: 'true',
-      disfluencies: 'false', // Remove filler words
-      multichannel: 'false',
-      language_code: 'en', // Multi-accent English support
-    });
-    
-    const assemblyAIUrl = `wss://streaming.assemblyai.com/v3/ws?${params.toString()}&token=${ASSEMBLYAI_API_KEY}`;
+    // Connect to AssemblyAI streaming API
+    const assemblyAIUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&formatted_finals=true&token=${ASSEMBLYAI_API_KEY}`;
     
     assemblyAISocket = new WebSocket(assemblyAIUrl);
 
@@ -78,15 +58,6 @@ serve(async (req) => {
         status: 'connected',
         message: 'High Accuracy Mode active',
       }));
-
-      // Process any queued audio data
-      console.log(`📦 Processing ${audioQueue.length} queued audio chunks`);
-      while (audioQueue.length > 0) {
-        const audioData = audioQueue.shift();
-        if (audioData && assemblyAISocket) {
-          assemblyAISocket.send(JSON.stringify({ audio_data: audioData }));
-        }
-      }
     };
 
     assemblyAISocket.onmessage = (event) => {
@@ -143,30 +114,24 @@ serve(async (req) => {
   };
 
   clientSocket.onmessage = (event) => {
+    if (!isConnected || !assemblyAISocket) {
+      console.warn('⚠️ Received audio before AssemblyAI connection ready');
+      return;
+    }
+
     try {
       const data = JSON.parse(event.data);
       
       // Forward audio data to AssemblyAI
       if (data.type === 'audio' && data.audio) {
-        if (!isConnected || !assemblyAISocket || assemblyAISocket.readyState !== WebSocket.OPEN) {
-          // Queue audio if not connected yet
-          audioQueue.push(data.audio);
-          if (audioQueue.length % 10 === 0) {
-            console.log(`📦 Queued ${audioQueue.length} audio chunks (waiting for connection)`);
-          }
-          return;
-        }
-        
         assemblyAISocket.send(JSON.stringify({
           audio_data: data.audio, // Base64 PCM16 audio
         }));
       } else if (data.type === 'terminate') {
         // Client requested termination
-        if (assemblyAISocket && assemblyAISocket.readyState === WebSocket.OPEN) {
-          assemblyAISocket.send(JSON.stringify({
-            terminate_session: true,
-          }));
-        }
+        assemblyAISocket.send(JSON.stringify({
+          terminate_session: true,
+        }));
       }
     } catch (error) {
       console.error('❌ Error processing client message:', error);

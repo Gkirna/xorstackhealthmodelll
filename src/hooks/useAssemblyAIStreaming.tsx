@@ -35,29 +35,11 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const hasConnectedRef = useRef<boolean>(false);
-  
-  // Use refs for callbacks to prevent re-renders
-  const onPartialTranscriptRef = useRef(onPartialTranscript);
-  const onFinalTranscriptRef = useRef(onFinalTranscript);
-  const onErrorRef = useRef(onError);
-  
-  useEffect(() => {
-    onPartialTranscriptRef.current = onPartialTranscript;
-    onFinalTranscriptRef.current = onFinalTranscript;
-    onErrorRef.current = onError;
-  }, [onPartialTranscript, onFinalTranscript, onError]);
 
   // Connect to AssemblyAI streaming via edge function
   const connect = useCallback(async () => {
     if (!enabled) {
       console.log('⚠️ AssemblyAI streaming not enabled');
-      return;
-    }
-
-    // Don't reconnect if already connected
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      console.log('⚠️ Already connected to AssemblyAI');
       return;
     }
 
@@ -68,7 +50,6 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       const projectId = supabaseUrl.split('//')[1].split('.')[0];
       const wsUrl = `wss://${projectId}.supabase.co/functions/v1/assemblyai-realtime`;
 
-      console.log('🌐 WebSocket URL:', wsUrl);
       wsRef.current = new WebSocket(wsUrl);
 
       wsRef.current.onopen = () => {
@@ -87,22 +68,22 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
           } else if (data.type === 'session_started') {
             setState(prev => ({ ...prev, sessionId: data.session_id }));
           } else if (data.type === 'partial') {
-            if (onPartialTranscriptRef.current) {
-              onPartialTranscriptRef.current(data.text);
+            if (onPartialTranscript) {
+              onPartialTranscript(data.text);
             }
           } else if (data.type === 'final') {
-            if (onFinalTranscriptRef.current) {
-              onFinalTranscriptRef.current(data.text);
+            if (onFinalTranscript) {
+              onFinalTranscript(data.text);
             }
           } else if (data.type === 'error') {
             console.error('❌ Streaming error:', data.message);
             setState(prev => ({ ...prev, error: data.message }));
-            if (onErrorRef.current) {
-              onErrorRef.current(data.message);
+            if (onError) {
+              onError(data.message);
             }
           } else if (data.type === 'session_ended') {
             console.log('🛑 Streaming session ended');
-            // Don't stop streaming on session_ended - let user control it
+            setState(prev => ({ ...prev, isStreaming: false }));
           }
         } catch (error) {
           console.error('❌ Error parsing message:', error);
@@ -116,8 +97,8 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
           error: 'Connection error',
           isConnected: false,
         }));
-        if (onErrorRef.current) {
-          onErrorRef.current('WebSocket connection error');
+        if (onError) {
+          onError('WebSocket connection error');
         }
       };
 
@@ -133,92 +114,66 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       console.error('❌ Error connecting:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       setState(prev => ({ ...prev, error: errorMsg }));
-      if (onErrorRef.current) {
-        onErrorRef.current(errorMsg);
+      if (onError) {
+        onError(errorMsg);
       }
     }
-  }, [enabled]);
+  }, [enabled, onPartialTranscript, onFinalTranscript, onError]);
 
   // Start streaming audio
-  const startStreaming = useCallback(async (deviceId?: string) => {
+  const startStreaming = useCallback(async () => {
     if (!state.isConnected || !wsRef.current) {
       console.warn('⚠️ Not connected to streaming service');
       return;
     }
 
-    if (state.isStreaming) {
-      console.log('⚠️ Already streaming, ignoring duplicate start');
-      return;
-    }
-
     try {
-      console.log('🎤 Starting audio streaming with device:', deviceId || 'default');
+      console.log('🎤 Starting audio streaming...');
 
-      // Get microphone access with optimal constraints for transcription
-      const audioConstraints: MediaTrackConstraints = {
-        sampleRate: 16000,
-        channelCount: 1,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      };
-
-      // Add device ID if provided (supports all microphone types: built-in, headset, USB)
-      if (deviceId && deviceId !== 'default') {
-        audioConstraints.deviceId = { exact: deviceId };
-      }
-
+      // Get microphone access
       mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({
-        audio: audioConstraints,
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
       });
 
-      console.log('✅ Microphone access granted');
-
-      // Create audio context with optimal settings
-      audioContextRef.current = new AudioContext({ 
-        sampleRate: 16000,
-        latencyHint: 'interactive' // Low latency for real-time
-      });
-      
+      // Create audio context
+      audioContextRef.current = new AudioContext({ sampleRate: 16000 });
       sourceRef.current = audioContextRef.current.createMediaStreamSource(mediaStreamRef.current);
-      
-      // Use 4096 buffer size for good balance between latency and reliability
       processorRef.current = audioContextRef.current.createScriptProcessor(4096, 1, 1);
 
-      // Process audio chunks with optimized conversion
+      // Process audio chunks
       processorRef.current.onaudioprocess = (e) => {
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN || !state.isStreaming) {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
           return;
         }
 
         const inputData = e.inputBuffer.getChannelData(0);
         
-        // Convert Float32Array to Int16Array (PCM16) with clamping
+        // Convert Float32Array to Int16Array (PCM16)
         const int16Array = new Int16Array(inputData.length);
         for (let i = 0; i < inputData.length; i++) {
           const s = Math.max(-1, Math.min(1, inputData[i]));
           int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
         }
 
-        // Convert to base64 efficiently
+        // Convert to base64
         const uint8Array = new Uint8Array(int16Array.buffer);
         let binary = '';
-        const chunkSize = 8192;
-        for (let i = 0; i < uint8Array.length; i += chunkSize) {
-          const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
-          binary += String.fromCharCode.apply(null, Array.from(chunk));
+        for (let i = 0; i < uint8Array.length; i++) {
+          binary += String.fromCharCode(uint8Array[i]);
         }
         const base64Audio = btoa(binary);
 
         // Send to AssemblyAI via WebSocket
-        try {
-          wsRef.current.send(JSON.stringify({
-            type: 'audio',
-            audio: base64Audio,
-          }));
-        } catch (error) {
-          console.error('❌ Error sending audio:', error);
-        }
+        wsRef.current.send(JSON.stringify({
+          type: 'audio',
+          audio: base64Audio,
+        }));
       };
 
       sourceRef.current.connect(processorRef.current);
@@ -229,21 +184,12 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     } catch (error) {
       console.error('❌ Error starting stream:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      
-      // Provide user-friendly error messages
-      let friendlyError = errorMsg;
-      if (errorMsg.includes('Permission denied')) {
-        friendlyError = 'Microphone access denied. Please allow microphone permissions.';
-      } else if (errorMsg.includes('not found') || errorMsg.includes('OverconstrainedError')) {
-        friendlyError = 'Selected microphone not found. Please choose another microphone.';
-      }
-      
-      setState(prev => ({ ...prev, error: friendlyError }));
-      if (onErrorRef.current) {
-        onErrorRef.current(friendlyError);
+      setState(prev => ({ ...prev, error: errorMsg }));
+      if (onError) {
+        onError(errorMsg);
       }
     }
-  }, [state.isConnected, state.isStreaming]);
+  }, [state.isConnected, onError]);
 
   // Stop streaming
   const stopStreaming = useCallback(() => {
@@ -278,13 +224,10 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
 
   // Disconnect WebSocket
   const disconnect = useCallback(() => {
-    console.log('🛑 Disconnecting from AssemblyAI...');
     stopStreaming();
 
     if (wsRef.current) {
-      if (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING) {
-        wsRef.current.close();
-      }
+      wsRef.current.close();
       wsRef.current = null;
     }
 
@@ -293,23 +236,18 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       isConnected: false,
       sessionId: null,
     }));
-    
-    hasConnectedRef.current = false;
   }, [stopStreaming]);
 
-  // Auto-connect when enabled (only once)
+  // Auto-connect when enabled
   useEffect(() => {
-    if (enabled && !hasConnectedRef.current) {
-      hasConnectedRef.current = true;
+    if (enabled && !state.isConnected) {
       connect();
     }
 
     return () => {
-      // Only disconnect if component is truly unmounting
-      // Don't disconnect on re-renders
       disconnect();
     };
-  }, [enabled, connect, disconnect]);
+  }, [enabled]);
 
   return {
     ...state,

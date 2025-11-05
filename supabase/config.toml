@@ -29,4 +29,4 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.assemblyai-realtime]
-verify_jwt = false
+verify_jwt = true
