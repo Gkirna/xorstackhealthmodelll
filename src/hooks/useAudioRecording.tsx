@@ -18,10 +18,6 @@ interface AudioRecordingOptions {
   deviceId?: string;
   language?: string; // Language code for transcription (e.g., 'kn-IN', 'en-IN')
   mode?: 'direct' | 'playback'; // Recording mode: direct conversation or playback transcription
-  onSpeechDetection?: (data: { detected: boolean; audioLevel: number; quality: string }) => void;
-  onTranscriptionStalled?: (data: { duration: number; audioLevel: number; suggestion: string }) => void;
-  onSuggestUploadMode?: (reason: string) => void;
-  onAudioQualityChange?: (quality: 'poor' | 'fair' | 'good' | 'excellent') => void;
 }
 
 interface RecordingState {
@@ -36,13 +32,6 @@ interface RecordingState {
   recordedBlob: Blob | null;
   recordedUrl: string | null;
   voiceQuality: 'excellent' | 'good' | 'fair' | 'poor';
-  audioLevelHistory: number[];
-  isSpeechDetected: boolean;
-  lastSpeechDetectedAt: number;
-  averageAudioLevel: number;
-  audioQualityScore: 'poor' | 'fair' | 'good' | 'excellent';
-  transcriptChunkCount: number;
-  lastChunkReceivedAt: number;
 }
 
 export function useAudioRecording(options: AudioRecordingOptions = {}) {
@@ -56,10 +45,6 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     deviceId,
     language = 'kn-IN', // Default to Kannada
     mode = 'direct', // Default to direct recording
-    onSpeechDetection,
-    onTranscriptionStalled,
-    onSuggestUploadMode,
-    onAudioQualityChange,
   } = options;
 
   const [state, setState] = useState<RecordingState>({
@@ -74,13 +59,6 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     recordedBlob: null,
     recordedUrl: null,
     voiceQuality: 'fair',
-    audioLevelHistory: [],
-    isSpeechDetected: false,
-    lastSpeechDetectedAt: 0,
-    averageAudioLevel: 0,
-    audioQualityScore: 'poor',
-    transcriptChunkCount: 0,
-    lastChunkReceivedAt: 0,
   });
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -96,28 +74,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const voiceAnalysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const currentVoiceCharacteristicsRef = useRef<any>(null);
   const autoCorrectorRef = useRef<MedicalAutoCorrector>(new MedicalAutoCorrector());
-  const speechDetectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const stallDetectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const preCheckFailCountRef = useRef<number>(0);
 
-  // Use refs for callbacks to avoid re-initialization
-  const onTranscriptUpdateRef = useRef(onTranscriptUpdate);
-  const onFinalTranscriptChunkRef = useRef(onFinalTranscriptChunk);
-  const onSpeechDetectionRef = useRef(onSpeechDetection);
-  const onTranscriptionStalledRef = useRef(onTranscriptionStalled);
-  const onSuggestUploadModeRef = useRef(onSuggestUploadMode);
-  const onAudioQualityChangeRef = useRef(onAudioQualityChange);
-  
-  // Update refs when callbacks change
-  useEffect(() => {
-    onTranscriptUpdateRef.current = onTranscriptUpdate;
-    onFinalTranscriptChunkRef.current = onFinalTranscriptChunk;
-    onSpeechDetectionRef.current = onSpeechDetection;
-    onTranscriptionStalledRef.current = onTranscriptionStalled;
-    onSuggestUploadModeRef.current = onSuggestUploadMode;
-    onAudioQualityChangeRef.current = onAudioQualityChange;
-  }, [onTranscriptUpdate, onFinalTranscriptChunk, onSpeechDetection, onTranscriptionStalled, onSuggestUploadMode, onAudioQualityChange]);
-  
   // Initialize transcription engine
   useEffect(() => {
     console.log(`🎙️ Initializing real-time transcription engine for language: ${language}`);
@@ -126,7 +83,6 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       continuous,
       interimResults: true,
       lang: language, // Use language from options
-      mode, // Pass mode for optimization
       onResult: async (transcript, isFinal) => {
         console.log('📝 Transcription result:', { 
           text: transcript.substring(0, 50) + '...', 
@@ -137,16 +93,6 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         if (isFinal) {
           console.log('✅ Final transcript chunk received');
           
-          // Update chunk tracking
-          const now = Date.now();
-          setState(prev => ({
-            ...prev,
-            transcriptChunkCount: prev.transcriptChunkCount + 1,
-            lastChunkReceivedAt: now,
-            isSpeechDetected: true,
-            lastSpeechDetectedAt: now,
-          }));
-          
           // Apply medical auto-correction before sending to callback
           const correctedTranscript = autoCorrectorRef.current.correctTranscript(
             transcript, 
@@ -154,31 +100,22 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
             currentVoiceGenderRef.current === 'female' ? 'patient' : 'provider'
           );
           
-          if (onFinalTranscriptChunkRef.current) {
-            onFinalTranscriptChunkRef.current(correctedTranscript);
+          if (onFinalTranscriptChunk) {
+            onFinalTranscriptChunk(correctedTranscript);
           }
           setState(prev => ({ ...prev, interimTranscript: '' }));
           
-          if (onTranscriptUpdateRef.current) {
-            onTranscriptUpdateRef.current(correctedTranscript, true);
+          if (onTranscriptUpdate) {
+            onTranscriptUpdate(correctedTranscript, true);
           }
         } else {
           console.log('⏳ Interim transcript update');
           setState(prev => ({ ...prev, interimTranscript: transcript }));
           
-          if (onTranscriptUpdateRef.current) {
-            onTranscriptUpdateRef.current(transcript, false);
+          if (onTranscriptUpdate) {
+            onTranscriptUpdate(transcript, false);
           }
         }
-      },
-      onSpeechActivity: () => {
-        // Track when speech is detected by transcription engine
-        const now = Date.now();
-        setState(prev => ({
-          ...prev,
-          isSpeechDetected: true,
-          lastSpeechDetectedAt: now,
-        }));
       },
       onError: (error) => {
         console.error('❌ Transcription error:', error);
@@ -219,18 +156,6 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       if (voiceAnalysisIntervalRef.current) {
         clearInterval(voiceAnalysisIntervalRef.current);
         voiceAnalysisIntervalRef.current = null;
-      }
-      
-      // Stop speech detection monitoring
-      if (speechDetectionIntervalRef.current) {
-        clearInterval(speechDetectionIntervalRef.current);
-        speechDetectionIntervalRef.current = null;
-      }
-      
-      // Stop stall detection
-      if (stallDetectionIntervalRef.current) {
-        clearInterval(stallDetectionIntervalRef.current);
-        stallDetectionIntervalRef.current = null;
       }
       
       // Stop MediaRecorder
@@ -275,112 +200,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       console.log('✅ Audio recorder cleanup complete');
     };
-  }, [continuous, language, mode]); // Removed onFinalTranscriptChunk and onTranscriptUpdate to prevent re-render loop
-  
-  // Audio level monitoring function
-  const startAudioLevelMonitoring = useCallback(() => {
-    console.log('🎧 Starting audio level monitoring for speech detection...');
-    
-    // Monitor audio levels and speech detection every 500ms
-    speechDetectionIntervalRef.current = setInterval(() => {
-      if (!analyserRef.current) return;
-      
-      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-      analyserRef.current.getByteFrequencyData(dataArray);
-      
-      const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-      const normalized = Math.min(100, (average / 255) * 100);
-      
-      // Update audio level history (keep last 10 values)
-      setState(prev => {
-        const newHistory = [...prev.audioLevelHistory, normalized].slice(-10);
-        const avgLevel = newHistory.reduce((a, b) => a + b, 0) / newHistory.length;
-        
-        // Determine quality based on average level
-        let quality: 'poor' | 'fair' | 'good' | 'excellent' = 'poor';
-        if (avgLevel > 30) quality = 'excellent';
-        else if (avgLevel > 15) quality = 'good';
-        else if (avgLevel > 5) quality = 'fair';
-        
-        // Detect speech (threshold based on mode)
-        const speechThreshold = mode === 'playback' ? 5 : 10;
-        const isSpeech = normalized > speechThreshold;
-        
-        return {
-          ...prev,
-          audioLevelHistory: newHistory,
-          averageAudioLevel: avgLevel,
-          audioQualityScore: quality,
-        };
-      });
-      
-      // Fire callback every 2 seconds
-      if (Date.now() % 2000 < 500) {
-        setState(prev => {
-          const quality = prev.audioQualityScore;
-          const avgLevel = prev.averageAudioLevel;
-          
-          console.log(`🎧 Audio Level: ${avgLevel.toFixed(0)}%, Quality: ${quality}`);
-          
-          if (onSpeechDetectionRef.current) {
-            onSpeechDetectionRef.current({
-              detected: prev.isSpeechDetected,
-              audioLevel: avgLevel,
-              quality,
-            });
-          }
-          
-          if (onAudioQualityChangeRef.current) {
-            onAudioQualityChangeRef.current(quality);
-          }
-          
-          return prev;
-        });
-      }
-    }, 500);
-  }, [mode]); // Removed callback dependencies
-  
-  // Stall detection for playback mode
-  const startStallDetection = useCallback(() => {
-    console.log('🔍 Starting transcription stall detection for playback mode...');
-    
-    stallDetectionIntervalRef.current = setInterval(() => {
-      setState(prev => {
-        const now = Date.now();
-        const timeSinceLastChunk = now - prev.lastChunkReceivedAt;
-        
-        // If no chunks received for 15+ seconds during recording
-        if (prev.isRecording && timeSinceLastChunk > 15000 && prev.lastChunkReceivedAt > 0) {
-          const stallDuration = Math.floor(timeSinceLastChunk / 1000);
-          console.log(`⚠️ No transcription for ${stallDuration}s - Audio level: ${prev.averageAudioLevel.toFixed(0)}%`);
-          
-          if (onTranscriptionStalledRef.current) {
-            onTranscriptionStalledRef.current({
-              duration: stallDuration,
-              audioLevel: prev.averageAudioLevel,
-              suggestion: 'No transcription progress detected. Consider switching to Upload Mode.',
-            });
-          }
-          
-          // After 20 seconds with zero chunks, suggest upload mode
-          if (timeSinceLastChunk > 20000 && prev.transcriptChunkCount === 0) {
-            console.log('💡 Suggestion: No transcription progress. Consider Upload Mode for better accuracy.');
-            
-            if (onSuggestUploadModeRef.current) {
-              onSuggestUploadModeRef.current('No transcription detected after 20s. Upload Mode recommended for pre-recorded audio.');
-            }
-          }
-        }
-        
-        // Log progress every 10 seconds
-        if (prev.isRecording && now % 10000 < 1000) {
-          console.log(`📝 Transcript chunks: ${prev.transcriptChunkCount}, Last: ${Math.floor(timeSinceLastChunk / 1000)}s ago`);
-        }
-        
-        return prev;
-      });
-    }, 1000);
-  }, []); // Removed callback dependencies
+  }, [continuous, onFinalTranscriptChunk, onTranscriptUpdate, language]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -420,35 +240,27 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       console.log('✅ All cleanup complete, requesting microphone...');
       console.log(`🎤 Recording mode: ${mode}`);
       
-      // Critical: Different audio constraints for playback vs direct mode
-      // Playback mode MUST disable echo cancellation to hear speakers
+      // Enhanced audio constraints for playback mode
       const constraints: MediaStreamConstraints = {
         audio: mode === 'playback' ? {
-          // CRITICAL for playback: Disable echo cancellation so mic can hear speakers
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: true, // Boost quiet speaker audio
-          sampleRate: { ideal: 48000, min: 44100 },
+          echoCancellation: true, // Aggressive echo cancellation
+          noiseSuppression: true, // Strong noise suppression
+          autoGainControl: true, // Adaptive gain control
+          sampleRate: sampleRate,
+          channelCount: 1,
           ...(deviceId && { deviceId: { exact: deviceId } }),
-          // Enhanced browser-specific optimizations
+          // Additional constraints for playback mode
           advanced: [
-            { echoCancellation: false },
-            { noiseSuppression: false },
-            { autoGainControl: true },
-            { googEchoCancellation: false } as any,
-            { googNoiseSuppression: false } as any,
-            { googAutoGainControl2: true } as any, // Enhanced AGC
-            { googHighpassFilter: false } as any,
-            { googTypingNoiseDetection: false } as any,
-            { googAudioMirroring: false } as any
-          ] as any
+            { echoCancellation: { exact: true } },
+            { noiseSuppression: { exact: true } },
+            { autoGainControl: { exact: true } }
+          ]
         } : {
-          // Direct mode: Enable all noise reduction
-          echoCancellation: { exact: true },
-          noiseSuppression: { exact: true },
-          autoGainControl: { exact: true },
-          sampleRate: { ideal: 48000 },
-          channelCount: { ideal: 1 },
+          echoCancellation: { ideal: true },
+          noiseSuppression: { ideal: true },
+          autoGainControl: { ideal: true },
+          sampleRate: sampleRate,
+          channelCount: 1,
           ...(deviceId && { deviceId: { exact: deviceId } })
         }
       };
@@ -573,29 +385,11 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       analyserRef.current = sharedContext.createAnalyser();
       const source = sharedContext.createMediaStreamSource(stream);
-      
-      // Apply dynamic range compression for playback mode
-      if (mode === 'playback') {
-        const compressor = sharedContext.createDynamicsCompressor();
-        compressor.threshold.value = -30;
-        compressor.knee.value = 20;
-        compressor.ratio.value = 8;
-        compressor.attack.value = 0.003;
-        compressor.release.value = 0.25;
-        source.connect(compressor);
-        compressor.connect(analyserRef.current);
-        console.log('🎚️ Dynamic compression enabled for playback mode');
-      } else {
-        source.connect(analyserRef.current);
-      }
-      
-      analyserRef.current.fftSize = mode === 'playback' ? 8192 : 4096;
-      analyserRef.current.smoothingTimeConstant = mode === 'playback' ? 0.6 : 0.8;
+      source.connect(analyserRef.current);
+      analyserRef.current.fftSize = 4096;
+      analyserRef.current.smoothingTimeConstant = 0.8;
       
       console.log('✅ AudioContext setup complete');
-      
-      // Start audio level monitoring for speech detection
-      startAudioLevelMonitoring();
       
       // Initialize voice analyzer (non-critical, can fail gracefully)
       try {
@@ -700,51 +494,17 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       monitorAudioLevel();
       
-      // Advanced transcription startup with progressive retry
+      // Start transcription
       if (transcriptionRef.current && transcriptionRef.current.isBrowserSupported()) {
-        console.log(`🚀 Starting advanced real-time transcription (${mode} mode)...`);
-        
-        // Optimized delay for faster startup
-        setTimeout(() => {
-          if (transcriptionRef.current) {
-            const started = transcriptionRef.current.start();
-            if (started) {
-              setState(prev => ({ ...prev, isTranscribing: true }));
-              console.log('✅ Real-time transcription started successfully');
-              toast.success(`Advanced transcription active (${mode} mode)`, { duration: 2000 });
-            } else {
-              console.warn('⚠️ Transcription failed - attempting recovery...');
-              toast.loading("Initializing advanced speech recognition...");
-              
-              // Progressive retry with exponential backoff
-              setTimeout(() => {
-                if (transcriptionRef.current) {
-                  const retryStarted = transcriptionRef.current.start();
-                  if (retryStarted) {
-                    setState(prev => ({ ...prev, isTranscribing: true }));
-                    console.log('✅ Real-time transcription started on second attempt');
-                    toast.success(`Transcription active (${mode} mode)`, { duration: 2000 });
-                  } else {
-                    console.error('❌ Second attempt failed - final retry...');
-                    // Final attempt with longer delay
-                    setTimeout(() => {
-                      if (transcriptionRef.current) {
-                        const finalAttempt = transcriptionRef.current.start();
-                        if (finalAttempt) {
-                          setState(prev => ({ ...prev, isTranscribing: true }));
-                          console.log('✅ Real-time transcription started on final attempt');
-                          toast.success(`Transcription active (${mode} mode)`, { duration: 2000 });
-                        } else {
-                          toast.error("Speech recognition couldn't start. You can still record and transcribe later.");
-                        }
-                      }
-                    }, 2000);
-                  }
-                }
-              }, 800);
-            }
-          }
-        }, 300);
+        console.log('🚀 Starting real-time transcription...');
+        const started = transcriptionRef.current.start();
+        if (started) {
+          setState(prev => ({ ...prev, isTranscribing: true }));
+          console.log('✅ Real-time transcription started successfully');
+        } else {
+          console.warn('⚠️ Transcription failed to start');
+          toast.warning('Real-time transcription not available. You can still record and transcribe later.');
+        }
       } else {
         console.warn('⚠️ Transcription not supported');
         toast.warning('Real-time transcription not supported in this browser. Using Chrome is recommended.');
@@ -797,19 +557,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       toast.error(errorMessage, { duration: 5000 });
       if (onError) onError(errorMessage);
     }
-  }, []);
-
-  const clearRecording = useCallback(() => {
-    if (state.recordedUrl) {
-      URL.revokeObjectURL(state.recordedUrl);
-    }
-    setState(prev => ({
-      ...prev,
-      recordedBlob: null,
-      recordedUrl: null,
-      audioLevel: 0,
-    }));
-  }, [state.recordedUrl]);
+  }, [state.transcriptSupported, onRecordingComplete, onError, sampleRate, deviceId]);
 
   const pauseRecording = useCallback(() => {
     console.log('⏸️ Pause recording called, current state:', mediaRecorderRef.current?.state);
@@ -1004,6 +752,29 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   }, []);
 
 
+  const clearRecording = useCallback(() => {
+    if (state.recordedUrl) {
+      URL.revokeObjectURL(state.recordedUrl);
+    }
+    
+    // Clean up voice analyzer if still active
+    if (voiceAnalyzerRef.current) {
+      voiceAnalyzerRef.current.cleanup();
+      voiceAnalyzerRef.current = null;
+    }
+    
+    currentVoiceGenderRef.current = 'unknown';
+    currentVoiceCharacteristicsRef.current = null;
+    
+    setState(prev => ({
+      ...prev,
+      recordedBlob: null,
+      recordedUrl: null,
+      interimTranscript: '',
+      duration: 0,
+    }));
+    chunksRef.current = [];
+  }, [state.recordedUrl]);
 
   const formatDuration = useCallback((seconds: number) => {
     const mins = Math.floor(seconds / 60);

@@ -11,7 +11,6 @@ interface StreamingOptions {
 interface StreamingState {
   isConnected: boolean;
   isStreaming: boolean;
-  isPaused: boolean;
   error: string | null;
   sessionId: string | null;
 }
@@ -27,7 +26,6 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
   const [state, setState] = useState<StreamingState>({
     isConnected: false,
     isStreaming: false,
-    isPaused: false,
     error: null,
     sessionId: null,
   });
@@ -37,19 +35,6 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const hasConnectedRef = useRef(false);
-  
-  // Use refs for callbacks to avoid reconnections
-  const onPartialTranscriptRef = useRef(onPartialTranscript);
-  const onFinalTranscriptRef = useRef(onFinalTranscript);
-  const onErrorRef = useRef(onError);
-  
-  // Update callback refs when callbacks change
-  useEffect(() => {
-    onPartialTranscriptRef.current = onPartialTranscript;
-    onFinalTranscriptRef.current = onFinalTranscript;
-    onErrorRef.current = onError;
-  }, [onPartialTranscript, onFinalTranscript, onError]);
 
   // Connect to AssemblyAI streaming via edge function
   const connect = useCallback(async () => {
@@ -61,15 +46,9 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     try {
       console.log('🔌 Connecting to AssemblyAI real-time streaming...');
 
-      // Get Supabase credentials
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const projectId = supabaseUrl.split('//')[1].split('.')[0];
-      
-      // Build WebSocket URL with auth headers as query params (WebSocket doesn't support custom headers)
-      const wsUrl = `wss://${projectId}.functions.supabase.co/assemblyai-realtime`;
-      
-      console.log('🌐 Connecting to:', wsUrl);
+      const wsUrl = `wss://${projectId}.supabase.co/functions/v1/assemblyai-realtime`;
 
       wsRef.current = new WebSocket(wsUrl);
 
@@ -89,18 +68,18 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
           } else if (data.type === 'session_started') {
             setState(prev => ({ ...prev, sessionId: data.session_id }));
           } else if (data.type === 'partial') {
-            if (onPartialTranscriptRef.current) {
-              onPartialTranscriptRef.current(data.text);
+            if (onPartialTranscript) {
+              onPartialTranscript(data.text);
             }
           } else if (data.type === 'final') {
-            if (onFinalTranscriptRef.current) {
-              onFinalTranscriptRef.current(data.text);
+            if (onFinalTranscript) {
+              onFinalTranscript(data.text);
             }
           } else if (data.type === 'error') {
             console.error('❌ Streaming error:', data.message);
             setState(prev => ({ ...prev, error: data.message }));
-            if (onErrorRef.current) {
-              onErrorRef.current(data.message);
+            if (onError) {
+              onError(data.message);
             }
           } else if (data.type === 'session_ended') {
             console.log('🛑 Streaming session ended');
@@ -118,8 +97,8 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
           error: 'Connection error',
           isConnected: false,
         }));
-        if (onErrorRef.current) {
-          onErrorRef.current('WebSocket connection error');
+        if (onError) {
+          onError('WebSocket connection error');
         }
       };
 
@@ -135,11 +114,11 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       console.error('❌ Error connecting:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       setState(prev => ({ ...prev, error: errorMsg }));
-      if (onErrorRef.current) {
-        onErrorRef.current(errorMsg);
+      if (onError) {
+        onError(errorMsg);
       }
     }
-  }, [enabled]);
+  }, [enabled, onPartialTranscript, onFinalTranscript, onError]);
 
   // Start streaming audio
   const startStreaming = useCallback(async () => {
@@ -151,14 +130,14 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     try {
       console.log('🎤 Starting audio streaming...');
 
-      // Get microphone access with optimized settings for speaker playback
+      // Get microphone access
       mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({
         audio: {
           sampleRate: 16000,
           channelCount: 1,
-          echoCancellation: false, // Disabled for speaker audio
-          noiseSuppression: false,  // Disabled to preserve speech
-          autoGainControl: true,    // Enabled to boost speaker audio
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
         },
       });
 
@@ -170,11 +149,6 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       // Process audio chunks
       processorRef.current.onaudioprocess = (e) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-          return;
-        }
-
-        // Skip processing if paused
-        if (state.isPaused) {
           return;
         }
 
@@ -211,11 +185,11 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       console.error('❌ Error starting stream:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       setState(prev => ({ ...prev, error: errorMsg }));
-      if (onErrorRef.current) {
-        onErrorRef.current(errorMsg);
+      if (onError) {
+        onError(errorMsg);
       }
     }
-  }, [state.isConnected, state.isPaused]);
+  }, [state.isConnected, onError]);
 
   // Stop streaming
   const stopStreaming = useCallback(() => {
@@ -248,18 +222,6 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     setState(prev => ({ ...prev, isStreaming: false }));
   }, []);
 
-  // Pause streaming (mute audio processing)
-  const pauseStreaming = useCallback(() => {
-    console.log('⏸️ Pausing AssemblyAI streaming...');
-    setState(prev => ({ ...prev, isPaused: true }));
-  }, []);
-
-  // Resume streaming
-  const resumeStreaming = useCallback(() => {
-    console.log('▶️ Resuming AssemblyAI streaming...');
-    setState(prev => ({ ...prev, isPaused: false }));
-  }, []);
-
   // Disconnect WebSocket
   const disconnect = useCallback(() => {
     stopStreaming();
@@ -276,18 +238,14 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     }));
   }, [stopStreaming]);
 
-  // Auto-connect when enabled (only once)
+  // Auto-connect when enabled
   useEffect(() => {
-    if (enabled && !hasConnectedRef.current) {
-      hasConnectedRef.current = true;
+    if (enabled && !state.isConnected) {
       connect();
     }
 
     return () => {
-      if (enabled) {
-        hasConnectedRef.current = false;
-        disconnect();
-      }
+      disconnect();
     };
   }, [enabled]);
 
@@ -297,7 +255,5 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     disconnect,
     startStreaming,
     stopStreaming,
-    pauseStreaming,
-    resumeStreaming,
   };
 }
