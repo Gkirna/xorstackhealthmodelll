@@ -240,27 +240,32 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       console.log('✅ All cleanup complete, requesting microphone...');
       console.log(`🎤 Recording mode: ${mode}`);
       
-      // Enhanced audio constraints optimized for each mode
+      // Advanced audio constraints with browser-specific optimizations
       const constraints: MediaStreamConstraints = {
         audio: mode === 'playback' ? {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: { exact: true },
+          noiseSuppression: { exact: true },
+          autoGainControl: { exact: true },
           sampleRate: { ideal: 48000 },
-          channelCount: 1,
+          channelCount: { ideal: 1 },
           ...(deviceId && { deviceId: { exact: deviceId } }),
-          // Advanced constraints for better playback transcription
+          // Browser-specific enhancements for playback mode
           advanced: [
-            { echoCancellation: { exact: true } },
-            { noiseSuppression: { exact: true } },
-            { autoGainControl: { exact: true } }
-          ]
+            { echoCancellation: true },
+            { noiseSuppression: true },
+            { autoGainControl: true },
+            { googEchoCancellation: true } as any,
+            { googNoiseSuppression: true } as any,
+            { googAutoGainControl: true } as any,
+            { googHighpassFilter: true } as any,
+            { googTypingNoiseDetection: true } as any
+          ] as any
         } : {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: { exact: true },
+          noiseSuppression: { exact: true },
+          autoGainControl: { exact: true },
           sampleRate: { ideal: 48000 },
-          channelCount: 1,
+          channelCount: { ideal: 1 },
           ...(deviceId && { deviceId: { exact: deviceId } })
         }
       };
@@ -494,35 +499,51 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       monitorAudioLevel();
       
-      // Start transcription with retry logic
+      // Advanced transcription startup with progressive retry
       if (transcriptionRef.current && transcriptionRef.current.isBrowserSupported()) {
-        console.log(`🚀 Starting real-time transcription (mode: ${mode})...`);
+        console.log(`🚀 Starting advanced real-time transcription (${mode} mode)...`);
         
-        // Small delay to ensure audio context is fully initialized
+        // Optimized delay for faster startup
         setTimeout(() => {
           if (transcriptionRef.current) {
             const started = transcriptionRef.current.start();
             if (started) {
               setState(prev => ({ ...prev, isTranscribing: true }));
               console.log('✅ Real-time transcription started successfully');
-              toast.success(`Real-time transcription active (${mode} mode)`, { duration: 2000 });
+              toast.success(`Advanced transcription active (${mode} mode)`, { duration: 2000 });
             } else {
-              console.warn('⚠️ Transcription failed to start - retrying in 1s...');
-              // Retry once after 1 second
+              console.warn('⚠️ Transcription failed - attempting recovery...');
+              toast.loading("Initializing advanced speech recognition...");
+              
+              // Progressive retry with exponential backoff
               setTimeout(() => {
                 if (transcriptionRef.current) {
                   const retryStarted = transcriptionRef.current.start();
                   if (retryStarted) {
                     setState(prev => ({ ...prev, isTranscribing: true }));
-                    console.log('✅ Real-time transcription started on retry');
+                    console.log('✅ Real-time transcription started on second attempt');
+                    toast.success(`Transcription active (${mode} mode)`, { duration: 2000 });
                   } else {
-                    toast.warning('Real-time transcription not available. You can still record and transcribe later.');
+                    console.error('❌ Second attempt failed - final retry...');
+                    // Final attempt with longer delay
+                    setTimeout(() => {
+                      if (transcriptionRef.current) {
+                        const finalAttempt = transcriptionRef.current.start();
+                        if (finalAttempt) {
+                          setState(prev => ({ ...prev, isTranscribing: true }));
+                          console.log('✅ Real-time transcription started on final attempt');
+                          toast.success(`Transcription active (${mode} mode)`, { duration: 2000 });
+                        } else {
+                          toast.error("Speech recognition couldn't start. You can still record and transcribe later.");
+                        }
+                      }
+                    }, 2000);
                   }
                 }
-              }, 1000);
+              }, 800);
             }
           }
-        }, 500);
+        }, 300);
       } else {
         console.warn('⚠️ Transcription not supported');
         toast.warning('Real-time transcription not supported in this browser. Using Chrome is recommended.');

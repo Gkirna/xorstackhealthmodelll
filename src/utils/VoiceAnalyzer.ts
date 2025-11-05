@@ -73,31 +73,40 @@ export class VoiceAnalyzer {
   private readonly MIN_PITCH_FEMALE: number;
   private readonly MAX_PITCH_FEMALE: number;
   private readonly CONFIDENCE_THRESHOLD: number;
+  private recentPitches: number[] = [];
+  private recentEnergies: number[] = [];
+  private adaptiveThreshold: number;
   
   constructor(mode: 'direct' | 'playback' = 'direct') {
     this.mode = mode;
     
-    // Adjust thresholds for playback mode (degraded audio quality)
+    // Advanced adaptive thresholds optimized for each mode
     if (mode === 'playback') {
-      this.MIN_PITCH_DIFFERENCE = 25; // Wider tolerance for degraded audio
-      this.MIN_PITCH_MALE = 65;
-      this.MAX_PITCH_MALE = 210;
-      this.MIN_PITCH_FEMALE = 140;
-      this.MAX_PITCH_FEMALE = 380;
-      this.CONFIDENCE_THRESHOLD = 0.55;
+      // Enhanced for playback mode with better tolerance
+      this.MIN_PITCH_DIFFERENCE = 22;
+      this.MIN_PITCH_MALE = 60;
+      this.MAX_PITCH_MALE = 220;
+      this.MIN_PITCH_FEMALE = 135;
+      this.MAX_PITCH_FEMALE = 400;
+      this.CONFIDENCE_THRESHOLD = 0.48;
+      this.adaptiveThreshold = 0.42;
     } else {
-      this.MIN_PITCH_MALE = 85;
-      this.MAX_PITCH_MALE = 180;
-      this.MIN_PITCH_FEMALE = 165;
-      this.MAX_PITCH_FEMALE = 255;
-      this.CONFIDENCE_THRESHOLD = 0.70;
+      // Optimized for direct mode with precision
+      this.MIN_PITCH_DIFFERENCE = 20;
+      this.MIN_PITCH_MALE = 80;
+      this.MAX_PITCH_MALE = 190;
+      this.MIN_PITCH_FEMALE = 155;
+      this.MAX_PITCH_FEMALE = 275;
+      this.CONFIDENCE_THRESHOLD = 0.65;
+      this.adaptiveThreshold = 0.60;
     }
     
-    console.log(`🎤 VoiceAnalyzer initialized in ${mode} mode with thresholds:`, {
+    console.log(`🎤 Advanced VoiceAnalyzer initialized (${mode} mode):`, {
       pitchDiff: this.MIN_PITCH_DIFFERENCE,
       maleRange: [this.MIN_PITCH_MALE, this.MAX_PITCH_MALE],
       femaleRange: [this.MIN_PITCH_FEMALE, this.MAX_PITCH_FEMALE],
-      confidence: this.CONFIDENCE_THRESHOLD
+      confidence: this.CONFIDENCE_THRESHOLD,
+      adaptive: this.adaptiveThreshold
     });
   }
 
@@ -183,7 +192,7 @@ export class VoiceAnalyzer {
   }
 
   /**
-   * Analyze a voice sample and return characteristics
+   * Analyze a voice sample and return characteristics with adaptive learning
    */
   async analyzeVoiceSample(): Promise<VoiceCharacteristics> {
     if (!this.analyser) {
@@ -209,6 +218,16 @@ export class VoiceAnalyzer {
     // Volume detection
     const volume = this.detectVolume(dataArray);
     
+    // Store recent values for adaptive learning
+    this.recentPitches.push(pitch);
+    this.recentEnergies.push(volume);
+    
+    // Keep only last 50 samples
+    if (this.recentPitches.length > 50) {
+      this.recentPitches.shift();
+      this.recentEnergies.shift();
+    }
+    
     // Detect voice activity
     const isVoiceActive = this.detectVoiceActivity(dataArray);
     
@@ -223,18 +242,35 @@ export class VoiceAnalyzer {
       };
     }
     
-    // Determine gender with high accuracy
-    const { gender, confidence } = this.determineGenderWithConfidence(pitch);
+    // Advanced gender detection with adaptive confidence
+    const avgRecentPitch = this.recentPitches.length > 5
+      ? this.recentPitches.slice(-10).reduce((a, b) => a + b, 0) / Math.min(10, this.recentPitches.length)
+      : pitch;
+    
+    const effectivePitch = (pitch * 0.6 + avgRecentPitch * 0.4);
+    const { gender, confidence } = this.determineGenderWithConfidence(effectivePitch);
+    
+    // Apply adaptive threshold
+    if (confidence < this.adaptiveThreshold) {
+      return {
+        gender: 'unknown',
+        pitch: effectivePitch,
+        confidence: 0,
+        speakerId: 'silence',
+        voiceQuality: this.assessVoiceQuality(dataArray, effectivePitch, volume),
+        volume
+      };
+    }
     
     // Determine voice quality
-    const voiceQuality = this.assessVoiceQuality(dataArray, pitch, volume);
+    const voiceQuality = this.assessVoiceQuality(dataArray, effectivePitch, volume);
     
     // Identify or create speaker
-    const speakerId = this.identifySpeaker(pitch, gender === 'unknown' ? 'male' : gender);
+    const speakerId = this.identifySpeaker(effectivePitch, gender === 'unknown' ? 'male' : gender);
     
     return {
       gender,
-      pitch,
+      pitch: effectivePitch,
       confidence,
       speakerId,
       voiceQuality,

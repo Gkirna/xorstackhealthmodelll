@@ -61,19 +61,29 @@ export class RealTimeTranscription {
   private setupRecognition() {
     if (!this.recognition) return;
 
-    this.recognition.continuous = this.config.continuous;
-    this.recognition.interimResults = this.config.interimResults;
-    this.recognition.lang = this.config.lang;
-    this.recognition.maxAlternatives = 5; // Increased for better accuracy in medical context
-    
-    // Enhanced settings for better playback mode performance
-    if ('audioConstraints' in this.recognition) {
-      (this.recognition as any).audioConstraints = {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
-      };
-    }
+      this.recognition.continuous = this.config.continuous;
+      this.recognition.interimResults = this.config.interimResults;
+      this.recognition.lang = this.config.lang;
+      this.recognition.maxAlternatives = 10; // Maximum alternatives for best accuracy
+      
+      // Advanced audio processing settings for optimal performance
+      if ('audioConstraints' in this.recognition) {
+        (this.recognition as any).audioConstraints = {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 48000,
+          channelCount: 1
+        };
+      }
+      
+      // Enable grammar and hints for better medical terminology recognition
+      if ('grammars' in this.recognition) {
+        (this.recognition as any).grammars = {
+          medical: true,
+          technical: true
+        };
+      }
 
     this.recognition.onstart = () => {
       console.log('Speech recognition started');
@@ -95,29 +105,60 @@ export class RealTimeTranscription {
         let bestTranscript = result[0].transcript;
         let bestConfidence = result[0].confidence || 0;
         
-        // Enhanced medical terminology detection
+        // Comprehensive medical terminology database
         const medicalTerms = [
-          'diabetes', 'hypertension', 'medication', 'prescription', 'diagnosis',
-          'symptoms', 'treatment', 'patient', 'doctor', 'blood pressure',
-          'temperature', 'heart rate', 'pulse', 'fever', 'pain', 'allergy',
-          'tablet', 'capsule', 'injection', 'test', 'report', 'scan',
-          'x-ray', 'mri', 'ct', 'ultrasound', 'ecg', 'lab', 'blood test'
+          // Common conditions
+          'diabetes', 'hypertension', 'asthma', 'copd', 'arthritis', 'migraine',
+          'depression', 'anxiety', 'obesity', 'cholesterol', 'thyroid', 'anemia',
+          // Medications
+          'medication', 'prescription', 'tablet', 'capsule', 'injection', 'syrup',
+          'antibiotic', 'painkiller', 'insulin', 'metformin', 'aspirin', 'ibuprofen',
+          // Symptoms
+          'symptoms', 'fever', 'pain', 'headache', 'nausea', 'vomiting', 'diarrhea',
+          'cough', 'cold', 'fatigue', 'weakness', 'dizziness', 'breathlessness',
+          // Medical procedures
+          'diagnosis', 'treatment', 'surgery', 'therapy', 'consultation', 'examination',
+          'checkup', 'followup', 'screening', 'vaccination', 'immunization',
+          // Vital signs
+          'blood pressure', 'temperature', 'heart rate', 'pulse', 'oxygen',
+          'saturation', 'spo2', 'glucose', 'weight', 'bmi',
+          // Medical tests
+          'test', 'report', 'scan', 'x-ray', 'mri', 'ct', 'ultrasound', 'ecg',
+          'ekg', 'lab', 'blood test', 'urine test', 'biopsy', 'endoscopy',
+          // Medical professionals
+          'doctor', 'patient', 'nurse', 'specialist', 'surgeon', 'physician',
+          // Body parts
+          'chest', 'abdomen', 'back', 'knee', 'shoulder', 'neck', 'head',
+          // Other
+          'allergy', 'chronic', 'acute', 'severe', 'mild', 'moderate'
         ];
         
-        // Check all alternatives (up to 5 now)
-        for (let j = 1; j < result.length && j < 5; j++) {
+        // Advanced alternative selection with weighted scoring
+        for (let j = 1; j < result.length && j < 10; j++) {
           const altConfidence = result[j].confidence || 0;
           const altTranscript = result[j].transcript;
           const altLower = altTranscript.toLowerCase();
           
           // Count medical terms in alternative
           let medicalTermCount = 0;
+          let medicalTermScore = 0;
           medicalTerms.forEach(term => {
-            if (altLower.includes(term)) medicalTermCount++;
+            if (altLower.includes(term)) {
+              medicalTermCount++;
+              // Weight longer medical terms higher
+              medicalTermScore += term.length / 10;
+            }
           });
           
-          // Prefer alternatives with medical terms or significantly higher confidence
-          if (altConfidence > bestConfidence * 1.15 || medicalTermCount > 0) {
+          // Calculate weighted score: confidence + medical term bonus
+          const currentScore = bestConfidence + (bestTranscript.toLowerCase().split(' ').filter(word => 
+            medicalTerms.some(term => word.includes(term))
+          ).length * 0.05);
+          
+          const altScore = altConfidence + (medicalTermScore * 0.1);
+          
+          // Prefer alternatives with better overall score
+          if (altScore > currentScore || (medicalTermCount > 2 && altConfidence > bestConfidence * 0.8)) {
             bestTranscript = altTranscript;
             bestConfidence = altConfidence;
           }
@@ -232,30 +273,41 @@ export class RealTimeTranscription {
         this.config.onError(errorMessage);
       }
 
-      // Auto-restart on certain errors in continuous mode
+      // Advanced auto-restart with exponential backoff
       if (this.config.continuous && shouldRestart) {
-        console.log('⏳ Auto-restarting recognition in 300ms...');
+        const restartDelay = event.error === 'network' ? 500 : 200;
+        console.log(`⏳ Auto-restarting recognition in ${restartDelay}ms...`);
         setTimeout(() => {
           if (this.isListening) {
             try {
               console.log('🔄 Restarting recognition...');
-              this.isListening = false; // Reset flag before restart
+              this.isListening = false;
               this.recognition.start();
             } catch (e) {
               console.error('Failed to restart:', e);
-              // Try one more time after a longer delay
+              // Exponential backoff retry
               setTimeout(() => {
                 if (!this.isListening) {
                   try {
                     this.recognition.start();
                   } catch (retryError) {
                     console.error('Restart retry failed:', retryError);
+                    // Final retry after longer delay
+                    setTimeout(() => {
+                      if (!this.isListening) {
+                        try {
+                          this.recognition.start();
+                        } catch (finalError) {
+                          console.error('Final restart failed:', finalError);
+                        }
+                      }
+                    }, 3000);
                   }
                 }
-              }, 1000);
+              }, 1500);
             }
           }
-        }, 300);
+        }, restartDelay);
       }
     };
 
@@ -268,9 +320,9 @@ export class RealTimeTranscription {
         this.config.onEnd();
       }
 
-      // Auto-restart if continuous mode and was actively listening
+      // Advanced auto-restart with adaptive delay
       if (this.config.continuous && wasListening) {
-        console.log('🔄 Continuous mode - restarting in 200ms...');
+        console.log('🔄 Continuous mode - restarting in 150ms...');
         setTimeout(() => {
           try {
             this.recognition.start();
@@ -278,17 +330,28 @@ export class RealTimeTranscription {
             console.log('✅ Recognition restarted successfully');
           } catch (e) {
             console.error('Failed to restart recognition:', e);
-            // Try again after a longer delay
+            // Progressive retry with increasing delays
             setTimeout(() => {
               try {
                 this.recognition.start();
                 this.isListening = true;
+                console.log('✅ Recognition restarted on second attempt');
               } catch (retryError) {
-                console.error('Restart retry failed:', retryError);
+                console.error('Second restart attempt failed:', retryError);
+                // Final attempt with longer delay
+                setTimeout(() => {
+                  try {
+                    this.recognition.start();
+                    this.isListening = true;
+                    console.log('✅ Recognition restarted on final attempt');
+                  } catch (finalError) {
+                    console.error('All restart attempts failed:', finalError);
+                  }
+                }, 2000);
               }
-            }, 1000);
+            }, 800);
           }
-        }, 200);
+        }, 150);
       }
     };
   }
