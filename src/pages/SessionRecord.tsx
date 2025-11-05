@@ -132,30 +132,37 @@ const SessionRecord = () => {
   console.log('🔗 Connecting useTranscription with voice gender:', currentVoiceGender || 'unknown');
   const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats, updateVoiceCharacteristics } = useTranscription(id || '', currentVoiceGender || 'unknown');
   
+  // Callbacks for AssemblyAI streaming - use refs to prevent re-renders
+  const handlePartialTranscript = useCallback((text: string) => {
+    console.log('🎯 Partial transcript from AssemblyAI:', text.substring(0, 50));
+  }, []);
+
+  const handleFinalTranscript = useCallback((text: string) => {
+    if (text.trim()) {
+      const currentSpeaker = speakerRef.current;
+      transcriptCountRef.current++;
+      
+      console.log(`💬 Final transcript #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
+      
+      const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
+      setTranscript(prev => prev ? `${prev}\n\n${speakerLabel} : ${text}` : `${speakerLabel} : ${text}`);
+      
+      // Alternate speaker for next chunk
+      speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
+    }
+  }, []);
+
+  const handleStreamingError = useCallback((error: string) => {
+    console.error('AssemblyAI streaming error:', error);
+    toast.error(`Streaming error: ${error}`);
+  }, []);
+
   // AssemblyAI streaming for playback mode
   const assemblyAIStreaming = useAssemblyAIStreaming({
-    enabled: recordingInputMode === 'playback' && isRecordingForAssembly,
-    onPartialTranscript: (text: string) => {
-      console.log('🎯 Partial transcript from AssemblyAI:', text.substring(0, 50));
-    },
-    onFinalTranscript: (text: string) => {
-      if (text.trim()) {
-        const currentSpeaker = speakerRef.current;
-        transcriptCountRef.current++;
-        
-        console.log(`💬 Final transcript #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
-        
-        const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
-        setTranscript(prev => prev ? `${prev}\n\n${speakerLabel} : ${text}` : `${speakerLabel} : ${text}`);
-        
-        // Alternate speaker for next chunk
-        speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
-      }
-    },
-    onError: (error: string) => {
-      console.error('AssemblyAI streaming error:', error);
-      toast.error(`Streaming error: ${error}`);
-    },
+    enabled: recordingInputMode === 'playback',
+    onPartialTranscript: handlePartialTranscript,
+    onFinalTranscript: handleFinalTranscript,
+    onError: handleStreamingError,
   });
   
   // Sync voice characteristics from audio recording to transcription hook
@@ -220,22 +227,22 @@ const SessionRecord = () => {
         
         if (recordingInputMode === 'playback') {
           toast.success('Starting playback transcription... Play audio now!');
-          console.log('📞 Calling assemblyAIStreaming.connect()...');
+          console.log('📞 Starting AssemblyAI streaming for playback mode...');
           
-          // Connect to AssemblyAI
+          // Wait a bit for hook to connect (it auto-connects when enabled)
+          let attempts = 0;
+          while (!assemblyAIStreaming.isConnected && attempts < 10) {
+            console.log(`⏳ Waiting for connection... attempt ${attempts + 1}/10`);
+            await new Promise(resolve => setTimeout(resolve, 500));
+            attempts++;
+            
+            if (attempts === 5) {
+              toast.info('Still connecting to transcription service...');
+            }
+          }
+          
           if (!assemblyAIStreaming.isConnected) {
-            await assemblyAIStreaming.connect();
-            
-            // Wait for connection (max 5 seconds)
-            let attempts = 0;
-            while (!assemblyAIStreaming.isConnected && attempts < 10) {
-              await new Promise(resolve => setTimeout(resolve, 500));
-              attempts++;
-            }
-            
-            if (!assemblyAIStreaming.isConnected) {
-              throw new Error('Failed to connect to transcription service');
-            }
+            throw new Error('Failed to connect to transcription service');
           }
           
           console.log('📞 Calling assemblyAIStreaming.startStreaming()...');

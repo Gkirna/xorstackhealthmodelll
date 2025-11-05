@@ -55,6 +55,12 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       return;
     }
 
+    // Don't reconnect if already connected
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      console.log('⚠️ Already connected to AssemblyAI');
+      return;
+    }
+
     try {
       console.log('🔌 Connecting to AssemblyAI real-time streaming...');
 
@@ -62,6 +68,7 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       const projectId = supabaseUrl.split('//')[1].split('.')[0];
       const wsUrl = `wss://${projectId}.supabase.co/functions/v1/assemblyai-realtime`;
 
+      console.log('🌐 WebSocket URL:', wsUrl);
       wsRef.current = new WebSocket(wsUrl);
 
       wsRef.current.onopen = () => {
@@ -248,10 +255,13 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
 
   // Disconnect WebSocket
   const disconnect = useCallback(() => {
+    console.log('🛑 Disconnecting from AssemblyAI...');
     stopStreaming();
 
     if (wsRef.current) {
-      wsRef.current.close();
+      if (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING) {
+        wsRef.current.close();
+      }
       wsRef.current = null;
     }
 
@@ -260,6 +270,8 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       isConnected: false,
       sessionId: null,
     }));
+    
+    hasConnectedRef.current = false;
   }, [stopStreaming]);
 
   // Auto-connect when enabled (only once)
@@ -270,11 +282,11 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     }
 
     return () => {
-      if (enabled) {
-        disconnect();
-      }
+      // Only disconnect if component is truly unmounting
+      // Don't disconnect on re-renders
+      disconnect();
     };
-  }, [enabled]);
+  }, [enabled, connect, disconnect]);
 
   return {
     ...state,
