@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { RealTimeTranscription } from '@/utils/RealTimeTranscription';
 import { VoiceAnalyzer } from '@/utils/VoiceAnalyzer';
 import { MedicalAutoCorrector } from '@/utils/MedicalAutoCorrector';
+import { useAssemblyAIStreaming } from './useAssemblyAIStreaming';
 
 // Global singleton to track active audio recording
 let globalActiveStream: MediaStream | null = null;
@@ -74,6 +75,33 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const voiceAnalysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const currentVoiceCharacteristicsRef = useRef<any>(null);
   const autoCorrectorRef = useRef<MedicalAutoCorrector>(new MedicalAutoCorrector());
+
+  // AssemblyAI streaming for playback mode
+  const assemblyAIStreaming = useAssemblyAIStreaming({
+    enabled: mode === 'playback',
+    onPartialTranscript: (text) => {
+      console.log('📝 AssemblyAI partial:', text.substring(0, 50));
+      setState(prev => ({ ...prev, interimTranscript: text }));
+      if (onTranscriptUpdate) {
+        onTranscriptUpdate(text, false);
+      }
+    },
+    onFinalTranscript: (text) => {
+      console.log('✅ AssemblyAI final transcript chunk');
+      const corrected = autoCorrectorRef.current.correctTranscript(text, 'provider');
+      if (onFinalTranscriptChunk) {
+        onFinalTranscriptChunk(corrected);
+      }
+      setState(prev => ({ ...prev, interimTranscript: '' }));
+      if (onTranscriptUpdate) {
+        onTranscriptUpdate(corrected, true);
+      }
+    },
+    onError: (error) => {
+      console.error('❌ AssemblyAI error:', error);
+      toast.error(error);
+    },
+  });
 
   // Initialize transcription engine
   useEffect(() => {
@@ -390,6 +418,34 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       analyserRef.current.smoothingTimeConstant = 0.8;
       
       console.log('✅ AudioContext setup complete');
+
+      // For playback mode, use AssemblyAI streaming instead of Web Speech API
+      if (mode === 'playback') {
+        console.log('🎤 Playback mode: Using AssemblyAI for high-accuracy transcription');
+        toast.info('Connecting to high-accuracy transcription service...');
+        
+        // Connect and start AssemblyAI streaming
+        await assemblyAIStreaming.connect();
+        await assemblyAIStreaming.startStreaming();
+        
+        setState(prev => ({ ...prev, isTranscribing: true }));
+      } else {
+        // Direct mode: Use Web Speech API for real-time transcription
+        if (state.transcriptSupported && transcriptionRef.current) {
+          console.log('🎙️ Starting Web Speech API transcription...');
+          const started = transcriptionRef.current.start();
+          if (started) {
+            setState(prev => ({ ...prev, isTranscribing: true }));
+            console.log('✅ Real-time transcription started successfully');
+          } else {
+            console.warn('⚠️ Transcription failed to start');
+            toast.warning('Real-time transcription not available. You can still record and transcribe later.');
+          }
+        } else {
+          console.warn('⚠️ Transcription not supported');
+          toast.warning('Real-time transcription not supported in this browser. Using Chrome is recommended.');
+        }
+      }
       
       // Initialize voice analyzer (non-critical, can fail gracefully)
       try {
@@ -494,22 +550,6 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       monitorAudioLevel();
       
-      // Start transcription
-      if (transcriptionRef.current && transcriptionRef.current.isBrowserSupported()) {
-        console.log('🚀 Starting real-time transcription...');
-        const started = transcriptionRef.current.start();
-        if (started) {
-          setState(prev => ({ ...prev, isTranscribing: true }));
-          console.log('✅ Real-time transcription started successfully');
-        } else {
-          console.warn('⚠️ Transcription failed to start');
-          toast.warning('Real-time transcription not available. You can still record and transcribe later.');
-        }
-      } else {
-        console.warn('⚠️ Transcription not supported');
-        toast.warning('Real-time transcription not supported in this browser. Using Chrome is recommended.');
-      }
-      
       timerRef.current = setInterval(() => {
         setState(prev => ({ ...prev, duration: prev.duration + 1 }));
       }, 1000);
@@ -573,9 +613,12 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.pause();
       
-      // Pause transcription
-      if (transcriptionRef.current) {
-        console.log('⏸️ Pausing transcription engine');
+      // Pause transcription based on mode
+      if (mode === 'playback') {
+        console.log('⏸️ Pausing AssemblyAI streaming');
+        assemblyAIStreaming.pauseStreaming();
+      } else if (transcriptionRef.current) {
+        console.log('⏸️ Pausing Web Speech API transcription');
         transcriptionRef.current.pause();
       }
       
@@ -593,7 +636,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       console.log('✅ Recording paused - voice analysis and audio monitoring continue');
       toast.info('Recording paused');
     }
-  }, []);
+  }, [mode, assemblyAIStreaming]);
 
   const resumeRecording = useCallback(() => {
     console.log('▶️ Resume recording called, current state:', mediaRecorderRef.current?.state);
@@ -735,9 +778,12 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       analyserRef.current = null;
       
-      // Stop transcription
-      if (transcriptionRef.current) {
-        console.log('⏹️ Stopping transcription engine');
+      // Stop transcription based on mode
+      if (mode === 'playback') {
+        console.log('🧹 Disconnecting AssemblyAI streaming...');
+        assemblyAIStreaming.disconnect();
+      } else if (transcriptionRef.current) {
+        console.log('⏹️ Stopping Web Speech API transcription');
         transcriptionRef.current.stop();
       }
       
@@ -749,7 +795,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       console.log('✅ Recording stopped successfully, all resources released');
       toast.success('Recording stopped');
     }
-  }, []);
+  }, [mode, assemblyAIStreaming]);
 
 
   const clearRecording = useCallback(() => {
@@ -794,5 +840,6 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     currentVoiceCharacteristics: currentVoiceCharacteristicsRef.current,
     voiceAnalyzer: voiceAnalyzerRef.current,
     autoCorrector: autoCorrectorRef.current,
+    assemblyAIStreaming, // Export for external access
   };
 }

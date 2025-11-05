@@ -11,6 +11,7 @@ interface StreamingOptions {
 interface StreamingState {
   isConnected: boolean;
   isStreaming: boolean;
+  isPaused: boolean;
   error: string | null;
   sessionId: string | null;
 }
@@ -26,6 +27,7 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
   const [state, setState] = useState<StreamingState>({
     isConnected: false,
     isStreaming: false,
+    isPaused: false,
     error: null,
     sessionId: null,
   });
@@ -148,6 +150,11 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
 
       // Process audio chunks
       processorRef.current.onaudioprocess = (e) => {
+        // Skip if paused, but keep connection alive
+        if (state.isPaused) {
+          return;
+        }
+        
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
           return;
         }
@@ -222,6 +229,20 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     setState(prev => ({ ...prev, isStreaming: false }));
   }, []);
 
+  // Pause streaming (keep connection alive)
+  const pauseStreaming = useCallback(() => {
+    console.log('⏸️ Pausing streaming (keeping connection alive)');
+    setState(prev => ({ ...prev, isPaused: true }));
+    toast.info('Transcription paused');
+  }, []);
+
+  // Resume streaming
+  const resumeStreaming = useCallback(() => {
+    console.log('▶️ Resuming streaming');
+    setState(prev => ({ ...prev, isPaused: false }));
+    toast.success('Transcription resumed');
+  }, []);
+
   // Disconnect WebSocket
   const disconnect = useCallback(() => {
     stopStreaming();
@@ -234,6 +255,7 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     setState(prev => ({ 
       ...prev, 
       isConnected: false,
+      isPaused: false,
       sessionId: null,
     }));
   }, [stopStreaming]);
@@ -255,5 +277,7 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     disconnect,
     startStreaming,
     stopStreaming,
+    pauseStreaming,
+    resumeStreaming,
   };
 }

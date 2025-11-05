@@ -39,6 +39,7 @@ serve(async (req) => {
 
   let assemblyAISocket: WebSocket | null = null;
   let isConnected = false;
+  let heartbeatInterval: number | null = null;
 
   clientSocket.onopen = () => {
     console.log('✅ Client WebSocket connected');
@@ -58,6 +59,13 @@ serve(async (req) => {
         status: 'connected',
         message: 'High Accuracy Mode active',
       }));
+
+      // Start heartbeat to keep connection alive
+      heartbeatInterval = setInterval(() => {
+        if (clientSocket.readyState === WebSocket.OPEN) {
+          clientSocket.send(JSON.stringify({ type: 'heartbeat' }));
+        }
+      }, 30000); // Every 30 seconds
     };
 
     assemblyAISocket.onmessage = (event) => {
@@ -144,6 +152,13 @@ serve(async (req) => {
 
   clientSocket.onclose = () => {
     console.log('🛑 Client WebSocket closed');
+    
+    // Clean up heartbeat
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+    }
+    
     if (assemblyAISocket && assemblyAISocket.readyState === WebSocket.OPEN) {
       assemblyAISocket.send(JSON.stringify({
         terminate_session: true,
