@@ -229,28 +229,41 @@ const SessionRecord = () => {
         if (recordingInputMode === 'playback') {
           // Playback mode - use AssemblyAI streaming
           console.log('🔌 Playback mode - connecting to AssemblyAI...');
-          toast.success('Starting playback transcription...');
+          toast.info('Connecting to transcription service...');
           
-          // Connect if not already connected
-          if (!assemblyAIStreaming.isConnected) {
-            await assemblyAIStreaming.connect();
-            
-            // Wait for connection
-            let waitCount = 0;
-            while (!assemblyAIStreaming.isConnected && waitCount < 50) {
-              await new Promise(resolve => setTimeout(resolve, 100));
-              waitCount++;
-            }
-            
+          try {
+            // Connect if not already connected
             if (!assemblyAIStreaming.isConnected) {
-              throw new Error('Failed to connect to transcription service');
+              console.log('🔌 Initiating connection...');
+              await assemblyAIStreaming.connect();
+              
+              // Wait for connection with timeout
+              const maxWaitMs = 10000; // 10 seconds
+              const checkIntervalMs = 200;
+              let waitedMs = 0;
+              
+              while (!assemblyAIStreaming.isConnected && waitedMs < maxWaitMs) {
+                await new Promise(resolve => setTimeout(resolve, checkIntervalMs));
+                waitedMs += checkIntervalMs;
+                console.log(`⏳ Waiting for connection... (${waitedMs}ms)`);
+              }
+              
+              if (!assemblyAIStreaming.isConnected) {
+                console.error('❌ Connection timeout after', waitedMs, 'ms');
+                throw new Error('Connection timeout. Please check your internet connection and try again.');
+              }
+              
+              console.log('✅ Connected to transcription service');
             }
+            
+            console.log('🎤 Starting audio streaming with mic:', microphone);
+            await assemblyAIStreaming.startStreaming(microphone !== 'default' ? microphone : undefined);
+            console.log('✅ Audio streaming started successfully');
+            toast.success(`Listening in ${language.toUpperCase()} - speak now!`);
+          } catch (error) {
+            console.error('❌ Failed to start playback mode:', error);
+            throw error; // Re-throw to be caught by outer try-catch
           }
-          
-          console.log('✅ Connected, starting audio streaming with mic:', microphone);
-          await assemblyAIStreaming.startStreaming(microphone !== 'default' ? microphone : undefined);
-          console.log('✅ Audio streaming started');
-          toast.success(`Transcribing in ${language.toUpperCase()}`);
         } else {
           // Direct mode - use regular recording
           toast.success(`Recording in ${language.toUpperCase()}`);

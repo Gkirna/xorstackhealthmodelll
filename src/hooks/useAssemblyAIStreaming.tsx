@@ -71,7 +71,7 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       console.log('🔗 WebSocket created, waiting for connection...');
 
       wsRef.current.onopen = () => {
-        console.log('✅ WebSocket connection established');
+        console.log('✅ WebSocket connection established to edge function');
         setState(prev => ({ ...prev, isConnected: true, error: null }));
       };
 
@@ -110,13 +110,14 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
 
       wsRef.current.onerror = (error) => {
         console.error('❌ WebSocket error:', error);
+        const errorMsg = 'Failed to connect to transcription service. Please check your internet connection.';
         setState(prev => ({ 
           ...prev, 
-          error: 'Connection error',
+          error: errorMsg,
           isConnected: false,
         }));
         if (onError) {
-          onError('WebSocket connection error');
+          onError(errorMsg);
         }
       };
 
