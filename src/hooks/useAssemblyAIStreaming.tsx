@@ -129,7 +129,7 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
         onError(errorMsg);
       }
     }
-  }, [enabled, onPartialTranscript, onFinalTranscript, onError]);
+  }, [enabled]); // Stable - only enabled matters
 
   // Start streaming audio
   const startStreaming = useCallback(async (sourceDeviceId?: string) => {

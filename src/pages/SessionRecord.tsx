@@ -139,7 +139,8 @@ const SessionRecord = () => {
     continuous: true,
     language: getTranscriptionLanguage(language), // Use selected language
     mode: recordingInputMode, // Pass recording mode
-    onTranscriptUpdate: (text: string, isFinal: boolean) => {
+    deviceId: microphone !== 'default' ? microphone : undefined,
+    onTranscriptUpdate: useCallback((text: string, isFinal: boolean) => {
       if (isFinal && text.trim()) {
         const currentSpeaker = speakerRef.current;
         transcriptCountRef.current++;
@@ -151,12 +152,12 @@ const SessionRecord = () => {
         
         speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
       }
-    },
+    }, []),
     // onRecordingComplete will be set via ref to avoid re-renders
-    onError: (error: string) => {
+    onError: useCallback((error: string) => {
       console.error('Recording error:', error);
       toast.error(error);
-    },
+    }, []),
   });
   
   // NOW use useTranscription with the currentVoiceGender from useAudioRecording

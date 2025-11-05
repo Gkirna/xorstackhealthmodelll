@@ -75,9 +75,15 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const currentVoiceCharacteristicsRef = useRef<any>(null);
   const autoCorrectorRef = useRef<MedicalAutoCorrector>(new MedicalAutoCorrector());
 
-  // Initialize transcription engine
+  // Initialize transcription engine - only once on mount
   useEffect(() => {
     console.log(`🎙️ Initializing real-time transcription engine for language: ${language}`);
+    
+    // Only initialize if not already done
+    if (transcriptionRef.current) {
+      console.log('⚠️ Transcription already initialized, skipping...');
+      return;
+    }
     
     transcriptionRef.current = new RealTimeTranscription({
       continuous,
@@ -141,7 +147,10 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     } else {
       console.log('✅ Real-time transcription is supported');
     }
+  }, []); // Empty deps - initialize only once
 
+  // Cleanup only on unmount
+  useEffect(() => {
     return () => {
       console.log('🧹 Cleaning up audio recorder on unmount...');
       
@@ -196,11 +205,12 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       // Stop transcription
       if (transcriptionRef.current) {
         transcriptionRef.current.destroy();
+        transcriptionRef.current = null;
       }
       
       console.log('✅ Audio recorder cleanup complete');
     };
-  }, [continuous, onFinalTranscriptChunk, onTranscriptUpdate, language]);
+  }, []); // Empty deps - only on mount/unmount
 
   const startRecording = useCallback(async () => {
     try {
