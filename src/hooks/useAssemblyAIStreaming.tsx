@@ -284,12 +284,12 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     }
 
     return () => {
-      if (enabled) {
+      if (hasConnectedRef.current) {
         hasConnectedRef.current = false;
         disconnect();
       }
     };
-  }, [enabled]);
+  }, [enabled, connect, disconnect]);
 
   return {
     ...state,

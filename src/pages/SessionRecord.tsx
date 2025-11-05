@@ -89,7 +89,7 @@ const SessionRecord = () => {
   
   // AssemblyAI streaming for playback mode (better for speaker audio + all US accents)
   const assemblyAIStreaming = useAssemblyAIStreaming({
-    enabled: recordingInputMode === 'playback' && isRecordingForAssembly,
+    enabled: recordingInputMode === 'playback',
     onPartialTranscript: (text: string) => {
       console.log('🎙️ [AssemblyAI] Partial:', text.substring(0, 50));
     },
@@ -180,7 +180,6 @@ const SessionRecord = () => {
   });
   
   // NOW use useTranscription with the currentVoiceGender from useAudioRecording
-  console.log('🔗 Connecting useTranscription with voice gender:', currentVoiceGender || 'unknown');
   const transcriptionHook = useTranscription(id || '', currentVoiceGender || 'unknown');
   const { 
     transcriptChunks = [], 
@@ -269,9 +268,19 @@ const SessionRecord = () => {
         // Start AssemblyAI streaming for playback mode
         if (recordingInputMode === 'playback') {
           setIsRecordingForAssembly(true);
-          await assemblyAIStreaming.connect();
-          await assemblyAIStreaming.startStreaming();
-          console.log('✅ AssemblyAI streaming started for playback mode');
+          // Connection happens automatically via the hook's useEffect
+          // Just wait a moment for it to connect, then start streaming
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          if (assemblyAIStreaming.isConnected) {
+            await assemblyAIStreaming.startStreaming();
+            console.log('✅ AssemblyAI streaming started for playback mode');
+          } else {
+            console.warn('⚠️ AssemblyAI not connected yet, retrying...');
+            await assemblyAIStreaming.connect();
+            await assemblyAIStreaming.startStreaming();
+            console.log('✅ AssemblyAI streaming started for playback mode (after retry)');
+          }
         } else {
           // Use Web Speech API for direct mode
           await startRecording();
@@ -291,7 +300,7 @@ const SessionRecord = () => {
     if (hasManualInput) {
       await autoGenerateNote();
     }
-  }, [isStartingRecording, isRecording, isRecordingForAssembly, recordingMode, recordingInputMode, transcript, context, saveAllPendingChunks, stopRecording, startRecording, assemblyAIStreaming]);
+  }, [isStartingRecording, isRecording, isRecordingForAssembly, recordingMode, recordingInputMode, transcript, context, saveAllPendingChunks, stopRecording, startRecording, assemblyAIStreaming.connect, assemblyAIStreaming.disconnect, assemblyAIStreaming.startStreaming, assemblyAIStreaming.stopStreaming]);
 
   const autoGenerateNote = useCallback(async (selectedTemplateId?: string) => {
     if (!id || !orchestratorRef.current) return;
@@ -374,23 +383,23 @@ const SessionRecord = () => {
 
   const handlePauseRecording = useCallback(() => {
     console.log('🎯 PAUSE BUTTON CLICKED - Mode:', recordingInputMode);
-    if (recordingInputMode === 'playback' && assemblyAIStreaming.isStreaming) {
+    if (recordingInputMode === 'playback' && isRecordingForAssembly) {
       assemblyAIStreaming.pauseStreaming();
       toast.info('Playback transcription paused');
     } else {
       pauseRecording();
     }
-  }, [recordingInputMode, assemblyAIStreaming, pauseRecording]);
+  }, [recordingInputMode, isRecordingForAssembly, assemblyAIStreaming, pauseRecording]);
 
   const handleResumeRecording = useCallback(() => {
     console.log('🎯 RESUME BUTTON CLICKED - Mode:', recordingInputMode);
-    if (recordingInputMode === 'playback' && assemblyAIStreaming.isStreaming) {
+    if (recordingInputMode === 'playback' && isRecordingForAssembly) {
       assemblyAIStreaming.resumeStreaming();
       toast.success('Playback transcription resumed');
     } else {
       resumeRecording();
     }
-  }, [recordingInputMode, assemblyAIStreaming, resumeRecording]);
+  }, [recordingInputMode, isRecordingForAssembly, assemblyAIStreaming, resumeRecording]);
 
   const handleStopRecording = useCallback(async () => {
     console.log('🎯 STOP BUTTON CLICKED - Stopping recording and opening template selection');
