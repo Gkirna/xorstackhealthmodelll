@@ -49,10 +49,14 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       console.log('🔌 Connecting to AssemblyAI real-time streaming...');
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const projectId = supabaseUrl.split('//')[1].split('.')[0];
       const wsUrl = `wss://${projectId}.supabase.co/functions/v1/assemblyai-realtime`;
 
-      wsRef.current = new WebSocket(wsUrl);
+      console.log('🌐 WebSocket URL:', wsUrl);
+
+      // Create WebSocket with auth header via subprotocol
+      wsRef.current = new WebSocket(wsUrl, ['apikey', anonKey]);
 
       wsRef.current.onopen = () => {
         console.log('✅ WebSocket connection established');
