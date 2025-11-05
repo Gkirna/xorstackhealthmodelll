@@ -210,14 +210,28 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       analyserRef.current.connect(processorRef.current);
       processorRef.current.connect(audioContextRef.current.destination);
 
-      // Start audio level monitoring
+      // Start audio level monitoring (throttled to reduce re-renders)
       const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+      let lastUpdate = 0;
+      const UPDATE_INTERVAL = 500; // Update only every 500ms instead of 100ms
+      
       audioLevelIntervalRef.current = window.setInterval(() => {
+        const now = Date.now();
+        if (now - lastUpdate < UPDATE_INTERVAL) return;
+        lastUpdate = now;
+        
         if (analyserRef.current) {
           analyserRef.current.getByteFrequencyData(dataArray);
           const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
           const normalized = Math.min(100, (average / 128) * 100);
-          setState(prev => ({ ...prev, audioLevel: normalized }));
+          
+          // Only update if change is significant (>5%) to prevent unnecessary re-renders
+          setState(prev => {
+            if (Math.abs(prev.audioLevel - normalized) > 5) {
+              return { ...prev, audioLevel: normalized };
+            }
+            return prev;
+          });
         }
       }, 100);
 
