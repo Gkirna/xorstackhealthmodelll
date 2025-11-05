@@ -43,8 +43,8 @@ serve(async (req) => {
   clientSocket.onopen = () => {
     console.log('✅ Client WebSocket connected');
 
-    // Connect to AssemblyAI streaming API with US English optimization
-    const assemblyAIUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&formatted_finals=true&language_code=en_us&word_boost=diagnosis,prescription,symptom,treatment,medication,yeah,nah,gonna,wanna,gotta,kinda,sorta&token=${ASSEMBLYAI_API_KEY}`;
+    // Connect to AssemblyAI streaming API
+    const assemblyAIUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&formatted_finals=true&token=${ASSEMBLYAI_API_KEY}`;
     
     assemblyAISocket = new WebSocket(assemblyAIUrl);
 
@@ -56,7 +56,7 @@ serve(async (req) => {
       clientSocket.send(JSON.stringify({
         type: 'connection',
         status: 'connected',
-        message: 'High Accuracy Mode active - US English optimized',
+        message: 'High Accuracy Mode active',
       }));
     };
 

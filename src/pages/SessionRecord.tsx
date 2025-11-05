@@ -10,7 +10,6 @@ import { toast } from "sonner";
 import { useSession, useUpdateSession } from "@/hooks/useSessions";
 import { useTranscription } from "@/hooks/useTranscription";
 import { useAudioRecording } from "@/hooks/useAudioRecording";
-import { useAssemblyAIStreaming } from "@/hooks/useAssemblyAIStreaming";
 import { useTranscriptUpdates, useSessionUpdates } from "@/hooks/useRealtime";
 import { WorkflowOrchestrator } from "@/utils/WorkflowOrchestrator";
 import { WorkflowProgress } from "@/components/WorkflowProgress";
@@ -84,35 +83,6 @@ const SessionRecord = () => {
   };
 
   // CUSTOM HOOKS NEXT
-  // Track recording state for AssemblyAI
-  const [isRecordingForAssembly, setIsRecordingForAssembly] = useState(false);
-  
-  // AssemblyAI streaming for playback mode (better for speaker audio + all US accents)
-  const assemblyAIStreaming = useAssemblyAIStreaming({
-    enabled: recordingInputMode === 'playback' && isRecordingForAssembly,
-    onPartialTranscript: (text: string) => {
-      console.log('🎙️ [AssemblyAI] Partial:', text.substring(0, 50));
-    },
-    onFinalTranscript: (text: string) => {
-      if (text.trim()) {
-        const currentSpeaker = speakerRef.current;
-        transcriptCountRef.current++;
-        
-        console.log(`💬 [AssemblyAI] Transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text);
-        
-        const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
-        setTranscript(prev => prev ? `${prev}\n\n${speakerLabel} : ${text}` : `${speakerLabel} : ${text}`);
-        
-        // Toggle speaker
-        speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
-      }
-    },
-    onError: (error: string) => {
-      console.error('❌ [AssemblyAI] Error:', error);
-      toast.error('Real-time transcription error: ' + error);
-    },
-  });
-
   // IMPORTANT: First declare useAudioRecording to get voice characteristics
   const {
     startRecording,
@@ -134,12 +104,11 @@ const SessionRecord = () => {
     language: getTranscriptionLanguage(language), // Use selected language
     mode: recordingInputMode, // Pass recording mode
     onTranscriptUpdate: (text: string, isFinal: boolean) => {
-      // Only use Web Speech API in direct mode
-      if (recordingInputMode === 'direct' && isFinal && text.trim()) {
+      if (isFinal && text.trim()) {
         const currentSpeaker = speakerRef.current;
         transcriptCountRef.current++;
         
-        console.log(`💬 [WebSpeech] Transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
+        console.log(`💬 Transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
         
         const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
         setTranscript(prev => prev ? `${prev}\n\n${speakerLabel} : ${text}` : `${speakerLabel} : ${text}`);
@@ -215,22 +184,13 @@ const SessionRecord = () => {
       return;
     }
 
-    if (isRecording || isRecordingForAssembly) {
+    if (isRecording) {
       console.log('🛑 Stopping recording...');
       toast.success('Stopping transcription...');
       if (saveAllPendingChunks) {
         await saveAllPendingChunks();
       }
-      
-      // Stop AssemblyAI if in playback mode
-      if (recordingInputMode === 'playback' && isRecordingForAssembly) {
-        assemblyAIStreaming.stopStreaming();
-        assemblyAIStreaming.disconnect();
-        setIsRecordingForAssembly(false);
-        console.log('✅ AssemblyAI streaming stopped');
-      } else {
-        stopRecording();
-      }
+      stopRecording();
       
       // Auto-generate clinical note after stopping
       setTimeout(async () => {
@@ -265,18 +225,8 @@ const SessionRecord = () => {
         }
         
         console.log(`📞 Calling startRecording() in ${recordingInputMode} mode...`);
-        
-        // Start AssemblyAI streaming for playback mode
-        if (recordingInputMode === 'playback') {
-          setIsRecordingForAssembly(true);
-          await assemblyAIStreaming.connect();
-          await assemblyAIStreaming.startStreaming();
-          console.log('✅ AssemblyAI streaming started for playback mode');
-        } else {
-          // Use Web Speech API for direct mode
-          await startRecording();
-          console.log('✅ Web Speech API started for direct mode');
-        }
+        await startRecording();
+        console.log('✅ startRecording() completed');
       } catch (error) {
         console.error('❌ Failed to start recording:', error);
         toast.error('Failed to start recording. Please try again.');
