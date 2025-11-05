@@ -152,9 +152,9 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     }
 
     try {
-      console.log('🎤 Starting audio streaming...');
+      console.log('🎤 Starting audio streaming with device:', deviceId || 'default');
 
-      // Get microphone access with optional device selection
+      // Get microphone access with optimal constraints for transcription
       const audioConstraints: MediaTrackConstraints = {
         sampleRate: 16000,
         channelCount: 1,
@@ -163,7 +163,7 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
         autoGainControl: true,
       };
 
-      // Add device ID if provided
+      // Add device ID if provided (supports all microphone types: built-in, headset, USB)
       if (deviceId && deviceId !== 'default') {
         audioConstraints.deviceId = { exact: deviceId };
       }
@@ -172,39 +172,53 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
         audio: audioConstraints,
       });
 
-      // Create audio context
-      audioContextRef.current = new AudioContext({ sampleRate: 16000 });
+      console.log('✅ Microphone access granted');
+
+      // Create audio context with optimal settings
+      audioContextRef.current = new AudioContext({ 
+        sampleRate: 16000,
+        latencyHint: 'interactive' // Low latency for real-time
+      });
+      
       sourceRef.current = audioContextRef.current.createMediaStreamSource(mediaStreamRef.current);
+      
+      // Use 4096 buffer size for good balance between latency and reliability
       processorRef.current = audioContextRef.current.createScriptProcessor(4096, 1, 1);
 
-      // Process audio chunks
+      // Process audio chunks with optimized conversion
       processorRef.current.onaudioprocess = (e) => {
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN || !state.isStreaming) {
           return;
         }
 
         const inputData = e.inputBuffer.getChannelData(0);
         
-        // Convert Float32Array to Int16Array (PCM16)
+        // Convert Float32Array to Int16Array (PCM16) with clamping
         const int16Array = new Int16Array(inputData.length);
         for (let i = 0; i < inputData.length; i++) {
           const s = Math.max(-1, Math.min(1, inputData[i]));
           int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
         }
 
-        // Convert to base64
+        // Convert to base64 efficiently
         const uint8Array = new Uint8Array(int16Array.buffer);
         let binary = '';
-        for (let i = 0; i < uint8Array.length; i++) {
-          binary += String.fromCharCode(uint8Array[i]);
+        const chunkSize = 8192;
+        for (let i = 0; i < uint8Array.length; i += chunkSize) {
+          const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
+          binary += String.fromCharCode.apply(null, Array.from(chunk));
         }
         const base64Audio = btoa(binary);
 
         // Send to AssemblyAI via WebSocket
-        wsRef.current.send(JSON.stringify({
-          type: 'audio',
-          audio: base64Audio,
-        }));
+        try {
+          wsRef.current.send(JSON.stringify({
+            type: 'audio',
+            audio: base64Audio,
+          }));
+        } catch (error) {
+          console.error('❌ Error sending audio:', error);
+        }
       };
 
       sourceRef.current.connect(processorRef.current);
@@ -215,9 +229,18 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     } catch (error) {
       console.error('❌ Error starting stream:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      setState(prev => ({ ...prev, error: errorMsg }));
+      
+      // Provide user-friendly error messages
+      let friendlyError = errorMsg;
+      if (errorMsg.includes('Permission denied')) {
+        friendlyError = 'Microphone access denied. Please allow microphone permissions.';
+      } else if (errorMsg.includes('not found') || errorMsg.includes('OverconstrainedError')) {
+        friendlyError = 'Selected microphone not found. Please choose another microphone.';
+      }
+      
+      setState(prev => ({ ...prev, error: friendlyError }));
       if (onErrorRef.current) {
-        onErrorRef.current(errorMsg);
+        onErrorRef.current(friendlyError);
       }
     }
   }, [state.isConnected, state.isStreaming]);
