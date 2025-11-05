@@ -136,8 +136,8 @@ export function useAudioUpload(options: AudioUploadOptions = {}) {
       console.log('🎯 Starting transcription for uploaded audio...');
       setState(prev => ({ ...prev, uploadProgress: 70 }));
       
-      // For large files, show estimated processing time
-      toast.info('Processing audio... This may take a few minutes for longer recordings.');
+      // Show fast processing message
+      toast.info('Transcribing audio...');
       
       // Download the audio file to convert to base64
       const audioResponse = await fetch(audioUrl);

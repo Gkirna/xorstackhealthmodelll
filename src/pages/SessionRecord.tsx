@@ -27,7 +27,7 @@ import { AdvancedTranscriptionDashboard } from '@/components/AdvancedTranscripti
 import { useAdvancedTranscription } from '@/hooks/useAdvancedTranscription';
 import type { EnhancedTranscriptionData } from '@/types/advancedTranscription';
 import { TemplateSelectionDialog } from "@/components/session/TemplateSelectionDialog";
-import { UploadRecordingDialog } from "@/components/session/UploadRecordingDialog";
+import { AudioQualityIndicator } from "@/components/AudioQualityIndicator";
 
 const SessionRecord = () => {
   const { id } = useParams();
@@ -54,12 +54,17 @@ const SessionRecord = () => {
   const [recordingMode, setRecordingMode] = useState("transcribing");
   const [activeTab, setActiveTab] = useState<string>("transcript");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [isUploadTranscribing, setIsUploadTranscribing] = useState(false);
+  const [uploadTranscriptionTime, setUploadTranscriptionTime] = useState(0);
+  const uploadProcessingRef = useRef<boolean>(false);
   const [enhancedTranscriptionData, setEnhancedTranscriptionData] = useState<EnhancedTranscriptionData | null>(null);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [recordingInputMode, setRecordingInputMode] = useState<'direct' | 'playback'>('direct');
   
   // ALL REFS NEXT
   const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
   const timerRef = useRef<number | null>(null);
+  const uploadTimerRef = useRef<number | null>(null);
   const startTimeRef = useRef<Date>(new Date());
   const speakerRef = useRef<'provider' | 'patient'>('provider');
   const transcriptCountRef = useRef(0);
@@ -92,9 +97,12 @@ const SessionRecord = () => {
     currentVoiceCharacteristics,
     voiceAnalyzer,
     autoCorrector,
+    audioLevel,
+    voiceQuality,
   } = useAudioRecording({
     continuous: true,
     language: getTranscriptionLanguage(language), // Use selected language
+    mode: recordingInputMode, // Pass recording mode
     onTranscriptUpdate: (text: string, isFinal: boolean) => {
       if (isFinal && text.trim()) {
         const currentSpeaker = speakerRef.current;
@@ -315,32 +323,51 @@ const SessionRecord = () => {
     console.log('📁 Processing uploaded file:', { name: file.name, size: `${(file.size / (1024 * 1024)).toFixed(2)}MB`, mode });
     
     try {
-      // Import and use the audio upload hook functionality
-      toast.info(`Processing ${file.name}... This may take a few minutes.`);
+      // Mark as processing
+      uploadProcessingRef.current = true;
+      
+      // Show loading indicator and start timer
+      setIsUploadTranscribing(true);
+      setUploadTranscriptionTime(0);
+      
+      // Start real-time timer
+      uploadTimerRef.current = window.setInterval(() => {
+        setUploadTranscriptionTime(prev => prev + 1);
+      }, 1000);
+      
+      console.log('🎤 Starting file transcription...');
       
       // Convert file to base64 for transcription
       const reader = new FileReader();
       reader.onload = async () => {
+        console.log('📄 File read complete, calling transcription API...');
         try {
           const base64 = reader.result as string;
           const base64Data = base64.split(',')[1];
           
-          // Call transcription edge function
+          // Get the selected language code (en, hi, kn)
+          const langCode = language === 'en-IN' ? 'en' : 
+                           language === 'hi-IN' ? 'hi' : 
+                           language === 'kn-IN' ? 'kn' : 'en';
+          
+          // Call transcription edge function with language
           const { data, error } = await supabase.functions.invoke('transcribe-audio', {
             body: {
               audio: base64Data,
               session_id: id,
+              language: langCode,
             },
           });
 
           if (error) throw error;
 
+          console.log('✅ Transcription API successful');
+          
           const transcriptText = data?.text || '';
           
           if (transcriptText) {
             const wordCount = transcriptText.split(' ').length;
             console.log('✅ Transcription completed:', wordCount, 'words');
-            toast.success(`Transcription completed! ${wordCount} words transcribed.`);
             
             // Add speaker labels based on mode
             const labeledTranscript = mode === 'dictate' 
@@ -354,6 +381,8 @@ const SessionRecord = () => {
             setTranscript(labeledTranscript);
             setActiveTab('transcript');
             
+            toast.success(`Transcription completed! ${wordCount} words transcribed.`);
+            
             // Auto-generate note after a brief delay
             setTimeout(() => {
               autoGenerateNote();
@@ -364,10 +393,29 @@ const SessionRecord = () => {
         } catch (error) {
           console.error('❌ Transcription error:', error);
           toast.error(error instanceof Error ? error.message : 'Failed to transcribe audio');
+        } finally {
+          // Clear timer and reset
+          if (uploadTimerRef.current) {
+            clearInterval(uploadTimerRef.current);
+            uploadTimerRef.current = null;
+          }
+          uploadProcessingRef.current = false;
+          setIsUploadTranscribing(false);
+          setUploadTranscriptionTime(0);
+          setUploadDialogOpen(false);
         }
       };
       
       reader.onerror = () => {
+        console.error('❌ File read error');
+        // Clear timer and reset
+        if (uploadTimerRef.current) {
+          clearInterval(uploadTimerRef.current);
+          uploadTimerRef.current = null;
+        }
+        uploadProcessingRef.current = false;
+        setIsUploadTranscribing(false);
+        setUploadTranscriptionTime(0);
         toast.error('Failed to read audio file');
       };
       
@@ -375,9 +423,25 @@ const SessionRecord = () => {
       
     } catch (error) {
       console.error('❌ Upload processing error:', error);
+      // Clear timer and reset
+      if (uploadTimerRef.current) {
+        clearInterval(uploadTimerRef.current);
+        uploadTimerRef.current = null;
+      }
+      uploadProcessingRef.current = false;
+      setIsUploadTranscribing(false);
+      setUploadTranscriptionTime(0);
       toast.error('Failed to process audio file');
     }
-  }, [id, autoGenerateNote]);
+  }, [id, language, autoGenerateNote]);
+
+  // Handle dismissing the transcription overlay (background processing)
+  const handleDismissTranscription = useCallback(() => {
+    console.log('👋 Dismissing transcription overlay, continuing in background...');
+    setIsUploadTranscribing(false);
+    toast.info('Transcription continuing in background');
+    navigate('/session/new');
+  }, [navigate]);
 
   const handleGenerateNote = useCallback(async () => {
     if (!transcript.trim()) {
@@ -606,6 +670,10 @@ const SessionRecord = () => {
     
     return () => {
       orchestratorRef.current = null;
+      // Clear upload timer on unmount
+      if (uploadTimerRef.current) {
+        clearInterval(uploadTimerRef.current);
+      }
     };
   }, []);
 
@@ -712,7 +780,23 @@ const SessionRecord = () => {
           isRecording={isRecording}
           isPaused={isPaused}
           isStartingRecording={isStartingRecording}
+          recordingInputMode={recordingInputMode}
+          onRecordingInputModeChange={setRecordingInputMode}
         />
+
+        {/* Audio Quality Indicator - Hidden but monitoring runs in background */}
+        {/* 
+        {(isRecording || isPaused) && recordingInputMode === 'direct' && (
+          <div className="px-6 pt-3">
+            <AudioQualityIndicator
+              volume={audioLevel || 0}
+              quality={voiceQuality || 'fair'}
+              isActive={isRecording && !isPaused}
+              mode={recordingInputMode}
+            />
+          </div>
+        )}
+        */}
 
         {/* Workflow Progress - Hidden from UI but functionality preserved */}
 
@@ -809,17 +893,31 @@ const SessionRecord = () => {
         isGenerating={isAutoPipelineRunning}
       />
 
-      {/* Upload Recording Dialog */}
-      <UploadRecordingDialog
-        open={uploadDialogOpen}
-        onOpenChange={(open) => {
-          setUploadDialogOpen(open);
-          if (!open) {
-            setRecordingMode('transcribing');
-          }
-        }}
-        onUpload={handleUploadRecording}
-      />
+      {/* Transcription Loading Overlay */}
+      {isUploadTranscribing && (
+        <div 
+          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center cursor-pointer"
+          onClick={handleDismissTranscription}
+        >
+          <div 
+            className="bg-card border rounded-lg p-8 shadow-lg flex flex-col items-center gap-4 min-w-[320px] cursor-default"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <div className="text-center">
+              <h3 className="text-lg font-semibold mb-2">Transcribing Audio</h3>
+              <p className="text-sm text-muted-foreground mb-3">Processing your audio in real-time...</p>
+              <div className="flex items-center justify-center gap-2 text-2xl font-mono font-bold text-primary">
+                <span>{String(Math.floor(uploadTranscriptionTime / 60)).padStart(2, '0')}</span>
+                <span className="animate-pulse">:</span>
+                <span>{String(uploadTranscriptionTime % 60).padStart(2, '0')}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">Elapsed time</p>
+              <p className="text-xs text-muted-foreground mt-4 italic">Click outside to continue in background</p>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 };

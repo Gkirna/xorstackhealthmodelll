@@ -17,6 +17,7 @@ interface AudioRecordingOptions {
   sampleRate?: number;
   deviceId?: string;
   language?: string; // Language code for transcription (e.g., 'kn-IN', 'en-IN')
+  mode?: 'direct' | 'playback'; // Recording mode: direct conversation or playback transcription
 }
 
 interface RecordingState {
@@ -30,6 +31,7 @@ interface RecordingState {
   audioLevel: number;
   recordedBlob: Blob | null;
   recordedUrl: string | null;
+  voiceQuality: 'excellent' | 'good' | 'fair' | 'poor';
 }
 
 export function useAudioRecording(options: AudioRecordingOptions = {}) {
@@ -42,6 +44,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     sampleRate = 48000,
     deviceId,
     language = 'kn-IN', // Default to Kannada
+    mode = 'direct', // Default to direct recording
   } = options;
 
   const [state, setState] = useState<RecordingState>({
@@ -55,6 +58,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     audioLevel: 0,
     recordedBlob: null,
     recordedUrl: null,
+    voiceQuality: 'fair',
   });
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -234,9 +238,24 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       analyserRef.current = null;
       
       console.log('✅ All cleanup complete, requesting microphone...');
+      console.log(`🎤 Recording mode: ${mode}`);
       
+      // Enhanced audio constraints for playback mode
       const constraints: MediaStreamConstraints = {
-        audio: {
+        audio: mode === 'playback' ? {
+          echoCancellation: true, // Aggressive echo cancellation
+          noiseSuppression: true, // Strong noise suppression
+          autoGainControl: true, // Adaptive gain control
+          sampleRate: sampleRate,
+          channelCount: 1,
+          ...(deviceId && { deviceId: { exact: deviceId } }),
+          // Additional constraints for playback mode
+          advanced: [
+            { echoCancellation: { exact: true } },
+            { noiseSuppression: { exact: true } },
+            { autoGainControl: { exact: true } }
+          ]
+        } : {
           echoCancellation: { ideal: true },
           noiseSuppression: { ideal: true },
           autoGainControl: { ideal: true },
@@ -375,7 +394,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       // Initialize voice analyzer (non-critical, can fail gracefully)
       try {
         console.log('🎤 Initializing voice analyzer...');
-        voiceAnalyzerRef.current = new VoiceAnalyzer();
+        voiceAnalyzerRef.current = new VoiceAnalyzer(mode);
         const characteristics = await voiceAnalyzerRef.current.initializeWithContext(sharedContext, analyserRef.current);
         console.log('✅ Voice analyzer initialized');
         
@@ -387,6 +406,9 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           speakerId: characteristics.speakerId,
           voiceQuality: characteristics.voiceQuality
         });
+        
+        // Update state with voice quality
+        setState(prev => ({ ...prev, voiceQuality: characteristics.voiceQuality }));
         
         if (characteristics.gender !== 'unknown') {
           currentVoiceGenderRef.current = characteristics.gender;
@@ -407,8 +429,12 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
               const updated = await voiceAnalyzerRef.current.analyzeVoiceSample();
               currentVoiceCharacteristicsRef.current = updated;
               
-              // Update gender with higher confidence threshold for accuracy
-              if (updated.gender !== 'unknown' && updated.confidence > 0.75) {
+              // Update state with voice quality
+              setState(prev => ({ ...prev, voiceQuality: updated.voiceQuality }));
+              
+              // Update gender with adjusted confidence threshold based on mode
+              const confidenceThreshold = mode === 'playback' ? 0.6 : 0.75;
+              if (updated.gender !== 'unknown' && updated.confidence > confidenceThreshold) {
                 const previousGender = currentVoiceGenderRef.current;
                 currentVoiceGenderRef.current = updated.gender;
                 if (previousGender !== updated.gender) {
