@@ -115,6 +115,8 @@ const SessionRecord = () => {
     onFinalTranscript: handleFinalTranscript,
     onError: handleStreamingError,
     enabled: recordingInputMode === 'playback',
+    language: language, // Pass selected language
+    deviceId: microphone !== 'default' ? microphone : undefined,
   });
 
   // IMPORTANT: First declare useAudioRecording to get voice characteristics
@@ -243,11 +245,13 @@ const SessionRecord = () => {
             }
           }
           
-          console.log('✅ Connected, starting audio streaming...');
-          await assemblyAIStreaming.startStreaming();
+          console.log('✅ Connected, starting audio streaming with mic:', microphone);
+          await assemblyAIStreaming.startStreaming(microphone !== 'default' ? microphone : undefined);
           console.log('✅ Audio streaming started');
+          toast.success(`Transcribing in ${language.toUpperCase()}`);
         } else {
           // Direct mode - use regular recording
+          toast.success(`Recording in ${language.toUpperCase()}`);
           console.log('🎤 Direct mode - starting microphone recording...');
           toast.success('Starting live transcription... Speak now!');
           await startRecording();

@@ -6,6 +6,8 @@ interface StreamingOptions {
   onFinalTranscript?: (text: string) => void;
   onError?: (error: string) => void;
   enabled?: boolean;
+  language?: string;
+  deviceId?: string;
 }
 
 interface StreamingState {
@@ -21,6 +23,8 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     onFinalTranscript,
     onError,
     enabled = false,
+    language = 'en',
+    deviceId,
   } = options;
 
   const [state, setState] = useState<StreamingState>({
@@ -51,11 +55,11 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
     }
 
     try {
-      console.log('🔌 Connecting to AssemblyAI real-time streaming...');
+      console.log('🔌 Connecting to AssemblyAI real-time streaming with language:', language);
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const projectId = supabaseUrl.split('//')[1].split('.')[0];
-      const wsUrl = `wss://${projectId}.supabase.co/functions/v1/assemblyai-realtime`;
+      const wsUrl = `wss://${projectId}.supabase.co/functions/v1/assemblyai-realtime?language=${language}`;
 
       wsRef.current = new WebSocket(wsUrl);
 
@@ -128,24 +132,32 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
   }, [enabled, onPartialTranscript, onFinalTranscript, onError]);
 
   // Start streaming audio
-  const startStreaming = useCallback(async () => {
+  const startStreaming = useCallback(async (sourceDeviceId?: string) => {
     if (!state.isConnected || !wsRef.current) {
       console.warn('⚠️ Not connected to streaming service');
       return;
     }
 
     try {
-      console.log('🎤 Starting audio streaming...');
+      console.log('🎤 Starting audio streaming with device:', sourceDeviceId || deviceId || 'default');
 
-      // Get microphone access
+      // Audio constraints for capturing audio
+      const audioConstraints: MediaTrackConstraints = {
+        sampleRate: 16000,
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      };
+
+      // If a specific device is provided, use it
+      if (sourceDeviceId || deviceId) {
+        audioConstraints.deviceId = { exact: sourceDeviceId || deviceId };
+      }
+
+      // Get audio access (microphone or system audio)
       mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 16000,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audio: audioConstraints,
       });
 
       // Create audio context
@@ -188,6 +200,7 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
 
       setState(prev => ({ ...prev, isStreaming: true }));
       console.log('✅ Audio streaming started');
+      toast.success('Real-time transcription active');
     } catch (error) {
       console.error('❌ Error starting stream:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -195,8 +208,9 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       if (onError) {
         onError(errorMsg);
       }
+      toast.error('Failed to start audio capture: ' + errorMsg);
     }
-  }, [state.isConnected, onError]);
+  }, [state.isConnected, deviceId, onError]);
 
   // Stop streaming
   const stopStreaming = useCallback(() => {

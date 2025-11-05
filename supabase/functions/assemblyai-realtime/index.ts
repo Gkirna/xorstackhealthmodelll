@@ -32,7 +32,11 @@ serve(async (req) => {
     );
   }
 
-  console.log('🎙️ Initializing AssemblyAI real-time streaming...');
+  // Extract language from URL query params
+  const url = new URL(req.url);
+  const language = url.searchParams.get('language') || 'en';
+  
+  console.log('🎙️ Initializing AssemblyAI real-time streaming with language:', language);
 
   // Upgrade to WebSocket
   const { socket: clientSocket, response } = Deno.upgradeWebSocket(req);
@@ -44,8 +48,19 @@ serve(async (req) => {
   clientSocket.onopen = () => {
     console.log('✅ Client WebSocket connected');
 
-    // Connect to AssemblyAI streaming API with enhanced parameters
-    const assemblyAIUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&formatted_finals=true&punctuate=true&format_text=true&disfluencies=false&language_code=en&token=${ASSEMBLYAI_API_KEY}`;
+    // Map language codes
+    const languageMap: Record<string, string> = {
+      'en': 'en',
+      'hi': 'hi',
+      'kn': 'kn',
+      'es': 'es',
+      'fr': 'fr',
+      'de': 'de',
+    };
+    const langCode = languageMap[language] || 'en';
+
+    // Connect to AssemblyAI streaming API with enhanced parameters and selected language
+    const assemblyAIUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&formatted_finals=true&punctuate=true&format_text=true&disfluencies=false&language_code=${langCode}&token=${ASSEMBLYAI_API_KEY}`;
     
     assemblyAISocket = new WebSocket(assemblyAIUrl);
 
