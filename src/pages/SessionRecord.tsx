@@ -226,26 +226,33 @@ const SessionRecord = () => {
         transcriptCountRef.current = 0;
         
         if (recordingInputMode === 'playback') {
-          toast.success('Starting playback transcription... Play audio now!');
+          toast.success('Connecting to high-accuracy transcription...');
           console.log('📞 Starting AssemblyAI streaming for playback mode...');
           
-          // Wait a bit for hook to connect (it auto-connects when enabled)
-          let attempts = 0;
-          while (!assemblyAIStreaming.isConnected && attempts < 10) {
-            console.log(`⏳ Waiting for connection... attempt ${attempts + 1}/10`);
-            await new Promise(resolve => setTimeout(resolve, 500));
-            attempts++;
+          // First ensure we're connected
+          if (!assemblyAIStreaming.isConnected) {
+            console.log('🔌 Initiating connection...');
+            await assemblyAIStreaming.connect();
             
-            if (attempts === 5) {
-              toast.info('Still connecting to transcription service...');
+            // Wait for connection with timeout
+            let attempts = 0;
+            while (!assemblyAIStreaming.isConnected && attempts < 10) {
+              console.log(`⏳ Waiting for connection... attempt ${attempts + 1}/10`);
+              await new Promise(resolve => setTimeout(resolve, 500));
+              attempts++;
+              
+              if (attempts === 5) {
+                toast.info('Still connecting to transcription service...');
+              }
+            }
+            
+            if (!assemblyAIStreaming.isConnected) {
+              throw new Error('Failed to connect to transcription service. Please try again.');
             }
           }
           
-          if (!assemblyAIStreaming.isConnected) {
-            throw new Error('Failed to connect to transcription service');
-          }
-          
-          console.log('📞 Calling assemblyAIStreaming.startStreaming()...');
+          console.log('✅ Connected! Starting audio streaming with microphone:', selectedMicId || 'default');
+          toast.success('Ready! Play audio now to transcribe...');
           await assemblyAIStreaming.startStreaming(selectedMicId);
           setIsRecordingForAssembly(true);
           console.log('✅ AssemblyAI streaming started');
