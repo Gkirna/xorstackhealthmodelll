@@ -148,11 +148,6 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       return;
     }
 
-    if (state.isStreaming) {
-      console.log('⚠️ Already streaming audio');
-      return;
-    }
-
     try {
       console.log('🎤 Starting audio streaming...');
 
@@ -174,13 +169,12 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
 
       // Process audio chunks
       processorRef.current.onaudioprocess = (e) => {
-        // Check both WebSocket and connection state
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN || !state.isConnected) {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
           return;
         }
 
-        // Skip processing if paused or not streaming
-        if (state.isPaused || !state.isStreaming) {
+        // Skip processing if paused
+        if (state.isPaused) {
           return;
         }
 
