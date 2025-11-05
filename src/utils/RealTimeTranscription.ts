@@ -61,29 +61,21 @@ export class RealTimeTranscription {
   private setupRecognition() {
     if (!this.recognition) return;
 
-      this.recognition.continuous = this.config.continuous;
-      this.recognition.interimResults = this.config.interimResults;
-      this.recognition.lang = this.config.lang;
-      this.recognition.maxAlternatives = 10; // Maximum alternatives for best accuracy
-      
-      // Advanced audio processing settings for optimal performance
-      if ('audioConstraints' in this.recognition) {
-        (this.recognition as any).audioConstraints = {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 48000,
-          channelCount: 1
-        };
-      }
-      
-      // Enable grammar and hints for better medical terminology recognition
-      if ('grammars' in this.recognition) {
-        (this.recognition as any).grammars = {
-          medical: true,
-          technical: true
-        };
-      }
+    this.recognition.continuous = this.config.continuous;
+    this.recognition.interimResults = this.config.interimResults;
+    this.recognition.lang = this.config.lang;
+    this.recognition.maxAlternatives = 10; // Maximum alternatives for best accuracy
+    
+    // Advanced audio processing settings for optimal performance
+    if ('audioConstraints' in this.recognition) {
+      (this.recognition as any).audioConstraints = {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: 48000,
+        channelCount: 1
+      };
+    }
 
     this.recognition.onstart = () => {
       console.log('Speech recognition started');
