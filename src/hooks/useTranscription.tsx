@@ -65,17 +65,15 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
   
   // Voice analysis for gender detection
   const voiceAnalyzerRef = useRef<VoiceAnalyzer | null>(null);
-  const currentVoiceGenderRef = useRef<'male' | 'female' | 'unknown'>('unknown');
+  const currentVoiceGenderRef = useRef<'male' | 'female' | 'unknown'>(currentVoiceGender || 'unknown');
   const currentVoiceCharacteristicsRef = useRef<any>(null);
   const genderHistoryRef = useRef<{ gender: 'male' | 'female', timestamp: number }[]>([]);
   const lastSpeakerPitchRef = useRef<number>(0);
   const recentChunksRef = useRef<{ length: number, speaker: string }[]>([]);
   
-  // Update gender from external source (from audio recording)
+  // Update gender ref from external source (don't cause re-render)
   useEffect(() => {
-    if (currentVoiceGender) {
-      currentVoiceGenderRef.current = currentVoiceGender;
-    }
+    currentVoiceGenderRef.current = currentVoiceGender || 'unknown';
   }, [currentVoiceGender]);
   
   // Configuration for long sessions (5+ minutes continuous transcription)
