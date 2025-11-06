@@ -43,7 +43,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     continuous = true,
     sampleRate = 48000,
     deviceId,
-    language = 'kn-IN', // Default to Kannada
+    language = 'en-US', // Default to English (US) for multi-accent support
     mode = 'direct', // Default to direct recording
   } = options;
 
@@ -282,46 +282,65 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       // (AudioContext can consume the stream and prevent MediaRecorder from starting)
       console.log('🎬 Creating MediaRecorder FIRST (before AudioContext)...');
       let mediaRecorder: MediaRecorder;
+      let mimeType = 'audio/webm';
       
       try {
-        mediaRecorder = new MediaRecorder(stream);
-        console.log('✅ MediaRecorder created with browser default');
-      } catch (defaultError) {
-        console.warn('⚠️ Default MediaRecorder failed, trying explicit types:', defaultError);
+        // Try explicit format with timeslice for better audio capture
+        const supportedTypes = [
+          'audio/webm;codecs=opus',
+          'audio/webm',
+          'audio/ogg;codecs=opus',
+          'audio/mp4'
+        ];
         
-        const supportedTypes = ['audio/webm', 'audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4'];
         let created = false;
-        
         for (const type of supportedTypes) {
           try {
             if (MediaRecorder.isTypeSupported(type)) {
-              mediaRecorder = new MediaRecorder(stream, { mimeType: type });
+              mediaRecorder = new MediaRecorder(stream, { 
+                mimeType: type,
+                audioBitsPerSecond: 128000 // 128kbps for better quality
+              });
+              mimeType = type;
               console.log('✅ MediaRecorder created with:', type);
               created = true;
               break;
             }
           } catch (e) {
+            console.warn(`⚠️ Failed to create MediaRecorder with ${type}:`, e);
             continue;
           }
         }
         
         if (!created) {
-          throw new Error('Failed to create MediaRecorder with any configuration');
+          // Fallback to browser default
+          mediaRecorder = new MediaRecorder(stream);
+          mimeType = mediaRecorder.mimeType || 'audio/webm';
+          console.log('✅ MediaRecorder created with browser default:', mimeType);
         }
+      } catch (error) {
+        console.error('❌ Failed to create MediaRecorder:', error);
+        throw new Error('Failed to create MediaRecorder with any configuration');
       }
       
-      const mimeType = mediaRecorder.mimeType || 'audio/webm';
-      console.log('📝 MediaRecorder MIME type:', mimeType);
+      console.log('📝 MediaRecorder final MIME type:', mimeType);
       
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
 
       mediaRecorder.ondataavailable = (event) => {
+        console.log(`📦 ondataavailable fired - data size: ${event.data.size} bytes`);
         if (event.data.size > 0) {
           chunksRef.current.push(event.data);
           const totalSize = chunksRef.current.reduce((acc, chunk) => acc + chunk.size, 0);
-          console.log(`📦 Audio chunk: ${event.data.size} bytes (Total: ${(totalSize / 1024).toFixed(2)} KB)`);
+          console.log(`📦 Audio chunk: ${event.data.size} bytes (Total: ${(totalSize / 1024).toFixed(2)} KB, Chunks: ${chunksRef.current.length})`);
+        } else {
+          console.warn('⚠️ Audio chunk is empty (0 bytes)');
         }
+      };
+      
+      mediaRecorder.onerror = (event: any) => {
+        console.error('❌ MediaRecorder error:', event.error);
       };
 
       mediaRecorder.onstop = async () => {
@@ -368,7 +387,10 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
 
       // Start MediaRecorder BEFORE AudioContext processes the stream
       try {
-        mediaRecorder.start(1000);
+        // Start with smaller timeslice for better audio capture
+        mediaRecorder.start(100); // Request data every 100ms
+        console.log('🎬 MediaRecorder.start() called with 100ms timeslice');
+        console.log('🎬 MediaRecorder state:', mediaRecorder.state);
         console.log('✅ MediaRecorder started successfully');
       } catch (startError) {
         console.error('❌ MediaRecorder start failed:', startError);

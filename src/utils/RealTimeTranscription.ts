@@ -39,7 +39,7 @@ export class RealTimeTranscription {
     this.config = {
       continuous: true,
       interimResults: true,
-      lang: config.lang || 'kn-IN', // Default to Kannada (Karnataka, India)
+      lang: config.lang || 'en-US', // Default to English (US) for multi-accent support
       ...config
     };
 
