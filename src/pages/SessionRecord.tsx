@@ -37,6 +37,7 @@ const SessionRecord = () => {
   
   // ALL STATE HOOKS FIRST
   const [transcript, setTranscript] = useState("");
+  const [interimTranscript, setInterimTranscript] = useState(""); // Track interim results
   const [context, setContext] = useState("");
   const [generatedNote, setGeneratedNote] = useState("");
   const [template, setTemplate] = useState<string>("");
@@ -104,16 +105,22 @@ const SessionRecord = () => {
     language: getTranscriptionLanguage(language), // Use selected language
     mode: recordingInputMode, // Pass recording mode
     onTranscriptUpdate: (text: string, isFinal: boolean) => {
+      const currentSpeaker = speakerRef.current;
+      const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
+      
       if (isFinal && text.trim()) {
-        const currentSpeaker = speakerRef.current;
+        // Final transcript - add to permanent transcript
         transcriptCountRef.current++;
+        console.log(`✅ Final transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text);
         
-        console.log(`💬 Transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
-        
-        const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
         setTranscript(prev => prev ? `${prev}\n\n${speakerLabel} : ${text}` : `${speakerLabel} : ${text}`);
+        setInterimTranscript(""); // Clear interim
         
         speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
+      } else if (!isFinal && text.trim()) {
+        // Interim transcript - show as preview without adding to permanent transcript
+        console.log(`⏳ Interim update from ${currentSpeaker}:`, text.substring(0, 30));
+        setInterimTranscript(`${speakerLabel} : ${text}`);
       }
     },
     // onRecordingComplete will be set via ref to avoid re-renders
@@ -851,6 +858,7 @@ const SessionRecord = () => {
               )}
               <HeidiTranscriptPanel
                 transcript={transcript}
+                interimTranscript={interimTranscript}
                 onTranscriptChange={setTranscript}
                 stats={stats}
                 isTranscribing={isTranscribing}
