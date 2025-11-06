@@ -69,8 +69,8 @@ const SessionRecord = () => {
   const startTimeRef = useRef<Date>(new Date());
   const speakerRef = useRef<'provider' | 'patient'>('provider');
   const transcriptCountRef = useRef(0);
-  const onTranscriptUpdateRef = useRef<(text: string, isFinal: boolean) => void>();
-  const onRecordingErrorRef = useRef<(error: string) => void>();
+  const lastTranscriptTimeRef = useRef<number>(Date.now());
+  const isInitializedRef = useRef(false);
 
   // Language code mapping: simple code -> locale code for transcription
   const getTranscriptionLanguage = (lang: string): string => {
@@ -85,19 +85,51 @@ const SessionRecord = () => {
     return languageMap[lang] || 'en-US'; // Default to US English for broader accent support
   };
 
-  // CUSTOM HOOKS NEXT
-  // Note: Callbacks will be defined AFTER hooks to avoid reference errors
-
-  // Initialize transcription hook FIRST (stable session ID)
+  // CUSTOM HOOKS NEXT - Initialize once and keep stable
   const transcriptionHookKey = useRef(id || 'default').current;
   const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats, updateVoiceCharacteristics } = useTranscription(transcriptionHookKey, 'unknown');
   
-  // Initialize audio recording hook SECOND
-  const audioRecordingConfig = useRef({
+  // Stable recording config
+  const stableRecordingOptions = useRef({
     continuous: true,
     language: getTranscriptionLanguage(language),
     mode: recordingInputMode,
-  });
+    onTranscriptUpdate: (text: string, isFinal: boolean) => {
+      if (isFinal && text.trim()) {
+        // Calculate time since last transcript for speaker detection
+        const now = Date.now();
+        const timeSinceLast = now - lastTranscriptTimeRef.current;
+        lastTranscriptTimeRef.current = now;
+        
+        transcriptCountRef.current++;
+        console.log(`✅ Final transcript chunk #${transcriptCountRef.current}:`, text.substring(0, 50));
+        console.log(`⏱️ Time since last: ${timeSinceLast}ms`);
+        
+        // Determine speaker based on gap (2+ seconds = speaker change in playback mode)
+        if (recordingInputMode === 'playback' && timeSinceLast > 2000) {
+          speakerRef.current = speakerRef.current === 'provider' ? 'patient' : 'provider';
+          console.log(`🔄 Speaker changed to: ${speakerRef.current} (gap: ${timeSinceLast}ms)`);
+        }
+        
+        const speakerLabel = speakerRef.current === 'provider' ? 'Doctor' : 'Patient';
+        setTranscript(prev => prev ? `${prev}\n\n${speakerLabel}: ${text}` : `${speakerLabel}: ${text}`);
+        setInterimTranscript("");
+        
+        // Save to database in background (just text, speaker detection handled by hook)
+        addTranscriptChunk(text).catch(err => {
+          console.error('Failed to save transcript chunk:', err);
+        });
+      } else if (!isFinal && text.trim()) {
+        // Interim transcript - show as preview
+        const speakerLabel = speakerRef.current === 'provider' ? 'Doctor' : 'Patient';
+        setInterimTranscript(`${speakerLabel}: ${text}`);
+      }
+    },
+    onError: (error: string) => {
+      console.error('Recording error:', error);
+      toast.error(error);
+    },
+  }).current;
   
   const {
     startRecording,
@@ -114,53 +146,14 @@ const SessionRecord = () => {
     autoCorrector,
     audioLevel,
     voiceQuality,
-  } = useAudioRecording({
-    ...audioRecordingConfig.current,
-    onTranscriptUpdate: (text: string, isFinal: boolean) => {
-      onTranscriptUpdateRef.current?.(text, isFinal);
-    },
-    onError: (error: string) => {
-      onRecordingErrorRef.current?.(error);
-    },
-  });
+  } = useAudioRecording(stableRecordingOptions);
   
-  // NOW define callbacks AFTER all hooks (to avoid reference errors)
-  onTranscriptUpdateRef.current = useCallback(async (text: string, isFinal: boolean) => {
-    if (isFinal && text.trim()) {
-      // Final transcript - let transcription hook determine speaker
-      transcriptCountRef.current++;
-      console.log(`✅ Final transcript chunk #${transcriptCountRef.current}:`, text);
-      
-      // Add to transcription hook which will determine speaker based on gaps/voice
-      const chunk = await addTranscriptChunk(text, currentVoiceCharacteristics);
-      const detectedSpeaker = chunk.speaker as 'provider' | 'patient';
-      const speakerLabel = detectedSpeaker === 'provider' ? 'Doctor' : 'Patient';
-      
-      // Update speaker ref
-      speakerRef.current = detectedSpeaker;
-      
-      setTranscript(prev => prev ? `${prev}\n\n${speakerLabel} : ${text}` : `${speakerLabel} : ${text}`);
-      setInterimTranscript(""); // Clear interim
-    } else if (!isFinal && text.trim()) {
-      // Interim transcript - show as preview
-      const currentSpeaker = speakerRef.current;
-      const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
-      console.log(`⏳ Interim update from ${currentSpeaker}:`, text.substring(0, 30));
-      setInterimTranscript(`${speakerLabel} : ${text}`);
-    }
-  }, [addTranscriptChunk, currentVoiceCharacteristics]);
-
-  onRecordingErrorRef.current = useCallback((error: string) => {
-    console.error('Recording error:', error);
-    toast.error(error);
-  }, []);
-  
-  // Sync voice characteristics from audio recording to transcription hook
-  const hasInitializedVoiceRef = useRef(false);
+  // Initialize voice characteristics once
   useEffect(() => {
-    if (currentVoiceCharacteristics && !hasInitializedVoiceRef.current) {
+    if (currentVoiceCharacteristics && !isInitializedRef.current) {
       updateVoiceCharacteristics(currentVoiceCharacteristics);
-      hasInitializedVoiceRef.current = true;
+      isInitializedRef.current = true;
+      console.log('✅ Voice characteristics initialized');
     }
   }, [currentVoiceCharacteristics, updateVoiceCharacteristics]);
   

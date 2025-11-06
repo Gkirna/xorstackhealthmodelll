@@ -43,8 +43,11 @@ export function HeidiTranscriptPanel({
     }
   };
 
-  // Combine transcript and interim for display
-  const displayText = transcript + (interimTranscript ? (transcript ? '\n\n' : '') + interimTranscript : '');
+  // Combine transcript and interim for display - with better formatting
+  const displayText = interimTranscript && interimTranscript.trim()
+    ? transcript + (transcript ? '\n\n' : '') + '⏳ ' + interimTranscript
+    : transcript;
+  
   const wordCount = transcript.trim().split(/\s+/).filter(Boolean).length;
   const charCount = transcript.length;
 
