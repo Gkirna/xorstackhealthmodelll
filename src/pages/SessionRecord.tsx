@@ -69,6 +69,8 @@ const SessionRecord = () => {
   const startTimeRef = useRef<Date>(new Date());
   const speakerRef = useRef<'provider' | 'patient'>('provider');
   const transcriptCountRef = useRef(0);
+  const onTranscriptUpdateRef = useRef<(text: string, isFinal: boolean) => void>();
+  const onRecordingErrorRef = useRef<(error: string) => void>();
 
   // Language code mapping: simple code -> locale code for transcription
   const getTranscriptionLanguage = (lang: string): string => {
@@ -85,6 +87,32 @@ const SessionRecord = () => {
 
   // CUSTOM HOOKS NEXT
   // IMPORTANT: First declare useAudioRecording to get voice characteristics
+  // Stabilize callbacks in refs to prevent re-renders
+  onTranscriptUpdateRef.current = (text: string, isFinal: boolean) => {
+    const currentSpeaker = speakerRef.current;
+    const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
+    
+    if (isFinal && text.trim()) {
+      // Final transcript - add to permanent transcript
+      transcriptCountRef.current++;
+      console.log(`✅ Final transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text);
+      
+      setTranscript(prev => prev ? `${prev}\n\n${speakerLabel} : ${text}` : `${speakerLabel} : ${text}`);
+      setInterimTranscript(""); // Clear interim
+      
+      speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
+    } else if (!isFinal && text.trim()) {
+      // Interim transcript - show as preview without adding to permanent transcript
+      console.log(`⏳ Interim update from ${currentSpeaker}:`, text.substring(0, 30));
+      setInterimTranscript(`${speakerLabel} : ${text}`);
+    }
+  };
+
+  onRecordingErrorRef.current = (error: string) => {
+    console.error('Recording error:', error);
+    toast.error(error);
+  };
+
   const {
     startRecording,
     stopRecording,
@@ -105,34 +133,17 @@ const SessionRecord = () => {
     language: getTranscriptionLanguage(language), // Use selected language
     mode: recordingInputMode, // Pass recording mode
     onTranscriptUpdate: (text: string, isFinal: boolean) => {
-      const currentSpeaker = speakerRef.current;
-      const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
-      
-      if (isFinal && text.trim()) {
-        // Final transcript - add to permanent transcript
-        transcriptCountRef.current++;
-        console.log(`✅ Final transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text);
-        
-        setTranscript(prev => prev ? `${prev}\n\n${speakerLabel} : ${text}` : `${speakerLabel} : ${text}`);
-        setInterimTranscript(""); // Clear interim
-        
-        speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
-      } else if (!isFinal && text.trim()) {
-        // Interim transcript - show as preview without adding to permanent transcript
-        console.log(`⏳ Interim update from ${currentSpeaker}:`, text.substring(0, 30));
-        setInterimTranscript(`${speakerLabel} : ${text}`);
-      }
+      onTranscriptUpdateRef.current?.(text, isFinal);
     },
     // onRecordingComplete will be set via ref to avoid re-renders
     onError: (error: string) => {
-      console.error('Recording error:', error);
-      toast.error(error);
+      onRecordingErrorRef.current?.(error);
     },
   });
   
   // NOW use useTranscription - voice gender will be updated via updateVoiceCharacteristics
-  console.log('🔗 Connecting useTranscription');
-  const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats, updateVoiceCharacteristics } = useTranscription(id || '', 'unknown'); // Start with unknown, update later
+  const transcriptionHookKey = useRef(id || 'default');
+  const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats, updateVoiceCharacteristics } = useTranscription(transcriptionHookKey.current, 'unknown'); // Start with unknown, update later
   
   // Sync voice characteristics from audio recording to transcription hook (only once on mount)
   const hasInitializedVoiceRef = useRef(false);
