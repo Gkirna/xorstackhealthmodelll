@@ -86,9 +86,46 @@ const SessionRecord = () => {
   };
 
   // CUSTOM HOOKS NEXT
-  // IMPORTANT: First declare useAudioRecording to get voice characteristics
-  // Stabilize callbacks in refs to prevent re-renders
-  onTranscriptUpdateRef.current = async (text: string, isFinal: boolean) => {
+  // Note: Callbacks will be defined AFTER hooks to avoid reference errors
+
+  // Initialize transcription hook FIRST (stable session ID)
+  const transcriptionHookKey = useRef(id || 'default').current;
+  const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats, updateVoiceCharacteristics } = useTranscription(transcriptionHookKey, 'unknown');
+  
+  // Initialize audio recording hook SECOND
+  const audioRecordingConfig = useRef({
+    continuous: true,
+    language: getTranscriptionLanguage(language),
+    mode: recordingInputMode,
+  });
+  
+  const {
+    startRecording,
+    stopRecording,
+    pauseRecording,
+    resumeRecording,
+    isRecording,
+    isPaused,
+    duration,
+    isTranscribing,
+    currentVoiceGender,
+    currentVoiceCharacteristics,
+    voiceAnalyzer,
+    autoCorrector,
+    audioLevel,
+    voiceQuality,
+  } = useAudioRecording({
+    ...audioRecordingConfig.current,
+    onTranscriptUpdate: (text: string, isFinal: boolean) => {
+      onTranscriptUpdateRef.current?.(text, isFinal);
+    },
+    onError: (error: string) => {
+      onRecordingErrorRef.current?.(error);
+    },
+  });
+  
+  // NOW define callbacks AFTER all hooks (to avoid reference errors)
+  onTranscriptUpdateRef.current = useCallback(async (text: string, isFinal: boolean) => {
     if (isFinal && text.trim()) {
       // Final transcript - let transcription hook determine speaker
       transcriptCountRef.current++;
@@ -111,53 +148,21 @@ const SessionRecord = () => {
       console.log(`⏳ Interim update from ${currentSpeaker}:`, text.substring(0, 30));
       setInterimTranscript(`${speakerLabel} : ${text}`);
     }
-  };
+  }, [addTranscriptChunk, currentVoiceCharacteristics]);
 
-  onRecordingErrorRef.current = (error: string) => {
+  onRecordingErrorRef.current = useCallback((error: string) => {
     console.error('Recording error:', error);
     toast.error(error);
-  };
-
-  const {
-    startRecording,
-    stopRecording,
-    pauseRecording,
-    resumeRecording,
-    isRecording,
-    isPaused,
-    duration,
-    isTranscribing,
-    currentVoiceGender,
-    currentVoiceCharacteristics,
-    voiceAnalyzer,
-    autoCorrector,
-    audioLevel,
-    voiceQuality,
-  } = useAudioRecording({
-    continuous: true,
-    language: getTranscriptionLanguage(language), // Use selected language
-    mode: recordingInputMode, // Pass recording mode
-    onTranscriptUpdate: (text: string, isFinal: boolean) => {
-      onTranscriptUpdateRef.current?.(text, isFinal);
-    },
-    // onRecordingComplete will be set via ref to avoid re-renders
-    onError: (error: string) => {
-      onRecordingErrorRef.current?.(error);
-    },
-  });
+  }, []);
   
-  // NOW use useTranscription - voice gender will be updated via updateVoiceCharacteristics
-  const transcriptionHookKey = useRef(id || 'default');
-  const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats, updateVoiceCharacteristics } = useTranscription(transcriptionHookKey.current, 'unknown'); // Start with unknown, update later
-  
-  // Sync voice characteristics from audio recording to transcription hook (only once on mount)
+  // Sync voice characteristics from audio recording to transcription hook
   const hasInitializedVoiceRef = useRef(false);
   useEffect(() => {
     if (currentVoiceCharacteristics && !hasInitializedVoiceRef.current) {
       updateVoiceCharacteristics(currentVoiceCharacteristics);
       hasInitializedVoiceRef.current = true;
     }
-  }, []); // Empty deps - only run once, updates happen through callbacks
+  }, [currentVoiceCharacteristics, updateVoiceCharacteristics]);
   
   // Advanced transcription
   const { processAudioWithFullAnalysis, isProcessing } = useAdvancedTranscription();
