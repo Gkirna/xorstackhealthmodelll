@@ -72,14 +72,14 @@ const SessionRecord = () => {
   // Language code mapping: simple code -> locale code for transcription
   const getTranscriptionLanguage = (lang: string): string => {
     const languageMap: Record<string, string> = {
-      'en': 'en-IN',
+      'en': 'en-US', // Changed to en-US for better multi-accent support (US, UK, AU, etc.)
       'hi': 'hi-IN',
       'kn': 'kn-IN',
       'es': 'es-ES',
       'fr': 'fr-FR',
       'de': 'de-DE',
     };
-    return languageMap[lang] || 'en-IN'; // Default to English if not found
+    return languageMap[lang] || 'en-US'; // Default to US English for broader accent support
   };
 
   // CUSTOM HOOKS NEXT
