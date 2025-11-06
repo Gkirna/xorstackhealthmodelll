@@ -15,7 +15,6 @@ interface TranscriptionStats {
 
 interface HeidiTranscriptPanelProps {
   transcript: string;
-  interimTranscript?: string; // Preview of current speech being transcribed
   onTranscriptChange: (text: string) => void;
   onUndo?: () => void;
   onRedo?: () => void;
@@ -27,7 +26,6 @@ interface HeidiTranscriptPanelProps {
 
 export function HeidiTranscriptPanel({
   transcript,
-  interimTranscript = "",
   onTranscriptChange,
   onUndo,
   onRedo,
@@ -43,11 +41,6 @@ export function HeidiTranscriptPanel({
     }
   };
 
-  // Combine transcript and interim for display - with better formatting
-  const displayText = interimTranscript && interimTranscript.trim()
-    ? transcript + (transcript ? '\n\n' : '') + '⏳ ' + interimTranscript
-    : transcript;
-  
   const wordCount = transcript.trim().split(/\s+/).filter(Boolean).length;
   const charCount = transcript.length;
 
@@ -153,19 +146,12 @@ export function HeidiTranscriptPanel({
           </Button>
         </div>
       </div>
-      <div className="relative flex-1">
-        <Textarea
-          value={displayText}
-          onChange={(e) => onTranscriptChange(e.target.value)}
-          placeholder="Start recording or type manually..."
-          className="flex-1 min-h-[500px] text-sm leading-relaxed resize-none border bg-white focus-visible:ring-0 focus-visible:ring-offset-0"
-        />
-        {interimTranscript && (
-          <div className="absolute bottom-2 right-2 px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded border border-orange-300">
-            🎤 Speaking...
-          </div>
-        )}
-      </div>
+      <Textarea
+        value={transcript}
+        onChange={(e) => onTranscriptChange(e.target.value)}
+        placeholder="Start recording or type manually..."
+        className="flex-1 min-h-[500px] text-sm leading-relaxed resize-none border bg-white focus-visible:ring-0 focus-visible:ring-offset-0"
+      />
     </div>
   );
 }
