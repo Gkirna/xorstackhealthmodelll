@@ -88,21 +88,26 @@ const SessionRecord = () => {
   // CUSTOM HOOKS NEXT
   // IMPORTANT: First declare useAudioRecording to get voice characteristics
   // Stabilize callbacks in refs to prevent re-renders
-  onTranscriptUpdateRef.current = (text: string, isFinal: boolean) => {
-    const currentSpeaker = speakerRef.current;
-    const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
-    
+  onTranscriptUpdateRef.current = async (text: string, isFinal: boolean) => {
     if (isFinal && text.trim()) {
-      // Final transcript - add to permanent transcript
+      // Final transcript - let transcription hook determine speaker
       transcriptCountRef.current++;
-      console.log(`✅ Final transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text);
+      console.log(`✅ Final transcript chunk #${transcriptCountRef.current}:`, text);
+      
+      // Add to transcription hook which will determine speaker based on gaps/voice
+      const chunk = await addTranscriptChunk(text, currentVoiceCharacteristics);
+      const detectedSpeaker = chunk.speaker as 'provider' | 'patient';
+      const speakerLabel = detectedSpeaker === 'provider' ? 'Doctor' : 'Patient';
+      
+      // Update speaker ref
+      speakerRef.current = detectedSpeaker;
       
       setTranscript(prev => prev ? `${prev}\n\n${speakerLabel} : ${text}` : `${speakerLabel} : ${text}`);
       setInterimTranscript(""); // Clear interim
-      
-      speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
     } else if (!isFinal && text.trim()) {
-      // Interim transcript - show as preview without adding to permanent transcript
+      // Interim transcript - show as preview
+      const currentSpeaker = speakerRef.current;
+      const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
       console.log(`⏳ Interim update from ${currentSpeaker}:`, text.substring(0, 30));
       setInterimTranscript(`${speakerLabel} : ${text}`);
     }
