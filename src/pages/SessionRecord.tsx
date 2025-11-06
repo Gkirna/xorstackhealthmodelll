@@ -127,12 +127,14 @@ const SessionRecord = () => {
   console.log('🔗 Connecting useTranscription');
   const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats, updateVoiceCharacteristics } = useTranscription(id || '', 'unknown'); // Start with unknown, update later
   
-  // Sync voice characteristics from audio recording to transcription hook
+  // Sync voice characteristics from audio recording to transcription hook (only once on mount)
+  const hasInitializedVoiceRef = useRef(false);
   useEffect(() => {
-    if (currentVoiceCharacteristics) {
+    if (currentVoiceCharacteristics && !hasInitializedVoiceRef.current) {
       updateVoiceCharacteristics(currentVoiceCharacteristics);
+      hasInitializedVoiceRef.current = true;
     }
-  }, [currentVoiceCharacteristics, updateVoiceCharacteristics]);
+  }, []); // Empty deps - only run once, updates happen through callbacks
   
   // Advanced transcription
   const { processAudioWithFullAnalysis, isProcessing } = useAdvancedTranscription();

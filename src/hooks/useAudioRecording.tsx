@@ -445,36 +445,37 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
           if (intervalCount % 10 === 0) {
             console.log(`🔄 Voice analysis running (${intervalCount} iterations)`);
           }
+          // Check if voice analyzer still exists before analyzing
+          if (!voiceAnalyzerRef.current) {
+            // Voice analyzer may have been cleaned up, skip this iteration
+            return;
+          }
           
-          if (voiceAnalyzerRef.current) {
-            try {
-              const updated = await voiceAnalyzerRef.current.analyzeVoiceSample();
-              currentVoiceCharacteristicsRef.current = updated;
-              
-              // Update state with voice quality
-              setState(prev => ({ ...prev, voiceQuality: updated.voiceQuality }));
-              
-              // Update gender with adjusted confidence threshold based on mode
-              const confidenceThreshold = mode === 'playback' ? 0.6 : 0.75;
-              if (updated.gender !== 'unknown' && updated.confidence > confidenceThreshold) {
-                const previousGender = currentVoiceGenderRef.current;
-                currentVoiceGenderRef.current = updated.gender;
-                if (previousGender !== updated.gender) {
-                  console.log(`🎭 Voice update: ${updated.gender} (${updated.pitch.toFixed(0)}Hz, ${updated.speakerId})`);
-                }
+          try {
+            const updated = await voiceAnalyzerRef.current.analyzeVoiceSample();
+            currentVoiceCharacteristicsRef.current = updated;
+            
+            // Update state with voice quality
+            setState(prev => ({ ...prev, voiceQuality: updated.voiceQuality }));
+            
+            // Update gender with adjusted confidence threshold based on mode
+            const confidenceThreshold = mode === 'playback' ? 0.6 : 0.75;
+            if (updated.gender !== 'unknown' && updated.confidence > confidenceThreshold) {
+              const previousGender = currentVoiceGenderRef.current;
+              currentVoiceGenderRef.current = updated.gender;
+              if (previousGender !== updated.gender) {
+                console.log(`🎭 Voice update: ${updated.gender} (${updated.pitch.toFixed(0)}Hz, ${updated.speakerId})`);
               }
-              
-              // Log speaker changes
-              if (updated.speakerId !== 'silence' && updated.confidence > 0.7) {
-                if (intervalCount % 5 === 0) { // Log every 1.5 seconds
-                  console.log(`👤 Active speaker: ${updated.speakerId} (pitch: ${updated.pitch.toFixed(0)}Hz, confidence: ${(updated.confidence * 100).toFixed(0)}%)`);
-                }
-              }
-            } catch (error) {
-              console.error('❌ Voice analysis error in interval:', error);
             }
-          } else {
-            console.warn('⚠️ voiceAnalyzerRef.current is null in interval');
+            
+            // Log speaker changes
+            if (updated.speakerId !== 'silence' && updated.confidence > 0.7) {
+              if (intervalCount % 5 === 0) { // Log every 1.5 seconds
+                console.log(`👤 Active speaker: ${updated.speakerId} (pitch: ${updated.pitch.toFixed(0)}Hz, confidence: ${(updated.confidence * 100).toFixed(0)}%)`);
+              }
+            }
+          } catch (error) {
+            console.error('❌ Voice analysis error in interval:', error);
           }
         }, 300); // 300ms for more responsive updates
         
@@ -502,13 +503,26 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       // Start Web Speech API transcription
       if (state.transcriptSupported && transcriptionRef.current) {
-        console.log('🎙️ Starting Web Speech API transcription...');
+        console.log(`🎙️ Starting Web Speech API transcription for ${mode} mode...`);
+        console.log(`🎙️ Language: ${language}`);
+        console.log(`🎙️ Continuous: ${continuous}`);
+        
         const started = transcriptionRef.current.start();
         if (started) {
           setState(prev => ({ ...prev, isTranscribing: true }));
           console.log('✅ Real-time transcription started successfully');
+          
           if (mode === 'playback') {
-            toast.success('Playback transcription active - play audio near your microphone');
+            console.log('🔊 PLAYBACK MODE INSTRUCTIONS:');
+            console.log('   1. Play your audio file on external speakers');
+            console.log('   2. Make sure microphone can hear the speakers clearly');
+            console.log('   3. Adjust volume to medium-high level');
+            console.log('   4. Minimize background noise');
+            toast.success('Playback transcription active - play audio near your microphone', {
+              duration: 5000
+            });
+          } else {
+            toast.success('Real-time transcription active');
           }
         } else {
           console.warn('⚠️ Transcription failed to start');
