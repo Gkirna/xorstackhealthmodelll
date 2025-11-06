@@ -68,6 +68,8 @@ const SessionRecord = () => {
   const startTimeRef = useRef<Date>(new Date());
   const speakerRef = useRef<'provider' | 'patient'>('provider');
   const transcriptCountRef = useRef(0);
+  const lastTranscriptTimeRef = useRef<number>(0);
+  const stableSessionIdRef = useRef(id || 'default');
 
   // Language code mapping: simple code -> locale code for transcription
   const getTranscriptionLanguage = (lang: string): string => {
@@ -83,7 +85,47 @@ const SessionRecord = () => {
   };
 
   // CUSTOM HOOKS NEXT
-  // IMPORTANT: First declare useAudioRecording to get voice characteristics
+  // Create stable transcription hook first with stable key
+  console.log('🔗 Connecting useTranscription');
+  const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats, updateVoiceCharacteristics } = useTranscription(stableSessionIdRef.current, 'unknown');
+  
+  // Define stable callbacks using useCallback
+  const handleTranscriptUpdate = useCallback((text: string, isFinal: boolean) => {
+    if (isFinal && text.trim()) {
+      const currentTime = Date.now();
+      const timeSinceLastTranscript = currentTime - lastTranscriptTimeRef.current;
+      
+      // Detect speaker change based on time gap (playback mode)
+      if (recordingInputMode === 'playback' && timeSinceLastTranscript > 2000) {
+        speakerRef.current = speakerRef.current === 'provider' ? 'patient' : 'provider';
+      }
+      
+      const currentSpeaker = speakerRef.current;
+      transcriptCountRef.current++;
+      lastTranscriptTimeRef.current = currentTime;
+      
+      console.log(`💬 Transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
+      
+      // Add to transcription system
+      addTranscriptChunk(text);
+      
+      // Update UI
+      const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
+      setTranscript(prev => prev ? `${prev}\n\n${speakerLabel}: ${text}` : `${speakerLabel}: ${text}`);
+      
+      // Alternate speaker for next transcript (direct mode)
+      if (recordingInputMode === 'direct') {
+        speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
+      }
+    }
+  }, [recordingInputMode, addTranscriptChunk]);
+  
+  const handleRecordingError = useCallback((error: string) => {
+    console.error('Recording error:', error);
+    toast.error(error);
+  }, []);
+  
+  // Now declare useAudioRecording with stable callbacks
   const {
     startRecording,
     stopRecording,
@@ -101,40 +143,18 @@ const SessionRecord = () => {
     voiceQuality,
   } = useAudioRecording({
     continuous: true,
-    language: getTranscriptionLanguage(language), // Use selected language
-    mode: recordingInputMode, // Pass recording mode
-    onTranscriptUpdate: (text: string, isFinal: boolean) => {
-      if (isFinal && text.trim()) {
-        const currentSpeaker = speakerRef.current;
-        transcriptCountRef.current++;
-        
-        console.log(`💬 Transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
-        
-        const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
-        setTranscript(prev => prev ? `${prev}\n\n${speakerLabel} : ${text}` : `${speakerLabel} : ${text}`);
-        
-        speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
-      }
-    },
-    // onRecordingComplete will be set via ref to avoid re-renders
-    onError: (error: string) => {
-      console.error('Recording error:', error);
-      toast.error(error);
-    },
+    language: getTranscriptionLanguage(language),
+    mode: recordingInputMode,
+    onTranscriptUpdate: handleTranscriptUpdate,
+    onError: handleRecordingError,
   });
   
-  // NOW use useTranscription - voice gender will be updated via updateVoiceCharacteristics
-  console.log('🔗 Connecting useTranscription');
-  const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats, updateVoiceCharacteristics } = useTranscription(id || '', 'unknown'); // Start with unknown, update later
-  
-  // Sync voice characteristics from audio recording to transcription hook (only once on mount)
-  const hasInitializedVoiceRef = useRef(false);
+  // Sync voice characteristics (runs only when characteristics actually change)
   useEffect(() => {
-    if (currentVoiceCharacteristics && !hasInitializedVoiceRef.current) {
+    if (currentVoiceCharacteristics) {
       updateVoiceCharacteristics(currentVoiceCharacteristics);
-      hasInitializedVoiceRef.current = true;
     }
-  }, []); // Empty deps - only run once, updates happen through callbacks
+  }, [currentVoiceCharacteristics, updateVoiceCharacteristics]);
   
   // Advanced transcription
   const { processAudioWithFullAnalysis, isProcessing } = useAdvancedTranscription();
