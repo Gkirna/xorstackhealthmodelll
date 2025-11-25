@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { RealTimeTranscription } from '@/utils/RealTimeTranscription';
+import { WhisperTranscription } from '@/utils/WhisperTranscription';
 import { VoiceAnalyzer } from '@/utils/VoiceAnalyzer';
 import { MedicalAutoCorrector } from '@/utils/MedicalAutoCorrector';
 
@@ -64,7 +64,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const transcriptionRef = useRef<RealTimeTranscription | null>(null);
+  const transcriptionRef = useRef<WhisperTranscription | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -85,22 +85,21 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       return;
     }
     
-    console.log(`🎙️ Initializing real-time transcription engine for language: ${language}, mode: ${mode}`);
+    console.log(`🎙️ Initializing Whisper transcription engine for language: ${language}, mode: ${mode}`);
     transcriptionInitialized.current = true;
     
-    transcriptionRef.current = new RealTimeTranscription({
-      continuous,
-      interimResults: true,
-      lang: language,
+    transcriptionRef.current = new WhisperTranscription({
+      language: language.split('-')[0], // Extract base language code (e.g., 'en' from 'en-US')
+      mode,
       onResult: async (transcript, isFinal) => {
-        console.log('📝 Transcription result:', { 
+        console.log('📝 Whisper transcription result:', { 
           text: transcript.substring(0, 50) + '...', 
           isFinal,
           length: transcript.length 
         });
         
         if (isFinal) {
-          console.log('✅ Final transcript chunk received');
+          console.log('✅ Final transcript chunk received from Whisper');
           
           // Apply medical auto-correction before sending to callback
           const correctedTranscript = autoCorrectorRef.current.correctTranscript(
@@ -127,29 +126,28 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         }
       },
       onError: (error) => {
-        console.error('❌ Transcription error:', error);
+        console.error('❌ Whisper transcription error:', error);
         setState(prev => ({ ...prev, error }));
-        toast.error(error);
+        if (error.includes('OPENAI_API_KEY')) {
+          toast.error('OpenAI API key not configured. Please contact support.');
+        } else {
+          toast.error(error);
+        }
       },
       onStart: () => {
-        console.log('✅ Transcription started successfully');
+        console.log('✅ Whisper transcription started successfully');
         setState(prev => ({ ...prev, isTranscribing: true }));
-        toast.success('Real-time transcription active', { duration: 2000 });
+        toast.success('Advanced AI transcription active', { duration: 2000 });
       },
       onEnd: () => {
-        console.log('🛑 Transcription ended');
+        console.log('🛑 Whisper transcription ended');
         setState(prev => ({ ...prev, isTranscribing: false }));
       },
     });
 
-    const isSupported = transcriptionRef.current.isBrowserSupported();
-    setState(prev => ({ ...prev, transcriptSupported: isSupported }));
-    
-    if (!isSupported) {
-      console.warn('⚠️ Real-time transcription not supported in this browser');
-    } else {
-      console.log('✅ Real-time transcription is supported');
-    }
+    // Whisper is always supported (uses API)
+    setState(prev => ({ ...prev, transcriptSupported: true }));
+    console.log('✅ Whisper transcription is ready');
 
     return () => {
       console.log('🧹 Cleaning up audio recorder...');
@@ -517,16 +515,16 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         // Continue without voice analysis
       }
       
-      // Start Web Speech API transcription
-      if (state.transcriptSupported && transcriptionRef.current) {
-        console.log(`🎙️ Starting Web Speech API transcription for ${mode} mode...`);
+      // Start Whisper transcription with audio stream
+      if (transcriptionRef.current) {
+        console.log(`🎙️ Starting Whisper AI transcription for ${mode} mode...`);
         console.log(`🎙️ Language: ${language}`);
-        console.log(`🎙️ Continuous: ${continuous}`);
+        console.log(`🎙️ Mode: ${mode}`);
         
-        const started = transcriptionRef.current.start();
+        const started = await transcriptionRef.current.start(stream);
         if (started) {
           setState(prev => ({ ...prev, isTranscribing: true }));
-          console.log('✅ Real-time transcription started successfully');
+          console.log('✅ Whisper transcription started successfully');
           
           if (mode === 'playback') {
             console.log('🔊 PLAYBACK MODE INSTRUCTIONS:');
@@ -534,19 +532,16 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
             console.log('   2. Make sure microphone can hear the speakers clearly');
             console.log('   3. Adjust volume to medium-high level');
             console.log('   4. Minimize background noise');
-            toast.success('Playback transcription active - play audio near your microphone', {
+            toast.success('Advanced AI transcription active - play audio near your microphone', {
               duration: 5000
             });
           } else {
-            toast.success('Real-time transcription active');
+            toast.success('Advanced AI transcription active');
           }
         } else {
-          console.warn('⚠️ Transcription failed to start');
-          toast.warning('Real-time transcription not available. You can still record and transcribe later.');
+          console.warn('⚠️ Whisper transcription failed to start');
+          toast.warning('Transcription failed to start. Please check your settings.');
         }
-      } else {
-        console.warn('⚠️ Transcription not supported');
-        toast.warning('Real-time transcription not supported in this browser. Using Chrome is recommended.');
       }
       
       // Start audio level monitoring
@@ -628,9 +623,9 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.pause();
       
-      // Pause transcription
+      // Pause Whisper transcription
       if (transcriptionRef.current) {
-        console.log('⏸️ Pausing transcription engine');
+        console.log('⏸️ Pausing Whisper transcription engine');
         transcriptionRef.current.pause();
       }
       
@@ -664,9 +659,9 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
       mediaRecorderRef.current.resume();
       
-      // Resume transcription
+      // Resume Whisper transcription
       if (transcriptionRef.current) {
-        console.log('▶️ Resuming transcription engine');
+        console.log('▶️ Resuming Whisper transcription engine');
         transcriptionRef.current.resume();
       }
       
