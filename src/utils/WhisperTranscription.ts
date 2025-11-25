@@ -61,8 +61,9 @@ export class WhisperTranscription {
         }
       };
 
-      // Start recording and collect chunks
-      this.mediaRecorder.start();
+      // Start recording and collect chunks every second
+      // The timeslice parameter tells MediaRecorder to fire ondataavailable every 1000ms
+      this.mediaRecorder.start(1000);
       this.isActive = true;
 
       // Start periodic chunk processing
