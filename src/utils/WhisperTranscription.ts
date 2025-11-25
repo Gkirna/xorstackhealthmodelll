@@ -18,11 +18,8 @@ export class WhisperTranscription {
   private config: WhisperTranscriptionConfig;
   private isActive: boolean = false;
   private mediaRecorder: MediaRecorder | null = null;
-  private audioChunks: Blob[] = [];
-  private chunkTimer: number | null = null;
   private processingQueue: Promise<void> = Promise.resolve();
   private fullTranscript: string = '';
-  private chunkInterval: number = 5000; // Send chunks every 5 seconds for more complete audio
 
   constructor(config: WhisperTranscriptionConfig = {}) {
     this.config = {
@@ -56,14 +53,13 @@ export class WhisperTranscription {
       console.log('🎬 Using MIME type:', mimeType);
       const options = { 
         mimeType,
-        audioBitsPerSecond: 128000 // Higher bitrate for better quality and more reliable chunks
+        audioBitsPerSecond: 128000
       };
       this.mediaRecorder = new MediaRecorder(stream, options);
       
       this.mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           console.log(`📦 Audio chunk received: ${event.data.size} bytes`);
-          // Process immediately when we receive a chunk
           this.processAudioChunk(event.data);
         }
       };
@@ -75,12 +71,9 @@ export class WhisperTranscription {
         }
       };
 
-      // Start recording continuously without timeslice for better compatibility
-      this.mediaRecorder.start();
+      // Start recording with 10-second chunks for complete, properly-formatted audio
+      this.mediaRecorder.start(10000);
       this.isActive = true;
-
-      // Start periodic chunk processing every 3 seconds
-      this.startChunkProcessing();
 
       if (this.config.onStart) {
         this.config.onStart();
@@ -98,20 +91,10 @@ export class WhisperTranscription {
     }
   }
 
-  private startChunkProcessing() {
-    console.log('⏰ Starting chunk processing timer: every 5 seconds');
-    // Request audio data and process it every 5 seconds
-    this.chunkTimer = window.setInterval(() => {
-      if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
-        this.mediaRecorder.requestData(); // Request a chunk
-      }
-    }, this.chunkInterval);
-  }
-
   private async processAudioChunk(audioBlob: Blob) {
-    // Skip if too small (need at least 0.5 seconds of audio at typical bitrate)
-    if (audioBlob.size < 10000) {
-      console.log('⏭️ Skipping small audio chunk (likely silence or incomplete)');
+    // Skip if too small - need at least 1 second of audio at 128kbps
+    if (audioBlob.size < 15000) {
+      console.log('⏭️ Skipping small audio chunk:', audioBlob.size, 'bytes');
       return;
     }
 
@@ -183,20 +166,9 @@ export class WhisperTranscription {
   public stop(): string {
     console.log('🛑 Stopping Whisper transcription');
 
-    if (this.chunkTimer) {
-      clearInterval(this.chunkTimer);
-      this.chunkTimer = null;
-    }
-
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       this.mediaRecorder.stop();
       this.mediaRecorder = null;
-    }
-
-    // Request final chunk if still recording
-    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
-      console.log('🔄 Requesting final audio chunk');
-      this.mediaRecorder.requestData();
     }
 
     this.isActive = false;
@@ -209,10 +181,6 @@ export class WhisperTranscription {
   }
 
   public pause() {
-    if (this.chunkTimer) {
-      clearInterval(this.chunkTimer);
-      this.chunkTimer = null;
-    }
     if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
       this.mediaRecorder.pause();
     }
@@ -222,7 +190,6 @@ export class WhisperTranscription {
   public resume() {
     if (this.mediaRecorder && this.mediaRecorder.state === 'paused') {
       this.mediaRecorder.resume();
-      this.startChunkProcessing();
       console.log('▶️ Whisper transcription resumed');
     }
   }
