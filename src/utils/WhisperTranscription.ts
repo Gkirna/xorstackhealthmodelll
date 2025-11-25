@@ -102,6 +102,55 @@ export class WhisperTranscription {
     }, this.chunkInterval);
   }
 
+  private async convertBlobToWav(blob: Blob): Promise<Blob> {
+    // Convert WebM to WAV using Web Audio API
+    const arrayBuffer = await blob.arrayBuffer();
+    const audioContext = new AudioContext({ sampleRate: 24000 });
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    
+    // Get PCM data
+    const pcmData = audioBuffer.getChannelData(0);
+    const wavBuffer = this.encodeWav(pcmData, audioBuffer.sampleRate);
+    
+    await audioContext.close();
+    return new Blob([wavBuffer], { type: 'audio/wav' });
+  }
+
+  private encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+
+    // WAV header
+    const writeString = (offset: number, string: string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + samples.length * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true); // fmt chunk size
+    view.setUint16(20, 1, true); // PCM format
+    view.setUint16(22, 1, true); // mono
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true); // byte rate
+    view.setUint16(32, 2, true); // block align
+    view.setUint16(34, 16, true); // bits per sample
+    writeString(36, 'data');
+    view.setUint32(40, samples.length * 2, true);
+
+    // Convert float to int16
+    const offset = 44;
+    for (let i = 0; i < samples.length; i++) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+
+    return buffer;
+  }
+
   private async processAccumulatedAudio() {
     if (this.audioChunks.length === 0) {
       console.log('⏭️ No audio chunks to process yet');
@@ -119,7 +168,7 @@ export class WhisperTranscription {
       try {
         console.log(`🔄 Processing ${chunksToProcess.length} audio chunks`);
         
-        // Combine chunks into single blob - use simple webm type for better compatibility
+        // Combine chunks into single blob
         const audioBlob = new Blob(chunksToProcess, { type: 'audio/webm' });
         console.log(`📊 Combined audio blob: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
 
@@ -129,8 +178,13 @@ export class WhisperTranscription {
           return;
         }
 
+        // Convert to WAV format
+        console.log('🔄 Converting WebM to WAV format...');
+        const wavBlob = await this.convertBlobToWav(audioBlob);
+        console.log(`✅ Converted to WAV: ${wavBlob.size} bytes`);
+
         // Convert to base64
-        const base64Audio = await this.blobToBase64(audioBlob);
+        const base64Audio = await this.blobToBase64(wavBlob);
 
         // Send to Whisper API via edge function
         const { data, error } = await supabase.functions.invoke('whisper-transcribe', {
