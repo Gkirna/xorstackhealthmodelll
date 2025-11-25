@@ -2,7 +2,8 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useTranscriptUpdates } from './useRealtime';
-import { VoiceAnalyzer } from '@/utils/VoiceAnalyzer';
+import { VoiceAnalyzer, VoiceCharacteristics } from '@/utils/VoiceAnalyzer';
+import { AdvancedSpeakerDiarization } from '@/utils/AdvancedSpeakerDiarization';
 
 interface TranscriptChunk {
   id: string;
@@ -66,10 +67,13 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
   // Voice analysis for gender detection
   const voiceAnalyzerRef = useRef<VoiceAnalyzer | null>(null);
   const currentVoiceGenderRef = useRef<'male' | 'female' | 'unknown'>('unknown');
-  const currentVoiceCharacteristicsRef = useRef<any>(null);
+  const currentVoiceCharacteristicsRef = useRef<VoiceCharacteristics | null>(null);
   const genderHistoryRef = useRef<{ gender: 'male' | 'female', timestamp: number }[]>([]);
   const lastSpeakerPitchRef = useRef<number>(0);
   const recentChunksRef = useRef<{ length: number, speaker: string }[]>([]);
+  
+  // Advanced speaker diarization system
+  const diarizationSystemRef = useRef<AdvancedSpeakerDiarization>(new AdvancedSpeakerDiarization());
   
   // Update gender from external source (from audio recording)
   useEffect(() => {
@@ -815,9 +819,19 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
   }, [isTranscribing]);
 
   // Method to update voice characteristics from external source
-  const updateVoiceCharacteristics = useCallback((characteristics: any) => {
+  const updateVoiceCharacteristics = useCallback((characteristics: VoiceCharacteristics) => {
     currentVoiceCharacteristicsRef.current = characteristics;
     console.log('🎤 Voice characteristics updated in transcription:', characteristics);
+  }, []);
+
+  // Method to get speaker statistics
+  const getSpeakerStatistics = useCallback(() => {
+    return diarizationSystemRef.current.getSpeakerStatistics();
+  }, []);
+
+  // Method to reset diarization
+  const resetDiarization = useCallback(() => {
+    diarizationSystemRef.current.reset();
   }, []);
 
   return {
@@ -825,10 +839,12 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
     isTranscribing,
     setIsTranscribing,
     stats,
-    addTranscriptChunk: useCallback((text: string, speaker?: string) => addTranscriptChunk(text, speaker), [addTranscriptChunk]),
+    addTranscriptChunk,
     loadTranscripts: useCallback(async () => await loadTranscripts(), [loadTranscripts]),
     getFullTranscript: useCallback(() => getFullTranscript(), [getFullTranscript]),
     saveAllPendingChunks: useCallback(async () => await saveAllPendingChunks(), [saveAllPendingChunks]),
     updateVoiceCharacteristics,
+    getSpeakerStatistics,
+    resetDiarization,
   };
 }

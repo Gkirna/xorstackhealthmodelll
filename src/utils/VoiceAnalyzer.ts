@@ -3,7 +3,7 @@
  * Uses Web Audio API for real-time voice analysis with speaker diarization
  */
 
-interface VoiceCharacteristics {
+export interface VoiceCharacteristics {
   gender: 'male' | 'female' | 'unknown';
   pitch: number; // Hz
   confidence: number; // 0-1
