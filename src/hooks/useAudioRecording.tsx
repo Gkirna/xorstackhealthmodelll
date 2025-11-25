@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { RealtimeTranscription } from '@/utils/RealtimeTranscription';
+import { WhisperTranscription } from '@/utils/WhisperTranscription';
 import { VoiceAnalyzer } from '@/utils/VoiceAnalyzer';
 import { MedicalAutoCorrector } from '@/utils/MedicalAutoCorrector';
 
@@ -64,7 +64,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const transcriptionRef = useRef<RealtimeTranscription | null>(null);
+  const transcriptionRef = useRef<WhisperTranscription | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -88,9 +88,10 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     console.log(`🎙️ Initializing Realtime transcription engine for language: ${language}`);
     transcriptionInitialized.current = true;
     
-    transcriptionRef.current = new RealtimeTranscription({
-      language: language.split('-')[0], // Extract base language code (e.g., 'en' from 'en-US')
-      onResult: async (transcript, isFinal) => {
+      transcriptionRef.current = new WhisperTranscription({
+        mode,
+        language: language.split('-')[0], // Extract base language code (e.g., 'en' from 'en-US')
+        onResult: async (transcript, isFinal) => {
         console.log('📝 Whisper transcription result:', { 
           text: transcript.substring(0, 50) + '...', 
           isFinal,
