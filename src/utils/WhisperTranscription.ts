@@ -119,9 +119,9 @@ export class WhisperTranscription {
   }
 
   private async processAudioChunk(audioBlob: Blob) {
-    // Skip if too small (need at least 1.5 seconds at 128kbps)
-    if (audioBlob.size < 15000) {
-      console.log('[Whisper] Chunk too small, skipping');
+    // Skip if too small (need at least 3 seconds of audio at 128kbps)
+    if (audioBlob.size < 48000) {
+      console.log('[Whisper] Chunk too small, skipping:', audioBlob.size);
       return;
     }
 
