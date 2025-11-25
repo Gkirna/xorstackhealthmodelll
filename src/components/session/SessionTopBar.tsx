@@ -1,7 +1,7 @@
 import { Trash2, Calendar, Languages, Clock, Mic, ChevronDown, Pause, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Select,
   SelectContent,
@@ -24,6 +24,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Check } from "lucide-react";
+import { useMicrophoneSelection } from "@/hooks/useMicrophoneSelection";
 
 interface SessionTopBarProps {
   patientName: string;
@@ -72,6 +73,33 @@ export function SessionTopBar({
 }: SessionTopBarProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(patientName);
+  
+  // Get real microphone devices
+  const { 
+    microphones, 
+    selectedMicId, 
+    setSelectedMicId,
+    audioLevels,
+    isMonitoring,
+    startMonitoring,
+    stopMonitoring 
+  } = useMicrophoneSelection();
+  
+  // Sync microphone selection with parent
+  useEffect(() => {
+    if (selectedMicId && selectedMicId !== microphone) {
+      onMicrophoneChange(selectedMicId);
+    }
+  }, [selectedMicId, microphone, onMicrophoneChange]);
+  
+  // Start monitoring audio when recording starts
+  useEffect(() => {
+    if (isRecording && !isMonitoring) {
+      startMonitoring();
+    } else if (!isRecording && isMonitoring) {
+      stopMonitoring();
+    }
+  }, [isRecording, isMonitoring, startMonitoring, stopMonitoring]);
 
   const handleNameSubmit = () => {
     onPatientNameChange(tempName);
@@ -287,27 +315,35 @@ export function SessionTopBar({
             <span className="font-mono">{elapsedTime}</span>
           </div>
 
-          {/* Microphone with level bars */}
-          <Select value={microphone} onValueChange={onMicrophoneChange}>
+          {/* Microphone with real-time level bars */}
+          <Select value={selectedMicId} onValueChange={setSelectedMicId}>
             <SelectTrigger className="h-8 w-auto gap-2 border-0 bg-transparent hover:bg-accent">
               <div className="flex items-center gap-2">
                 <Mic className="h-4 w-4 text-muted-foreground" />
                 <div className="flex items-center gap-0.5">
-                  {[...Array(5)].map((_, i) => (
+                  {audioLevels.map((level, i) => (
                     <div
                       key={i}
-                      className="w-1 rounded-full bg-green-500"
-                      style={{ height: `${8 + Math.random() * 4}px` }}
+                      className="w-1 rounded-full bg-green-500 transition-all duration-100"
+                      style={{ height: `${Math.max(4, (level / 100) * 16)}px` }}
                     />
                   ))}
                 </div>
                 <ChevronDown className="h-3 w-3 opacity-50" />
               </div>
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="default">Default Microphone</SelectItem>
-              <SelectItem value="headset">Headset Microphone</SelectItem>
-              <SelectItem value="external">External USB Mic</SelectItem>
+            <SelectContent className="bg-popover z-50">
+              {microphones.length > 0 ? (
+                microphones.map((mic) => (
+                  <SelectItem key={mic.deviceId} value={mic.deviceId}>
+                    {mic.label}
+                  </SelectItem>
+                ))
+              ) : (
+                <SelectItem value="default" disabled>
+                  Loading microphones...
+                </SelectItem>
+              )}
             </SelectContent>
           </Select>
         </div>

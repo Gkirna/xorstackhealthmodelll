@@ -92,7 +92,7 @@ const SessionRecord = () => {
 
   // CUSTOM HOOKS - Initialize transcription hook FIRST with stable session ID
   const transcriptionSessionId = sessionIdRef.current || 'default';
-  console.log('🔗 Initializing useTranscription with session:', transcriptionSessionId);
+  // Remove excessive logging that causes performance issues
   
   const { 
     transcriptChunks, 
@@ -164,7 +164,7 @@ const SessionRecord = () => {
     toast.error(error, { duration: 5000 });
   };
   
-  // Create stable options object ONCE
+  // Create stable options object ONCE with deviceId support
   const audioRecordingOptions = useMemo(() => ({
     continuous: true,
     get language() {
@@ -177,13 +177,16 @@ const SessionRecord = () => {
     get mode() {
       return recordingInputModeRef.current;
     },
+    get deviceId() {
+      return microphone !== 'default' ? microphone : undefined;
+    },
     onTranscriptUpdate: (text: string, isFinal: boolean) => {
       handleTranscriptUpdateRef.current?.(text, isFinal);
     },
     onError: (error: string) => {
       handleRecordingErrorRef.current?.(error);
     },
-  }), []); // Empty deps - create once, never recreate
+  }), [microphone]); // Add microphone as dependency
   
   const {
     startRecording,

@@ -825,10 +825,10 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
     isTranscribing,
     setIsTranscribing,
     stats,
-    addTranscriptChunk,
-    loadTranscripts,
-    getFullTranscript,
-    saveAllPendingChunks,
+    addTranscriptChunk: useCallback((text: string) => addTranscriptChunk(text), []),
+    loadTranscripts: useCallback(async () => await loadTranscripts(), []),
+    getFullTranscript: useCallback(() => getFullTranscript(), []),
+    saveAllPendingChunks: useCallback(async () => await saveAllPendingChunks(), []),
     updateVoiceCharacteristics,
   };
 }
