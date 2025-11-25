@@ -1,73 +1,156 @@
-# Welcome to your Lovable project
+# Medical AI Scribe - Clinical Documentation System
 
-## Project info
+> **⚠️ HIPAA COMPLIANCE REQUIRED**: This system processes Protected Health Information (PHI). See [SECURITY.md](./SECURITY.md) for compliance requirements before deploying to production.
 
-**URL**: https://lovable.dev/projects/beb32a8a-9a0e-431e-a90a-200119acb386
+## Overview
 
-## How can I edit this code?
+Advanced AI-powered medical transcription and clinical documentation system featuring:
 
-There are several ways of editing your application.
+- 🎙️ **Real-time Speech-to-Text**: OpenAI Whisper API for medical-grade transcription
+- 👥 **Speaker Detection**: Automatic provider/patient identification
+- 🏥 **Medical Auto-Correction**: AI-powered medical terminology correction
+- 📝 **Clinical Note Generation**: Structured SOAP/DAP notes using Google Gemini
+- 🎯 **ICD-10 Coding**: Automated diagnosis code suggestions
+- 🔒 **HIPAA-Ready**: PHI protection, audit logging, secure handling
 
-**Use Lovable**
+## Quick Start
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/beb32a8a-9a0e-431e-a90a-200119acb386) and start prompting.
+### Prerequisites
+- Node.js 18+ or Bun
+- Supabase account (Lovable Cloud enabled)
+- OpenAI API key (Enterprise tier with BAA for production)
 
-Changes made via Lovable will be committed automatically to this repo.
+### Installation
 
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
+```bash
+# Clone repository
 git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
 cd <YOUR_PROJECT_NAME>
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Install dependencies
+npm install
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Environment Setup
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Required secrets (managed via Lovable Cloud):
+- `OPENAI_API_KEY` - For Whisper transcription (requires BAA for production)
+- `LOVABLE_API_KEY` - For clinical AI features (auto-configured)
 
-**Use GitHub Codespaces**
+## Features
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### 1. Real-Time Transcription
+- **Direct Recording**: Record doctor-patient conversations
+- **Playback Mode**: Transcribe external audio through laptop microphone
+- **Multi-Language**: Supports Indian English, US English, UK English, Australian English
+- **High Accuracy**: Medical terminology optimized
 
-## What technologies are used for this project?
+### 2. Voice Analysis
+- **Gender Detection**: Male/female voice identification
+- **Pitch Analysis**: Real-time frequency analysis
+- **Quality Monitoring**: Voice quality indicators
+- **Speaker Switching**: Automatic provider/patient alternation
 
-This project is built with:
+### 3. Clinical Documentation
+- **SOAP Notes**: Subjective, Objective, Assessment, Plan format
+- **DAP Notes**: Data, Assessment, Plan format
+- **Template System**: Customizable note templates
+- **Auto-Generation**: AI-powered note creation from transcripts
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### 4. AI-Powered Features
+- **Medical NER**: Extract conditions, medications, procedures
+- **ICD-10 Suggestions**: Automated diagnosis coding
+- **Task Extraction**: Identify follow-ups and action items
+- **Ask Heidi**: Contextual AI assistant for clinical questions
 
-## How can I deploy this project?
+## Architecture
 
-Simply open [Lovable](https://lovable.dev/projects/beb32a8a-9a0e-431e-a90a-200119acb386) and click on Share -> Publish.
+### Frontend
+- **Framework**: React 18 + TypeScript + Vite
+- **UI Components**: Shadcn/ui + Tailwind CSS
+- **State Management**: React Query + React Context
+- **Audio Processing**: Web Audio API + MediaRecorder
 
-## Can I connect a custom domain to my Lovable project?
+### Backend
+- **Database**: PostgreSQL (Supabase)
+- **Auth**: Supabase Auth (email/password)
+- **Edge Functions**: Deno (Supabase Functions)
+- **File Storage**: Supabase Storage
 
-Yes, you can!
+### AI Services
+- **Transcription**: OpenAI Whisper API
+- **Clinical AI**: Google Gemini 2.5 Flash (via Lovable AI)
+- **Voice Analysis**: Custom DSP algorithms
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Security & Compliance
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+### HIPAA Requirements ⚠️
+1. **OpenAI BAA**: Required for production use
+2. **Encryption**: At rest and in transit (enabled)
+3. **Access Controls**: RLS policies + authentication
+4. **Audit Logging**: All PHI access tracked
+5. **Data Retention**: 90-day automatic cleanup
+
+### Security Features
+- ✅ No PHI in application logs
+- ✅ Content hashing for audit trails
+- ✅ Rate limiting (20 req/min per user)
+- ✅ Input validation on all endpoints
+- ✅ Row Level Security (RLS) on all tables
+- ⚠️ CORS restriction needed (change '*' to your domain)
+
+**See [SECURITY.md](./SECURITY.md) for complete compliance guide**
+
+## Project Structure
+```
+src/
+├── components/       # React components
+│   ├── session/     # Recording session UI
+│   └── ui/          # Shadcn components
+├── hooks/           # Custom React hooks
+├── utils/           # Utilities and helpers
+├── ai/              # AI prompts and logic
+└── pages/           # Route pages
+
+supabase/
+├── functions/       # Edge functions
+└── migrations/      # Database migrations
+```
+
+## Deployment
+
+### Pre-Deployment Checklist
+- [ ] Sign OpenAI BAA (enterprise tier)
+- [ ] Update CORS to restrict origins
+- [ ] Enable MFA for admin users
+- [ ] Configure data retention policies
+- [ ] Set up error monitoring
+- [ ] Run security audit
+- [ ] Document privacy policy
+
+### Deploy to Production
+```bash
+# Build and deploy
+npm run build
+
+# Deploy via Lovable
+# Click Share -> Publish in Lovable UI
+```
+
+## Support & Resources
+
+- 📖 [Full Documentation](./docs/)
+- 🔒 [Security Guide](./SECURITY.md)
+- 🏥 [Clinical Workflow Guide](./docs/TRANSCRIPTION_AI_FEATURES_GUIDE.md)
+- 🌐 [Lovable Documentation](https://docs.lovable.dev)
+
+## License
+
+Proprietary - All rights reserved
+
+---
+
+**⚠️ IMPORTANT**: This software processes PHI. Ensure HIPAA compliance before production use. See SECURITY.md for requirements.
