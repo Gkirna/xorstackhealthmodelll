@@ -43,14 +43,21 @@ export class WhisperTranscription {
       console.log('📊 Mode:', this.config.mode);
       console.log('🌐 Language:', this.config.language);
 
-      // Create MediaRecorder for audio chunks
-      const options = { mimeType: 'audio/webm;codecs=opus' };
+      // Create MediaRecorder for audio chunks with timeslice for valid chunks
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm';
+      }
+      
+      console.log('🎬 Using MIME type:', mimeType);
+      const options = { mimeType };
       this.mediaRecorder = new MediaRecorder(stream, options);
       
       this.mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
-          this.audioChunks.push(event.data);
-          console.log(`📦 Audio chunk collected: ${event.data.size} bytes`);
+          console.log(`📦 Audio chunk received: ${event.data.size} bytes`);
+          // Process immediately when we receive a chunk
+          this.processAudioChunk(event.data);
         }
       };
 
@@ -61,11 +68,11 @@ export class WhisperTranscription {
         }
       };
 
-      // Start recording and collect chunks
+      // Start recording continuously without timeslice for better compatibility
       this.mediaRecorder.start();
       this.isActive = true;
 
-      // Start periodic chunk processing
+      // Start periodic chunk processing every 3 seconds
       this.startChunkProcessing();
 
       if (this.config.onStart) {
@@ -85,46 +92,35 @@ export class WhisperTranscription {
   }
 
   private startChunkProcessing() {
-    // Process accumulated audio every 3 seconds
+    console.log('⏰ Starting chunk processing timer: every 3 seconds');
+    // Request audio data and process it every 3 seconds
     this.chunkTimer = window.setInterval(() => {
-      this.processAccumulatedAudio();
+      if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+        this.mediaRecorder.requestData(); // Request a chunk
+      }
     }, this.chunkInterval);
   }
 
-  private async processAccumulatedAudio() {
-    if (this.audioChunks.length === 0) {
-      console.log('⏭️ No audio chunks to process');
+  private async processAudioChunk(audioBlob: Blob) {
+    // Skip if too small (less than 5KB - likely silence)
+    if (audioBlob.size < 5000) {
+      console.log('⏭️ Skipping small audio chunk (likely silence)');
       return;
     }
-
-    // Get all accumulated chunks
-    const chunksToProcess = [...this.audioChunks];
-    this.audioChunks = []; // Clear for next batch
 
     // Add to processing queue to prevent overlapping requests
     this.processingQueue = this.processingQueue.then(async () => {
       try {
-        console.log(`🔄 Processing ${chunksToProcess.length} audio chunks`);
-        
-        // Combine chunks into single blob
-        const audioBlob = new Blob(chunksToProcess, { type: 'audio/webm' });
-        console.log(`📊 Combined audio size: ${audioBlob.size} bytes`);
+        console.log(`📊 Processing WebM blob: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
 
-        // Skip if too small (less than 10KB - likely silence)
-        if (audioBlob.size < 10000) {
-          console.log('⏭️ Skipping small audio chunk (likely silence)');
-          return;
-        }
+        // Send WebM audio blob to edge function
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording.webm');
+        formData.append('language', this.config.language || 'en');
 
-        // Convert to base64
-        const base64Audio = await this.blobToBase64(audioBlob);
-
-        // Send to Whisper API via edge function
+        console.log('📤 Sending to edge function...');
         const { data, error } = await supabase.functions.invoke('whisper-transcribe', {
-          body: {
-            audio: base64Audio,
-            language: this.config.language
-          }
+          body: formData
         });
 
         if (error) {
@@ -190,10 +186,10 @@ export class WhisperTranscription {
       this.mediaRecorder = null;
     }
 
-    // Process any remaining chunks
-    if (this.audioChunks.length > 0) {
-      console.log('🔄 Processing final audio chunks');
-      this.processAccumulatedAudio();
+    // Request final chunk if still recording
+    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+      console.log('🔄 Requesting final audio chunk');
+      this.mediaRecorder.requestData();
     }
 
     this.isActive = false;
@@ -234,7 +230,6 @@ export class WhisperTranscription {
 
   public destroy() {
     this.stop();
-    this.audioChunks = [];
     this.fullTranscript = '';
   }
 }
