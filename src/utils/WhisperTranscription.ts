@@ -22,7 +22,7 @@ export class WhisperTranscription {
   private chunkTimer: number | null = null;
   private processingQueue: Promise<void> = Promise.resolve();
   private fullTranscript: string = '';
-  private chunkInterval: number = 3000; // Send chunks every 3 seconds
+  private chunkInterval: number = 5000; // Send chunks every 5 seconds for more complete audio
 
   constructor(config: WhisperTranscriptionConfig = {}) {
     this.config = {
@@ -43,14 +43,21 @@ export class WhisperTranscription {
       console.log('📊 Mode:', this.config.mode);
       console.log('🌐 Language:', this.config.language);
 
-      // Create MediaRecorder for audio chunks with timeslice for valid chunks
+      // Create MediaRecorder for audio chunks
+      // Try different mime types for better OpenAI compatibility
       let mimeType = 'audio/webm;codecs=opus';
       if (!MediaRecorder.isTypeSupported(mimeType)) {
         mimeType = 'audio/webm';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'audio/ogg;codecs=opus';
+        }
       }
       
       console.log('🎬 Using MIME type:', mimeType);
-      const options = { mimeType };
+      const options = { 
+        mimeType,
+        audioBitsPerSecond: 128000 // Higher bitrate for better quality and more reliable chunks
+      };
       this.mediaRecorder = new MediaRecorder(stream, options);
       
       this.mediaRecorder.ondataavailable = (event) => {
@@ -92,8 +99,8 @@ export class WhisperTranscription {
   }
 
   private startChunkProcessing() {
-    console.log('⏰ Starting chunk processing timer: every 3 seconds');
-    // Request audio data and process it every 3 seconds
+    console.log('⏰ Starting chunk processing timer: every 5 seconds');
+    // Request audio data and process it every 5 seconds
     this.chunkTimer = window.setInterval(() => {
       if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
         this.mediaRecorder.requestData(); // Request a chunk
@@ -102,9 +109,9 @@ export class WhisperTranscription {
   }
 
   private async processAudioChunk(audioBlob: Blob) {
-    // Skip if too small (less than 5KB - likely silence)
-    if (audioBlob.size < 5000) {
-      console.log('⏭️ Skipping small audio chunk (likely silence)');
+    // Skip if too small (need at least 0.5 seconds of audio at typical bitrate)
+    if (audioBlob.size < 10000) {
+      console.log('⏭️ Skipping small audio chunk (likely silence or incomplete)');
       return;
     }
 
