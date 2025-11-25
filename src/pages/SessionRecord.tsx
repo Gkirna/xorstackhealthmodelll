@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -108,6 +108,19 @@ const SessionRecord = () => {
   const handleTranscriptUpdateRef = useRef<(text: string, isFinal: boolean) => void>();
   const handleRecordingErrorRef = useRef<(error: string) => void>();
   
+  // Store recording options in refs to prevent recreating callbacks
+  const languageRef = useRef(language);
+  const recordingInputModeRef = useRef(recordingInputMode);
+  
+  // Update refs when values change
+  useEffect(() => {
+    languageRef.current = language;
+  }, [language]);
+  
+  useEffect(() => {
+    recordingInputModeRef.current = recordingInputMode;
+  }, [recordingInputMode]);
+  
   // Define the actual callback implementations
   handleTranscriptUpdateRef.current = (text: string, isFinal: boolean) => {
     if (isFinal && text.trim()) {
@@ -115,7 +128,7 @@ const SessionRecord = () => {
       const timeSinceLastTranscript = currentTime - lastTranscriptTimeRef.current;
       
       // Enhanced speaker detection for playback mode (3 second threshold for better accuracy)
-      if (recordingInputMode === 'playback' && timeSinceLastTranscript > 3000) {
+      if (recordingInputModeRef.current === 'playback' && timeSinceLastTranscript > 3000) {
         speakerRef.current = speakerRef.current === 'provider' ? 'patient' : 'provider';
         console.log(`🔄 Speaker change detected: ${speakerRef.current} (gap: ${timeSinceLastTranscript}ms)`);
       }
@@ -137,7 +150,7 @@ const SessionRecord = () => {
       });
       
       // Alternate speaker for direct mode (conversation flow)
-      if (recordingInputMode === 'direct') {
+      if (recordingInputModeRef.current === 'direct') {
         speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
       }
     } else if (!isFinal && text.trim()) {
@@ -151,18 +164,26 @@ const SessionRecord = () => {
     toast.error(error, { duration: 5000 });
   };
   
-  // Now initialize audio recording with stable callback refs
-  const audioRecordingOptions = useRef({
+  // Create stable options object ONCE
+  const audioRecordingOptions = useMemo(() => ({
     continuous: true,
-    language: getTranscriptionLanguage(language),
-    mode: recordingInputMode,
+    get language() {
+      return languageRef.current.split('-')[0] === 'en' ? 'en-US' : 
+             languageRef.current.split('-')[0] === 'kn' ? 'kn-IN' :
+             languageRef.current.split('-')[0] === 'hi' ? 'hi-IN' :
+             languageRef.current.split('-')[0] === 'ta' ? 'ta-IN' :
+             languageRef.current.split('-')[0] === 'te' ? 'te-IN' : 'en-US';
+    },
+    get mode() {
+      return recordingInputModeRef.current;
+    },
     onTranscriptUpdate: (text: string, isFinal: boolean) => {
       handleTranscriptUpdateRef.current?.(text, isFinal);
     },
     onError: (error: string) => {
       handleRecordingErrorRef.current?.(error);
     },
-  }).current;
+  }), []); // Empty deps - create once, never recreate
   
   const {
     startRecording,
