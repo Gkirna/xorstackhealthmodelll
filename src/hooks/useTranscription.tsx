@@ -739,13 +739,12 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
     }
   }, [sessionId]);
 
-  // Get full transcript text
+  // Get full transcript text (including temp chunks for real-time display)
   const getFullTranscript = useCallback(() => {
     return transcriptChunks
-      .filter(chunk => !chunk.temp) // Exclude temporary chunks
       .map(chunk => {
         const speakerLabel = chunk.speaker === 'provider' ? 'Doctor' : 'Patient';
-        return `${speakerLabel} : ${chunk.text}`;
+        return `${speakerLabel}: ${chunk.text}`;
       })
       .join('\n\n');
   }, [transcriptChunks]);
@@ -825,10 +824,10 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
     isTranscribing,
     setIsTranscribing,
     stats,
-    addTranscriptChunk: useCallback((text: string) => addTranscriptChunk(text), []),
-    loadTranscripts: useCallback(async () => await loadTranscripts(), []),
-    getFullTranscript: useCallback(() => getFullTranscript(), []),
-    saveAllPendingChunks: useCallback(async () => await saveAllPendingChunks(), []),
+    addTranscriptChunk: useCallback((text: string, speaker?: string) => addTranscriptChunk(text, speaker), [addTranscriptChunk]),
+    loadTranscripts: useCallback(async () => await loadTranscripts(), [loadTranscripts]),
+    getFullTranscript: useCallback(() => getFullTranscript(), [getFullTranscript]),
+    saveAllPendingChunks: useCallback(async () => await saveAllPendingChunks(), [saveAllPendingChunks]),
     updateVoiceCharacteristics,
   };
 }

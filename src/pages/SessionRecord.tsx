@@ -139,15 +139,8 @@ const SessionRecord = () => {
       
       console.log(`💬 Final transcript #${transcriptCountRef.current} [${currentSpeaker}]: "${text.substring(0, 80)}..."`);
       
-      // Add to transcription system with speaker info
-      addTranscriptChunk(text);
-      
-      // Update UI with formatted transcript
-      const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
-      setTranscript(prev => {
-        const newText = `${speakerLabel}: ${text}`;
-        return prev ? `${prev}\n\n${newText}` : newText;
-      });
+      // Add to transcription system - it will update transcriptChunks and trigger the useEffect to update UI
+      addTranscriptChunk(text, currentSpeaker);
       
       // Alternate speaker for direct mode (conversation flow)
       if (recordingInputModeRef.current === 'direct') {
