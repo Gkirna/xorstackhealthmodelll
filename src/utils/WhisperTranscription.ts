@@ -98,50 +98,89 @@ export class WhisperTranscription {
     }, this.chunkInterval);
   }
 
-  private async convertBlobToWav(blob: Blob): Promise<Blob> {
-    // Convert WebM to WAV using Web Audio API
-    const arrayBuffer = await blob.arrayBuffer();
-    const audioContext = new AudioContext({ sampleRate: 24000 });
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-    
-    // Get PCM data
-    const pcmData = audioBuffer.getChannelData(0);
-    const wavBuffer = this.encodeWav(pcmData, audioBuffer.sampleRate);
-    
-    await audioContext.close();
-    return new Blob([wavBuffer], { type: 'audio/wav' });
+  private async convertToWav(blob: Blob): Promise<Blob> {
+    try {
+      // Convert WebM/Opus to WAV using Web Audio API
+      const arrayBuffer = await blob.arrayBuffer();
+      
+      // Create audio context at 16kHz (Whisper's native rate)
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ 
+        sampleRate: 16000 
+      });
+      
+      // Decode the audio data
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      console.log(`🎵 Decoded audio: ${audioBuffer.duration.toFixed(2)}s, ${audioBuffer.sampleRate}Hz`);
+      
+      // Resample to 16kHz if needed
+      let samples: Float32Array;
+      if (audioBuffer.sampleRate !== 16000) {
+        // Create offline context for resampling
+        const offlineContext = new OfflineAudioContext(1, 
+          Math.ceil(audioBuffer.duration * 16000), 
+          16000
+        );
+        const source = offlineContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(offlineContext.destination);
+        source.start(0);
+        
+        const resampledBuffer = await offlineContext.startRendering();
+        samples = resampledBuffer.getChannelData(0);
+        console.log(`🔄 Resampled to 16kHz`);
+      } else {
+        samples = audioBuffer.getChannelData(0);
+      }
+      
+      // Create WAV file
+      const wavBuffer = this.createWavFile(samples, 16000);
+      await audioContext.close();
+      
+      return new Blob([wavBuffer], { type: 'audio/wav' });
+    } catch (error) {
+      console.error('❌ WAV conversion error:', error);
+      throw new Error('Failed to convert audio to WAV format');
+    }
   }
 
-  private encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
+  private createWavFile(samples: Float32Array, sampleRate: number): ArrayBuffer {
     const buffer = new ArrayBuffer(44 + samples.length * 2);
     const view = new DataView(buffer);
 
-    // WAV header
+    // Helper to write strings
     const writeString = (offset: number, string: string) => {
       for (let i = 0; i < string.length; i++) {
         view.setUint8(offset + i, string.charCodeAt(i));
       }
     };
 
+    // WAV file header
     writeString(0, 'RIFF');
-    view.setUint32(4, 36 + samples.length * 2, true);
+    view.setUint32(4, 36 + samples.length * 2, true); // file size - 8
     writeString(8, 'WAVE');
+    
+    // Format chunk
     writeString(12, 'fmt ');
     view.setUint32(16, 16, true); // fmt chunk size
-    view.setUint16(20, 1, true); // PCM format
-    view.setUint16(22, 1, true); // mono
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * 2, true); // byte rate
-    view.setUint16(32, 2, true); // block align
+    view.setUint16(20, 1, true); // audio format (1 = PCM)
+    view.setUint16(22, 1, true); // number of channels (mono)
+    view.setUint32(24, sampleRate, true); // sample rate
+    view.setUint32(28, sampleRate * 2, true); // byte rate (sample rate * block align)
+    view.setUint16(32, 2, true); // block align (channels * bytes per sample)
     view.setUint16(34, 16, true); // bits per sample
+    
+    // Data chunk
     writeString(36, 'data');
-    view.setUint32(40, samples.length * 2, true);
+    view.setUint32(40, samples.length * 2, true); // data size
 
-    // Convert float to int16
-    const offset = 44;
+    // Write PCM samples
+    let offset = 44;
     for (let i = 0; i < samples.length; i++) {
+      // Clamp and convert float32 [-1, 1] to int16 [-32768, 32767]
       const s = Math.max(-1, Math.min(1, samples[i]));
-      view.setInt16(offset + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      const val = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      view.setInt16(offset, val, true);
+      offset += 2;
     }
 
     return buffer;
@@ -164,23 +203,27 @@ export class WhisperTranscription {
       try {
         console.log(`🔄 Processing ${chunksToProcess.length} audio chunks`);
         
-        // Each chunk from MediaRecorder is a complete valid blob with headers
-        // Just take the first chunk which is a complete valid WebM file
+        // Take the first chunk (3 seconds of audio)
         const audioBlob = chunksToProcess[0]; 
         console.log(`📊 Processing WebM blob: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
 
-        // Skip if too small (less than 5KB - likely silence or incomplete)
+        // Skip if too small (less than 5KB - likely silence)
         if (audioBlob.size < 5000) {
           console.log('⏭️ Skipping small audio chunk (likely silence)');
           return;
         }
 
-        // Send audio blob directly to edge function (not base64)
+        // Convert WebM to WAV for better OpenAI compatibility
+        console.log('🔄 Converting to WAV format...');
+        const wavBlob = await this.convertToWav(audioBlob);
+        console.log(`✅ Converted to WAV: ${wavBlob.size} bytes`);
+
+        // Send WAV audio blob to edge function
         const formData = new FormData();
-        formData.append('audio', audioBlob, 'recording.webm');
+        formData.append('audio', wavBlob, 'recording.wav');
         formData.append('language', this.config.language || 'en');
 
-        // Send to Whisper API via edge function
+        console.log('📤 Sending to edge function...');
         const { data, error } = await supabase.functions.invoke('whisper-transcribe', {
           body: formData
         });
