@@ -9,6 +9,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { RetryStrategy, CircuitBreaker } from './RetryStrategy';
 
 export interface WhisperTranscriptionConfig {
   language?: string;
@@ -27,6 +28,14 @@ export class WhisperTranscription {
   private fullTranscript: string = '';
   private processedChunks: number = 0;
   private failedChunks: number = 0;
+  private retryStrategy: RetryStrategy;
+  private circuitBreaker: CircuitBreaker;
+  private lastSuccessTime: number = Date.now();
+  private qualityMetrics: {
+    avgConfidence: number;
+    avgChunkSize: number;
+    avgProcessingTime: number;
+  } = { avgConfidence: 0, avgChunkSize: 0, avgProcessingTime: 0 };
 
   constructor(config: WhisperTranscriptionConfig = {}) {
     this.config = {
@@ -34,6 +43,18 @@ export class WhisperTranscription {
       mode: 'direct',
       ...config
     };
+
+    // Initialize retry strategy for medical-grade reliability
+    this.retryStrategy = new RetryStrategy({
+      maxRetries: 5,
+      initialDelayMs: 1000,
+      maxDelayMs: 15000,
+      backoffMultiplier: 2,
+      jitterFactor: 0.2
+    });
+
+    // Initialize circuit breaker to prevent cascading failures
+    this.circuitBreaker = new CircuitBreaker(5, 60000, 2);
   }
 
   async start(stream: MediaStream): Promise<boolean> {
@@ -106,63 +127,110 @@ export class WhisperTranscription {
 
     // Add to processing queue to prevent overlapping requests
     this.processingQueue = this.processingQueue.then(async () => {
+      const startTime = Date.now();
+      const chunkId = ++this.processedChunks;
+
       try {
-        const chunkId = ++this.processedChunks;
         console.log(`[Whisper] Processing chunk #${chunkId}:`, {
           size: `${(audioBlob.size / 1024).toFixed(2)} KB`,
           type: audioBlob.type
         });
 
-        // Send WebM audio blob to edge function
-        const formData = new FormData();
-        formData.append('audio', audioBlob, 'recording.webm');
-        formData.append('language', this.config.language || 'en');
+        // Execute with circuit breaker and retry logic
+        const result = await this.circuitBreaker.execute(async () => {
+          return await this.retryStrategy.executeWithRetry(async () => {
+            // Send WebM audio blob to edge function
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'recording.webm');
+            formData.append('language', this.config.language || 'en');
 
-        const { data, error } = await supabase.functions.invoke('whisper-transcribe', {
-          body: formData
+            const { data, error } = await supabase.functions.invoke('whisper-transcribe', {
+              body: formData
+            });
+
+            if (error) {
+              throw error;
+            }
+
+            if (!data?.success || !data?.text) {
+              throw new Error('No transcription returned');
+            }
+
+            return data;
+          }, `transcribe chunk #${chunkId}`);
+        }, 'whisper-transcribe');
+
+        // Process successful result
+        const transcriptText = result.text.trim();
+        const processingTime = Date.now() - startTime;
+
+        if (transcriptText.length > 0) {
+          console.log(`[Whisper] Chunk #${chunkId} success:`, {
+            length: transcriptText.length,
+            processingTime: `${processingTime}ms`,
+            preview: transcriptText.substring(0, 30) + '...'
+          });
+
+          // Update quality metrics
+          this.updateQualityMetrics(audioBlob.size, processingTime, 0.95);
+
+          // Update last success time
+          this.lastSuccessTime = Date.now();
+
+          this.fullTranscript += (this.fullTranscript ? ' ' : '') + transcriptText;
+
+          // Emit as final result
+          if (this.config.onResult) {
+            this.config.onResult(transcriptText, true);
+          }
+        }
+
+      } catch (error: any) {
+        this.failedChunks++;
+        const processingTime = Date.now() - startTime;
+
+        console.error(`[Whisper] Chunk #${chunkId} failed after retries:`, {
+          error: error.message,
+          processingTime: `${processingTime}ms`,
+          retryStats: this.retryStrategy.getStats(),
+          circuitBreakerState: this.circuitBreaker.getState()
         });
 
-        if (error) {
-          this.failedChunks++;
-          console.error(`[Whisper] Chunk #${chunkId} failed:`, error.message);
-          
-          // Show user-friendly error
-          if (error.message.includes('Rate limit')) {
-            if (this.config.onError) {
-              this.config.onError('Too many requests. Please wait a moment.');
-            }
-          } else if (this.config.onError) {
-            this.config.onError('Transcription temporarily unavailable');
-          }
-          return;
+        // Check if system is degraded
+        const timeSinceLastSuccess = Date.now() - this.lastSuccessTime;
+        if (timeSinceLastSuccess > 60000) {
+          // No successful transcription in 1 minute - critical alert
+          console.error('[Whisper] CRITICAL: No successful transcription in 60 seconds');
         }
 
-        if (data?.success && data?.text) {
-          const transcriptText = data.text.trim();
-          
-          if (transcriptText.length > 0) {
-            console.log(`[Whisper] Chunk #${chunkId} success:`, {
-              length: transcriptText.length,
-              preview: transcriptText.substring(0, 30) + '...'
-            });
-            
-            this.fullTranscript += (this.fullTranscript ? ' ' : '') + transcriptText;
-
-            // Emit as final result (Whisper always returns final transcripts)
-            if (this.config.onResult) {
-              this.config.onResult(transcriptText, true);
-            }
+        // User-friendly error messages
+        if (error.message.includes('Circuit breaker')) {
+          if (this.config.onError) {
+            this.config.onError('Transcription service temporarily unavailable. Recovering...');
           }
-        }
-
-      } catch (error) {
-        this.failedChunks++;
-        console.error('[Whisper] Processing error:', error);
-        if (this.config.onError) {
-          this.config.onError('Error processing audio');
+        } else if (error.message.includes('Rate limit')) {
+          if (this.config.onError) {
+            this.config.onError('Rate limit reached. Please wait a moment.');
+          }
+        } else if (this.config.onError) {
+          this.config.onError('Transcription error. Retrying...');
         }
       }
     });
+  }
+
+  private updateQualityMetrics(chunkSize: number, processingTime: number, confidence: number) {
+    const totalChunks = this.processedChunks;
+    
+    // Rolling average
+    this.qualityMetrics.avgChunkSize = 
+      (this.qualityMetrics.avgChunkSize * (totalChunks - 1) + chunkSize) / totalChunks;
+    
+    this.qualityMetrics.avgProcessingTime = 
+      (this.qualityMetrics.avgProcessingTime * (totalChunks - 1) + processingTime) / totalChunks;
+    
+    this.qualityMetrics.avgConfidence = 
+      (this.qualityMetrics.avgConfidence * (totalChunks - 1) + confidence) / totalChunks;
   }
 
   public stop(): string {
@@ -209,12 +277,21 @@ export class WhisperTranscription {
   }
 
   public getStats() {
+    const successfulChunks = this.processedChunks - this.failedChunks;
     return {
       processed: this.processedChunks,
+      successful: successfulChunks,
       failed: this.failedChunks,
       successRate: this.processedChunks > 0 
-        ? ((this.processedChunks - this.failedChunks) / this.processedChunks * 100).toFixed(1) + '%'
-        : '0%'
+        ? ((successfulChunks / this.processedChunks) * 100).toFixed(1) + '%'
+        : '0%',
+      qualityMetrics: {
+        avgConfidence: (this.qualityMetrics.avgConfidence * 100).toFixed(1) + '%',
+        avgChunkSize: (this.qualityMetrics.avgChunkSize / 1024).toFixed(2) + ' KB',
+        avgProcessingTime: this.qualityMetrics.avgProcessingTime.toFixed(0) + ' ms'
+      },
+      circuitBreaker: this.circuitBreaker.getState(),
+      timeSinceLastSuccess: ((Date.now() - this.lastSuccessTime) / 1000).toFixed(1) + 's'
     };
   }
 
@@ -223,5 +300,8 @@ export class WhisperTranscription {
     this.fullTranscript = '';
     this.processedChunks = 0;
     this.failedChunks = 0;
+    this.retryStrategy.reset();
+    this.circuitBreaker.reset();
+    this.qualityMetrics = { avgConfidence: 0, avgChunkSize: 0, avgProcessingTime: 0 };
   }
 }

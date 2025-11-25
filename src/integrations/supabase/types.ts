@@ -71,6 +71,13 @@ export type Database = {
             foreignKeyName: "ai_logs_session_id_fkey"
             columns: ["session_id"]
             isOneToOne: false
+            referencedRelation: "session_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_logs_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
             referencedRelation: "sessions"
             referencedColumns: ["id"]
           },
@@ -150,30 +157,46 @@ export type Database = {
       }
       session_transcripts: {
         Row: {
+          confidence_score: number | null
           created_at: string
           id: string
+          is_corrected: boolean | null
+          processing_time_ms: number | null
           session_id: string
           speaker: string
           text: string
           timestamp_offset: number | null
         }
         Insert: {
+          confidence_score?: number | null
           created_at?: string
           id?: string
+          is_corrected?: boolean | null
+          processing_time_ms?: number | null
           session_id: string
           speaker: string
           text: string
           timestamp_offset?: number | null
         }
         Update: {
+          confidence_score?: number | null
           created_at?: string
           id?: string
+          is_corrected?: boolean | null
+          processing_time_ms?: number | null
           session_id?: string
           speaker?: string
           text?: string
           timestamp_offset?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "session_transcripts_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "session_analytics"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "session_transcripts_session_id_fkey"
             columns: ["session_id"]
@@ -201,6 +224,9 @@ export type Database = {
           status: string
           summary: string | null
           template_id: string | null
+          total_words: number | null
+          transcript_quality_avg: number | null
+          transcription_duration_seconds: number | null
           updated_at: string
           user_id: string
           visit_mode: string | null
@@ -222,6 +248,9 @@ export type Database = {
           status?: string
           summary?: string | null
           template_id?: string | null
+          total_words?: number | null
+          transcript_quality_avg?: number | null
+          transcription_duration_seconds?: number | null
           updated_at?: string
           user_id: string
           visit_mode?: string | null
@@ -243,6 +272,9 @@ export type Database = {
           status?: string
           summary?: string | null
           template_id?: string | null
+          total_words?: number | null
+          transcript_quality_avg?: number | null
+          transcription_duration_seconds?: number | null
           updated_at?: string
           user_id?: string
           visit_mode?: string | null
@@ -325,6 +357,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "tasks_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "session_analytics"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tasks_session_id_fkey"
             columns: ["session_id"]
@@ -604,7 +643,19 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      session_analytics: {
+        Row: {
+          avg_confidence: number | null
+          created_at: string | null
+          duration: unknown
+          id: string | null
+          status: string | null
+          total_characters: number | null
+          transcript_segments: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {
@@ -618,6 +669,7 @@ export type Database = {
         Args: { _team_id: string; _user_id: string }
         Returns: boolean
       }
+      refresh_session_analytics: { Args: never; Returns: undefined }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
