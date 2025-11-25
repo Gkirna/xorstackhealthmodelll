@@ -1,17 +1,92 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': '*', // TODO: Restrict to your domain in production
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Rate limiting map (in-memory, resets on function restart)
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 20; // 20 requests per minute per user
+
+// Hash content for audit logging without storing PHI
+async function hashContent(text: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(text);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16);
+}
+
+// Check rate limit for user
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const userLimit = rateLimitMap.get(userId);
+
+  if (!userLimit || now > userLimit.resetTime) {
+    rateLimitMap.set(userId, {
+      count: 1,
+      resetTime: now + RATE_LIMIT_WINDOW_MS
+    });
+    return true;
+  }
+
+  if (userLimit.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return false;
+  }
+
+  userLimit.count++;
+  return true;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const requestId = crypto.randomUUID();
+  console.log(`[${requestId}] 🎙️ Transcription request received`);
+
   try {
+    // Get user from auth header
+    const authHeader = req.headers.get('authorization');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Supabase configuration missing');
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Verify user authentication
+    let userId = 'anonymous';
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+      if (!error && user) {
+        userId = user.id;
+      }
+    }
+
+    // Rate limiting check
+    if (!checkRateLimit(userId)) {
+      console.log(`[${requestId}] ⚠️ Rate limit exceeded for user: ${userId.substring(0, 8)}...`);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Rate limit exceeded. Please try again in a minute.',
+          success: false 
+        }),
+        {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     // Get the audio file from FormData
     const formData = await req.formData();
     const audioFile = formData.get('audio') as File;
@@ -21,16 +96,24 @@ serve(async (req) => {
       throw new Error('No audio file provided');
     }
 
+    // Validate audio file size (max 25MB as per OpenAI limit)
+    const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
+    if (audioFile.size > MAX_FILE_SIZE) {
+      throw new Error('Audio file too large. Maximum size is 25MB.');
+    }
+
+    // Validate audio file type
+    const allowedTypes = ['audio/webm', 'audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/ogg'];
+    if (!allowedTypes.some(type => audioFile.type.includes(type))) {
+      console.log(`[${requestId}] ⚠️ Invalid audio type: ${audioFile.type}`);
+    }
+
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     if (!OPENAI_API_KEY) {
       throw new Error('OPENAI_API_KEY not configured');
     }
 
-    console.log('🎙️ Processing audio file with Whisper API');
-    console.log('📊 Audio file size:', audioFile.size, 'bytes');
-    console.log('📊 Audio file type:', audioFile.type);
-    console.log('📊 Audio file name:', audioFile.name);
-    console.log('🌐 Language:', language);
+    console.log(`[${requestId}] 📊 Processing: ${(audioFile.size / 1024).toFixed(2)} KB, type: ${audioFile.type}, lang: ${language}`);
 
     // Create form data for OpenAI
     const openaiFormData = new FormData();
@@ -38,9 +121,7 @@ serve(async (req) => {
     openaiFormData.append('model', 'whisper-1');
     openaiFormData.append('language', language);
     openaiFormData.append('response_format', 'json');
-    openaiFormData.append('temperature', '0');
-    
-    console.log('📤 Sending to OpenAI: recording.webm');
+    openaiFormData.append('temperature', '0'); // Precise transcription for medical use
 
     // Send to OpenAI Whisper API
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -53,12 +134,31 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ OpenAI API error:', response.status, errorText);
-      throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+      console.error(`[${requestId}] ❌ OpenAI API error: ${response.status}`);
+      
+      // Don't expose OpenAI error details to client
+      throw new Error('Transcription service temporarily unavailable');
     }
 
     const result = await response.json();
-    console.log('✅ Whisper transcription:', result.text.substring(0, 100));
+    const transcriptHash = await hashContent(result.text);
+    
+    console.log(`[${requestId}] ✅ Success - hash: ${transcriptHash}, length: ${result.text.length} chars`);
+
+    // Log audit event (without PHI)
+    try {
+      await supabase.from('ai_logs').insert({
+        user_id: userId,
+        operation_type: 'transcription',
+        model: 'whisper-1',
+        status: 'success',
+        input_hash: transcriptHash,
+        tokens_used: Math.ceil(audioFile.size / 100), // Estimate
+        duration_ms: Date.now(),
+      });
+    } catch (logError) {
+      console.error(`[${requestId}] Failed to log audit event:`, logError);
+    }
 
     return new Response(
       JSON.stringify({ 
@@ -71,14 +171,15 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('❌ Transcription error:', error);
+    console.error(`[${requestId}] ❌ Error:`, error instanceof Error ? error.message : 'Unknown error');
+    
     return new Response(
       JSON.stringify({ 
         error: error instanceof Error ? error.message : 'Transcription failed',
         success: false 
       }),
       {
-        status: 500,
+        status: error instanceof Error && error.message.includes('Rate limit') ? 429 : 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
