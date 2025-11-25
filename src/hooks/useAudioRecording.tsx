@@ -482,6 +482,18 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
               }
             }
             
+            // Log real-time analysis every 3 seconds (10 intervals)
+            if (intervalCount % 10 === 0) {
+              console.log(`🎤 Voice Analysis Update #${intervalCount / 10}:`, {
+                gender: updated.gender,
+                pitch: updated.pitch.toFixed(0) + 'Hz',
+                confidence: (updated.confidence * 100).toFixed(0) + '%',
+                quality: updated.voiceQuality,
+                speakerId: updated.speakerId,
+                volume: updated.volume.toFixed(0) + 'dB'
+              });
+            }
+            
             // Log speaker changes
             if (updated.speakerId !== 'silence' && updated.confidence > 0.7) {
               if (intervalCount % 5 === 0) { // Log every 1.5 seconds

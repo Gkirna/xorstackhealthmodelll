@@ -28,11 +28,15 @@ export function VoicePitchVisualizer({ characteristics, isRecording }: VoicePitc
   
   if (!isRecording || !characteristics) return null;
   
-  const speakerColor = characteristics.speakerId.includes('speaker_1') 
+  const speakerColor = characteristics.gender === 'male'
     ? 'bg-blue-500' 
-    : 'bg-green-500';
+    : characteristics.gender === 'female'
+    ? 'bg-pink-500'
+    : 'bg-gray-500';
   
-  const speakerLabel = characteristics.speakerId.includes('speaker_1') ? 'Provider' : 'Patient';
+  const speakerLabel = characteristics.gender === 'male' ? 'Provider' : 
+                       characteristics.gender === 'female' ? 'Patient' : 
+                       'Unknown';
   
   return (
     <Card className="p-3 space-y-2 bg-card/50 backdrop-blur-sm border-primary/20">

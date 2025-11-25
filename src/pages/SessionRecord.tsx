@@ -881,19 +881,122 @@ const SessionRecord = () => {
           onRecordingInputModeChange={setRecordingInputMode}
         />
 
-        {/* Audio Quality Indicator - Hidden but monitoring runs in background */}
-        {/* 
-        {(isRecording || isPaused) && recordingInputMode === 'direct' && (
-          <div className="px-6 pt-3">
-            <AudioQualityIndicator
-              volume={audioLevel || 0}
-              quality={voiceQuality || 'fair'}
-              isActive={isRecording && !isPaused}
-              mode={recordingInputMode}
-            />
+        {/* Real-Time Voice Analysis & Quality Indicators */}
+        {(isRecording || isPaused) && (
+          <div className="px-6 pt-3 space-y-3">
+            {/* Voice Pitch Visualizer - Shows gender, pitch, confidence, quality */}
+            {currentVoiceCharacteristics && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* Voice Analysis Card */}
+                <div className="bg-card/50 backdrop-blur-sm border border-primary/20 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium text-muted-foreground">Voice Analysis</span>
+                    <div className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                      currentVoiceCharacteristics.gender === 'female' 
+                        ? 'bg-pink-500/20 text-pink-600 border border-pink-500/30' 
+                        : currentVoiceCharacteristics.gender === 'male'
+                        ? 'bg-blue-500/20 text-blue-600 border border-blue-500/30'
+                        : 'bg-gray-500/20 text-gray-600 border border-gray-500/30'
+                    }`}>
+                      {currentVoiceCharacteristics.gender === 'female' ? 'Patient' : 
+                       currentVoiceCharacteristics.gender === 'male' ? 'Provider' : 
+                       'Analyzing...'}
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Pitch</span>
+                      <span className="font-mono font-medium">{currentVoiceCharacteristics.pitch.toFixed(0)} Hz</span>
+                    </div>
+                    <div className="h-1.5 bg-background/50 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-300 ${
+                          currentVoiceCharacteristics.gender === 'female' ? 'bg-pink-500' : 'bg-blue-500'
+                        }`}
+                        style={{ width: `${Math.min(100, (currentVoiceCharacteristics.pitch / 500) * 100)}%` }}
+                      />
+                    </div>
+                    
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Confidence</span>
+                      <span className="font-mono font-medium">{(currentVoiceCharacteristics.confidence * 100).toFixed(0)}%</span>
+                    </div>
+                    <div className="h-1.5 bg-background/50 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-green-500 transition-all duration-300"
+                        style={{ width: `${currentVoiceCharacteristics.confidence * 100}%` }}
+                      />
+                    </div>
+                    
+                    <div className="flex justify-between text-xs pt-1">
+                      <span className="text-muted-foreground">Quality</span>
+                      <span className={`font-medium capitalize ${
+                        currentVoiceCharacteristics.voiceQuality === 'excellent' ? 'text-green-600' :
+                        currentVoiceCharacteristics.voiceQuality === 'good' ? 'text-blue-600' :
+                        currentVoiceCharacteristics.voiceQuality === 'fair' ? 'text-yellow-600' :
+                        'text-red-600'
+                      }`}>
+                        {currentVoiceCharacteristics.voiceQuality}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Audio Level Card */}
+                <div className="bg-card/50 backdrop-blur-sm border border-primary/20 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium text-muted-foreground">Audio Level</span>
+                    <span className="text-xs font-mono font-medium">{audioLevel.toFixed(0)}%</span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="h-2 bg-background/50 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-150 ${
+                          audioLevel > 70 ? 'bg-green-500' :
+                          audioLevel > 40 ? 'bg-yellow-500' :
+                          audioLevel > 10 ? 'bg-orange-500' :
+                          'bg-red-500'
+                        }`}
+                        style={{ width: `${Math.min(100, audioLevel)}%` }}
+                      />
+                    </div>
+                    
+                    <div className="text-xs text-muted-foreground">
+                      {audioLevel > 70 ? 'Excellent signal' :
+                       audioLevel > 40 ? 'Good signal' :
+                       audioLevel > 10 ? 'Weak signal' :
+                       'Very weak signal'}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Speaker Stats Card */}
+                <div className="bg-card/50 backdrop-blur-sm border border-primary/20 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium text-muted-foreground">Speaker Info</span>
+                  </div>
+                  
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">ID</span>
+                      <span className="font-mono font-medium">{currentVoiceCharacteristics.speakerId}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Volume</span>
+                      <span className="font-mono font-medium">{currentVoiceCharacteristics.volume.toFixed(0)} dB</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Mode</span>
+                      <span className="font-medium capitalize">{recordingInputMode}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
-        */}
 
         {/* Workflow Progress - Hidden from UI but functionality preserved */}
 
