@@ -517,7 +517,7 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
               session_id: sessionId,
               text: chunk.text.trim(),
               speaker: chunk.speaker,
-              timestamp_offset: chunk.timestamp,
+              timestamp_offset: chunk.timestamp, // Already a relative offset
               created_at: new Date().toISOString(),
               pending: true,
             });
@@ -675,8 +675,9 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
   const addTranscriptChunk = useCallback(async (text: string, speaker?: string) => {
     if (!sessionId || !text.trim()) return;
 
-    const timestamp = Date.now();
-    const tempId = `temp-${timestamp}-${Math.random().toString(36).substr(2, 9)}`;
+    // Calculate offset from session start (in milliseconds)
+    const timestamp = sessionStartTimeRef.current > 0 ? Date.now() - sessionStartTimeRef.current : 0;
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     // Smart speaker detection if not provided
     const detectedSpeaker = speaker || determineSpeaker(text);
