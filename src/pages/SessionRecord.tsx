@@ -813,12 +813,15 @@ const SessionRecord = () => {
     }
   }, [id]); // Removed loadTranscripts from deps - only load on id change
 
+  // Update transcript display in real-time whenever chunks change
   useEffect(() => {
     const fullTranscript = getFullTranscript();
-    if (fullTranscript) {
-      setTranscript(fullTranscript);
-    }
-  }, [transcriptChunks]); // Removed getFullTranscript from deps - only update when chunks change
+    console.log('🔄 Updating transcript display:', {
+      chunksCount: transcriptChunks.length,
+      transcriptLength: fullTranscript.length
+    });
+    setTranscript(fullTranscript);
+  }, [transcriptChunks, getFullTranscript]);
 
   useTranscriptUpdates(id || '', (newTranscript) => {
     loadTranscripts();
