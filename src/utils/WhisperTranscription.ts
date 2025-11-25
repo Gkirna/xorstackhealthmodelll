@@ -50,7 +50,7 @@ export class WhisperTranscription {
       this.mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           this.audioChunks.push(event.data);
-          console.log(`📦 Audio chunk collected: ${event.data.size} bytes`);
+          console.log(`📦 Audio chunk collected: ${event.data.size} bytes (Total chunks: ${this.audioChunks.length})`);
         }
       };
 
@@ -61,11 +61,11 @@ export class WhisperTranscription {
         }
       };
 
-      // Start recording and collect chunks
-      this.mediaRecorder.start();
+      // Start recording and collect chunks every 1 second
+      this.mediaRecorder.start(1000); // Capture chunks every 1 second
       this.isActive = true;
 
-      // Start periodic chunk processing
+      // Start periodic chunk processing every 3 seconds
       this.startChunkProcessing();
 
       if (this.config.onStart) {
@@ -85,6 +85,7 @@ export class WhisperTranscription {
   }
 
   private startChunkProcessing() {
+    console.log('⏰ Starting chunk processing timer: every 3 seconds');
     // Process accumulated audio every 3 seconds
     this.chunkTimer = window.setInterval(() => {
       this.processAccumulatedAudio();
@@ -93,10 +94,12 @@ export class WhisperTranscription {
 
   private async processAccumulatedAudio() {
     if (this.audioChunks.length === 0) {
-      console.log('⏭️ No audio chunks to process');
+      console.log('⏭️ No audio chunks to process yet');
       return;
     }
 
+    console.log(`🔄 Processing batch: ${this.audioChunks.length} chunks accumulated`);
+    
     // Get all accumulated chunks
     const chunksToProcess = [...this.audioChunks];
     this.audioChunks = []; // Clear for next batch
@@ -106,9 +109,9 @@ export class WhisperTranscription {
       try {
         console.log(`🔄 Processing ${chunksToProcess.length} audio chunks`);
         
-        // Combine chunks into single blob
-        const audioBlob = new Blob(chunksToProcess, { type: 'audio/webm' });
-        console.log(`📊 Combined audio size: ${audioBlob.size} bytes`);
+        // Combine chunks into single blob with proper codec
+        const audioBlob = new Blob(chunksToProcess, { type: 'audio/webm;codecs=opus' });
+        console.log(`📊 Combined audio blob: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
 
         // Skip if too small (less than 10KB - likely silence)
         if (audioBlob.size < 10000) {
