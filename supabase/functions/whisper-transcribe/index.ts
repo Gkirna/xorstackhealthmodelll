@@ -103,11 +103,17 @@ serve(async (req) => {
       throw new Error('Audio file too large. Maximum size is 25MB.');
     }
 
-    // Validate audio file type
-    const allowedTypes = ['audio/webm', 'audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/ogg'];
+    // Validate audio file type (critical for medical transcription)
+    const allowedTypes = ['audio/webm', 'audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/ogg', 'audio/mp4', 'audio/m4a'];
     if (!allowedTypes.some(type => audioFile.type.includes(type))) {
-      console.log(`[${requestId}] ⚠️ Invalid audio type: ${audioFile.type}`);
+      console.log(`[${requestId}] ⚠️ Audio type: ${audioFile.type} - will let OpenAI validate`);
     }
+
+    console.log(`[${requestId}] 📊 Audio validation:`, {
+      size: audioFile.size,
+      type: audioFile.type,
+      name: audioFile.name || 'unknown'
+    });
 
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     if (!OPENAI_API_KEY) {
@@ -116,13 +122,19 @@ serve(async (req) => {
 
     console.log(`[${requestId}] 📊 Processing: ${(audioFile.size / 1024).toFixed(2)} KB, type: ${audioFile.type}, lang: ${language}`);
 
-    // Create form data for OpenAI
+    // Create form data for OpenAI Whisper API
     const openaiFormData = new FormData();
-    openaiFormData.append('file', audioFile, 'recording.webm');
+    // Use appropriate filename extension based on actual type
+    const extension = audioFile.type.includes('webm') ? 'webm' : 
+                     audioFile.type.includes('mp3') ? 'mp3' :
+                     audioFile.type.includes('wav') ? 'wav' : 'audio';
+    openaiFormData.append('file', audioFile, `recording.${extension}`);
     openaiFormData.append('model', 'whisper-1');
     openaiFormData.append('language', language);
-    openaiFormData.append('response_format', 'json');
+    openaiFormData.append('response_format', 'verbose_json'); // Get detailed response
     openaiFormData.append('temperature', '0'); // Precise transcription for medical use
+    
+    console.log(`[${requestId}] 🚀 Sending to OpenAI Whisper API...`);
 
     // Send to OpenAI Whisper API
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -154,11 +166,17 @@ serve(async (req) => {
 
     const result = await response.json();
     const transcriptHash = await hashContent(result.text);
+    const processingTime = Date.now() - requestStartTime;
     
-    console.log(`[${requestId}] ✅ Success - hash: ${transcriptHash}, length: ${result.text.length} chars`);
+    console.log(`[${requestId}] ✅ Success:`, {
+      hash: transcriptHash,
+      length: result.text.length,
+      language: result.language,
+      duration: result.duration ? `${result.duration.toFixed(2)}s` : 'unknown',
+      processingTime: `${processingTime}ms`
+    });
 
     // Log audit event (without PHI)
-    const processingTime = Date.now() - requestStartTime;
     try {
       await supabase.from('ai_logs').insert({
         user_id: userId,
