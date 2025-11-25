@@ -55,6 +55,15 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('❌ OpenAI API error:', response.status, errorText);
+      
+      // Parse error for better debugging
+      try {
+        const errorData = JSON.parse(errorText);
+        console.error('❌ Error details:', JSON.stringify(errorData, null, 2));
+      } catch (e) {
+        console.error('❌ Raw error:', errorText);
+      }
+      
       throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
     }
 

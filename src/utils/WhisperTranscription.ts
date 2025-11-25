@@ -22,7 +22,8 @@ export class WhisperTranscription {
   private chunkTimer: number | null = null;
   private processingQueue: Promise<void> = Promise.resolve();
   private fullTranscript: string = '';
-  private chunkInterval: number = 3000; // Send chunks every 3 seconds
+  private chunkInterval: number = 5000; // Send chunks every 5 seconds (minimum for valid WebM)
+  private currentRecordingStart: number = 0;
 
   constructor(config: WhisperTranscriptionConfig = {}) {
     this.config = {
@@ -43,7 +44,7 @@ export class WhisperTranscription {
       console.log('📊 Mode:', this.config.mode);
       console.log('🌐 Language:', this.config.language);
 
-      // Create MediaRecorder for audio chunks
+      // Create MediaRecorder - record continuously for valid WebM files
       const options = { mimeType: 'audio/webm;codecs=opus' };
       this.mediaRecorder = new MediaRecorder(stream, options);
       
@@ -53,6 +54,11 @@ export class WhisperTranscription {
           console.log(`📦 Audio chunk collected: ${event.data.size} bytes`);
         }
       };
+      
+      this.mediaRecorder.onstop = () => {
+        console.log('⏹️ MediaRecorder stopped, processing final chunk');
+        this.processAccumulatedAudio();
+      };
 
       this.mediaRecorder.onerror = (error) => {
         console.error('❌ MediaRecorder error:', error);
@@ -61,12 +67,8 @@ export class WhisperTranscription {
         }
       };
 
-      // Start recording and collect chunks every second
-      // The timeslice parameter tells MediaRecorder to fire ondataavailable every 1000ms
-      this.mediaRecorder.start(1000);
+      // Start recording - use stop/restart pattern for valid WebM files
       this.isActive = true;
-
-      // Start periodic chunk processing
       this.startChunkProcessing();
 
       if (this.config.onStart) {
@@ -86,10 +88,33 @@ export class WhisperTranscription {
   }
 
   private startChunkProcessing() {
-    // Process accumulated audio every 3 seconds
+    // Start/stop MediaRecorder every 5 seconds to create valid WebM files
+    this.startRecordingChunk();
+    
     this.chunkTimer = window.setInterval(() => {
-      this.processAccumulatedAudio();
+      this.stopAndRestartRecording();
     }, this.chunkInterval);
+  }
+  
+  private startRecordingChunk() {
+    if (this.mediaRecorder && this.mediaRecorder.state === 'inactive') {
+      this.audioChunks = []; // Clear chunks for new recording
+      this.mediaRecorder.start();
+      this.currentRecordingStart = Date.now();
+      console.log('🎙️ Started recording chunk');
+    }
+  }
+  
+  private stopAndRestartRecording() {
+    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+      console.log('⏹️ Stopping current chunk to process');
+      this.mediaRecorder.stop(); // This triggers ondataavailable and onstop
+      
+      // Restart recording after a brief delay
+      setTimeout(() => {
+        this.startRecordingChunk();
+      }, 100);
+    }
   }
 
   private async processAccumulatedAudio() {
@@ -98,24 +123,32 @@ export class WhisperTranscription {
       return;
     }
 
-    // Get all accumulated chunks
+    // Get all accumulated chunks (should be a complete WebM file from stop())
     const chunksToProcess = [...this.audioChunks];
-    this.audioChunks = []; // Clear for next batch
+    const recordingDuration = Date.now() - this.currentRecordingStart;
+    console.log(`⏱️ Recording duration: ${recordingDuration}ms`);
+    
+    // Don't clear immediately - will be cleared when starting next chunk
+    // this.audioChunks = [];
 
     // Add to processing queue to prevent overlapping requests
     this.processingQueue = this.processingQueue.then(async () => {
       try {
         console.log(`🔄 Processing ${chunksToProcess.length} audio chunks`);
         
-        // Combine chunks into single blob
-        const audioBlob = new Blob(chunksToProcess, { type: 'audio/webm' });
-        console.log(`📊 Combined audio size: ${audioBlob.size} bytes`);
+        // Combine chunks into single blob (should be complete WebM file)
+        const audioBlob = new Blob(chunksToProcess, { type: 'audio/webm;codecs=opus' });
+        console.log(`📊 Audio blob size: ${audioBlob.size} bytes (${chunksToProcess.length} chunks)`);
 
-        // Skip if too small (less than 10KB - likely silence)
-        if (audioBlob.size < 10000) {
+        // Skip if too small (less than 5KB - likely silence or incomplete)
+        if (audioBlob.size < 5000) {
           console.log('⏭️ Skipping small audio chunk (likely silence)');
           return;
         }
+        
+        // Log first few bytes to verify WebM header (should start with 0x1A 0x45 0xDF 0xA3)
+        const headerCheck = new Uint8Array(await audioBlob.slice(0, 4).arrayBuffer());
+        console.log('📋 File header:', Array.from(headerCheck).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
 
         // Convert to base64
         const base64Audio = await this.blobToBase64(audioBlob);
@@ -130,8 +163,18 @@ export class WhisperTranscription {
 
         if (error) {
           console.error('❌ Transcription error:', error);
+          
+          // Better error message for users
+          let errorMessage = 'Transcription failed';
+          if (error.message?.includes('Invalid file format')) {
+            errorMessage = 'Audio format error - retrying with next chunk';
+            console.log('ℹ️ Will retry with next audio chunk');
+          } else if (error.message?.includes('Edge Function')) {
+            errorMessage = 'Connection error - check network';
+          }
+          
           if (this.config.onError) {
-            this.config.onError('Transcription failed: ' + error.message);
+            this.config.onError(errorMessage);
           }
           return;
         }
@@ -186,17 +229,12 @@ export class WhisperTranscription {
       this.chunkTimer = null;
     }
 
-    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-      this.mediaRecorder.stop();
-      this.mediaRecorder = null;
+    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+      console.log('⏹️ Stopping final recording chunk');
+      this.mediaRecorder.stop(); // This will trigger onstop which processes the audio
     }
-
-    // Process any remaining chunks
-    if (this.audioChunks.length > 0) {
-      console.log('🔄 Processing final audio chunks');
-      this.processAccumulatedAudio();
-    }
-
+    
+    this.mediaRecorder = null;
     this.isActive = false;
 
     if (this.config.onEnd) {
