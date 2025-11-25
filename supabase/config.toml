@@ -33,3 +33,6 @@ verify_jwt = true
 
 [functions.whisper-transcribe]
 verify_jwt = true
+
+[functions.medical-autocorrect]
+verify_jwt = true
