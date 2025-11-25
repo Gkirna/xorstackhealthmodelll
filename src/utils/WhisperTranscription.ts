@@ -44,7 +44,17 @@ export class WhisperTranscription {
       console.log('🌐 Language:', this.config.language);
 
       // Create MediaRecorder for audio chunks
-      const options = { mimeType: 'audio/webm;codecs=opus' };
+      // Try different mime types for better compatibility
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/ogg;codecs=opus';
+      }
+      
+      console.log('🎬 Using MIME type:', mimeType);
+      const options = { mimeType };
       this.mediaRecorder = new MediaRecorder(stream, options);
       
       this.mediaRecorder.ondataavailable = (event) => {
@@ -109,8 +119,8 @@ export class WhisperTranscription {
       try {
         console.log(`🔄 Processing ${chunksToProcess.length} audio chunks`);
         
-        // Combine chunks into single blob with proper codec
-        const audioBlob = new Blob(chunksToProcess, { type: 'audio/webm;codecs=opus' });
+        // Combine chunks into single blob - use simple webm type for better compatibility
+        const audioBlob = new Blob(chunksToProcess, { type: 'audio/webm' });
         console.log(`📊 Combined audio blob: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
 
         // Skip if too small (less than 10KB - likely silence)
