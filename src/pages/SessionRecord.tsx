@@ -28,6 +28,7 @@ import { useAdvancedTranscription } from '@/hooks/useAdvancedTranscription';
 import type { EnhancedTranscriptionData } from '@/types/advancedTranscription';
 import { TemplateSelectionDialog } from "@/components/session/TemplateSelectionDialog";
 import { AudioQualityIndicator } from "@/components/AudioQualityIndicator";
+import { SpeakerDiarizationDashboard } from "@/components/SpeakerDiarizationDashboard";
 
 const SessionRecord = () => {
   const { id } = useParams();
@@ -101,7 +102,9 @@ const SessionRecord = () => {
     getFullTranscript, 
     saveAllPendingChunks, 
     stats, 
-    updateVoiceCharacteristics 
+    updateVoiceCharacteristics,
+    getSpeakerStatistics,
+    resetDiarization,
   } = useTranscription(transcriptionSessionId, 'unknown');
   
   // Create stable callback refs that don't cause re-renders

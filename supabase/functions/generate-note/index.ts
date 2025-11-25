@@ -69,29 +69,43 @@ serve(async (req) => {
       .map(([key, desc]) => `    "${key}": "${desc}"`)
       .join(',\n');
 
-    const systemPrompt = `You are an expert medical scribe assistant with extensive knowledge of clinical documentation standards.
+    const systemPrompt = `You are an expert medical scribe assistant with extensive knowledge of clinical documentation standards and advanced speaker diarization analysis.
 
 Template: ${templateName}
 Detail level: ${detail_level}
 
-CRITICAL INSTRUCTIONS:
-1. Generate a comprehensive, accurate clinical note using the specified template
-2. Extract information from speaker-labeled transcript (Doctor: / Patient: prefixes)
-3. Use appropriate medical terminology and ICD-10 compatible language
-4. Include specific measurements, dosages, and clinical findings
-5. Maintain professional medical documentation standards
-6. Preserve patient safety information and critical alerts
-7. Structure the output as valid JSON
-8. **IMPORTANT**: Always generate the clinical note in ENGLISH, regardless of the transcript language
-9. Translate any non-English content to English while preserving medical accuracy
-10. Use standard English medical terminology
+CRITICAL INSTRUCTIONS FOR SPEAKER-AWARE CLINICAL DOCUMENTATION:
 
-LANGUAGE HANDLING:
-- The transcript may be in any language (English, Hindi, Kannada, etc.)
-- Always translate and generate the clinical note in English
-- Use appropriate English medical terminology
-- Preserve all clinical details during translation
-- Section headers must be in English
+1. **SPEAKER DIARIZATION ANALYSIS**:
+   - The transcript contains speaker-labeled segments with "Doctor:" and "Patient:" prefixes
+   - Carefully analyze which statements come from the doctor vs. patient
+   - Extract subjective complaints ONLY from patient statements
+   - Extract clinical observations and assessments ONLY from doctor statements
+   - Maintain clear attribution throughout the clinical note
+
+2. **CLINICAL NOTE STRUCTURE**:
+   - Subjective (S): Patient's own words, complaints, and symptoms (ONLY from "Patient:" segments)
+   - Objective (O): Doctor's observations, examination findings, vital signs (ONLY from "Doctor:" segments)
+   - Assessment (A): Doctor's clinical interpretation and diagnosis (ONLY from "Doctor:" segments)
+   - Plan (P): Treatment plan, prescriptions, follow-up (ONLY from "Doctor:" segments)
+
+3. **MEDICAL ACCURACY**:
+   - Use appropriate medical terminology and ICD-10 compatible language
+   - Include specific measurements, dosages, and clinical findings
+   - Maintain professional medical documentation standards
+   - Preserve patient safety information and critical alerts
+
+4. **LANGUAGE HANDLING**:
+   - The transcript may be in any language (English, Hindi, Kannada, etc.)
+   - Always translate and generate the clinical note in ENGLISH
+   - Use standard English medical terminology
+   - Preserve all clinical details during translation
+   - Section headers must be in English
+
+5. **OUTPUT FORMAT**:
+   - Structure the output as valid JSON
+   - Clearly separate doctor observations from patient statements
+   - Maintain chronological flow of the conversation
 
 Output format (MUST be valid JSON):
 {
@@ -102,14 +116,26 @@ ${sections}
   "plaintext": "Full formatted clinical note with proper section headers and content IN ENGLISH"
 }
 
-Quality criteria:
-- Accuracy: All information from transcript included
-- Completeness: No critical details omitted
-- Clarity: Medical terminology used appropriately
-- Structure: Logical flow and organization
-- Speaker Attribution: Correctly identify doctor vs patient statements
-- Compliance: Follows documentation standards
-- Language: Clinical note must always be in English`;
+QUALITY CRITERIA:
+- **Accuracy**: All information from transcript included with correct speaker attribution
+- **Completeness**: No critical details omitted, all speakers properly identified
+- **Clarity**: Medical terminology used appropriately with clear source attribution
+- **Structure**: Logical flow separating patient complaints from doctor findings
+- **Speaker Diarization**: Perfect identification of doctor vs patient statements
+- **Clinical Relevance**: Patient statements in Subjective, doctor findings in Objective/Assessment/Plan
+- **Compliance**: Follows medical documentation standards
+- **Language**: Clinical note must always be in English
+
+EXAMPLE OUTPUT STRUCTURE:
+{
+  "sections": {
+    "subjective": "Patient reports [symptoms from Patient: segments]",
+    "objective": "Physical examination reveals [findings from Doctor: segments]",
+    "assessment": "Clinical diagnosis based on [doctor's assessment from Doctor: segments]",
+    "plan": "Treatment plan includes [interventions from Doctor: segments]"
+  },
+  "plaintext": "Formatted clinical note with proper speaker-based sections"
+}`;
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -121,7 +147,21 @@ Quality criteria:
         model: 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Generate a clinical note from this transcript. IMPORTANT: Generate the note in ENGLISH, translating any non-English content while preserving medical accuracy.\n\nTranscript:\n${transcript_text}` }
+          { role: 'user', content: `Generate a clinical note from this SPEAKER-LABELED transcript. 
+
+CRITICAL: The transcript contains "Doctor:" and "Patient:" labels that MUST be used to correctly attribute statements:
+- Statements after "Doctor:" are from the healthcare provider
+- Statements after "Patient:" are from the patient
+
+IMPORTANT: 
+1. Generate the note in ENGLISH, translating any non-English content while preserving medical accuracy
+2. Patient complaints and symptoms → Subjective section (from "Patient:" segments)
+3. Doctor observations and findings → Objective section (from "Doctor:" segments)  
+4. Doctor diagnosis → Assessment section (from "Doctor:" segments)
+5. Doctor treatment plan → Plan section (from "Doctor:" segments)
+
+SPEAKER-LABELED TRANSCRIPT:
+${transcript_text}` }
         ],
       }),
     });
