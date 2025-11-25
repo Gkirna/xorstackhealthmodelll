@@ -48,6 +48,7 @@ serve(async (req) => {
   }
 
   const requestId = crypto.randomUUID();
+  const requestStartTime = Date.now();
   console.log(`[${requestId}] 🎙️ Transcription request received`);
 
   try {
@@ -134,10 +135,21 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`[${requestId}] ❌ OpenAI API error: ${response.status}`);
+      console.error(`[${requestId}] ❌ OpenAI API error: ${response.status} - ${errorText}`);
       
-      // Don't expose OpenAI error details to client
-      throw new Error('Transcription service temporarily unavailable');
+      // Parse OpenAI error for better diagnostics
+      let errorDetail = 'Transcription service temporarily unavailable';
+      try {
+        const errorJson = JSON.parse(errorText);
+        console.error(`[${requestId}] OpenAI error details:`, errorJson);
+        if (errorJson.error?.message) {
+          errorDetail = errorJson.error.message;
+        }
+      } catch (e) {
+        // Error text is not JSON
+      }
+      
+      throw new Error(errorDetail);
     }
 
     const result = await response.json();
@@ -146,6 +158,7 @@ serve(async (req) => {
     console.log(`[${requestId}] ✅ Success - hash: ${transcriptHash}, length: ${result.text.length} chars`);
 
     // Log audit event (without PHI)
+    const processingTime = Date.now() - requestStartTime;
     try {
       await supabase.from('ai_logs').insert({
         user_id: userId,
@@ -154,7 +167,7 @@ serve(async (req) => {
         status: 'success',
         input_hash: transcriptHash,
         tokens_used: Math.ceil(audioFile.size / 100), // Estimate
-        duration_ms: Date.now(),
+        duration_ms: processingTime, // Actual processing duration in ms
       });
     } catch (logError) {
       console.error(`[${requestId}] Failed to log audit event:`, logError);
