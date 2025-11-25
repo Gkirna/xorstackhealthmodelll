@@ -43,14 +43,10 @@ export class WhisperTranscription {
       console.log('📊 Mode:', this.config.mode);
       console.log('🌐 Language:', this.config.language);
 
-      // Create MediaRecorder for audio chunks
-      // Try different mime types for better compatibility
+      // Create MediaRecorder for audio chunks with timeslice for valid chunks
       let mimeType = 'audio/webm;codecs=opus';
       if (!MediaRecorder.isTypeSupported(mimeType)) {
         mimeType = 'audio/webm';
-      }
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/ogg;codecs=opus';
       }
       
       console.log('🎬 Using MIME type:', mimeType);
@@ -71,8 +67,8 @@ export class WhisperTranscription {
         }
       };
 
-      // Start recording and collect chunks every 1 second
-      this.mediaRecorder.start(1000); // Capture chunks every 1 second
+      // Start recording with timeslice to get complete valid chunks every 3 seconds
+      this.mediaRecorder.start(3000); // Request complete chunks every 3 seconds
       this.isActive = true;
 
       // Start periodic chunk processing every 3 seconds
@@ -168,23 +164,19 @@ export class WhisperTranscription {
       try {
         console.log(`🔄 Processing ${chunksToProcess.length} audio chunks`);
         
-        // Combine chunks into single blob
-        const audioBlob = new Blob(chunksToProcess, { type: 'audio/webm' });
-        console.log(`📊 Combined audio blob: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+        // Each chunk from MediaRecorder is a complete valid blob with headers
+        // Just take the first chunk which is a complete valid WebM file
+        const audioBlob = chunksToProcess[0]; 
+        console.log(`📊 Processing WebM blob: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
 
-        // Skip if too small (less than 10KB - likely silence)
-        if (audioBlob.size < 10000) {
+        // Skip if too small (less than 5KB - likely silence or incomplete)
+        if (audioBlob.size < 5000) {
           console.log('⏭️ Skipping small audio chunk (likely silence)');
           return;
         }
 
-        // Convert to WAV format
-        console.log('🔄 Converting WebM to WAV format...');
-        const wavBlob = await this.convertBlobToWav(audioBlob);
-        console.log(`✅ Converted to WAV: ${wavBlob.size} bytes`);
-
-        // Convert to base64
-        const base64Audio = await this.blobToBase64(wavBlob);
+        // Convert to base64 - send the valid WebM blob directly
+        const base64Audio = await this.blobToBase64(audioBlob);
 
         // Send to Whisper API via edge function
         const { data, error } = await supabase.functions.invoke('whisper-transcribe', {

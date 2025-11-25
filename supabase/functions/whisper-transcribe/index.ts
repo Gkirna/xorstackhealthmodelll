@@ -36,18 +36,18 @@ serve(async (req) => {
 
     console.log('📦 Audio binary size:', bytes.length, 'bytes');
 
-    // Create form data with WAV audio format
+    // Create form data with WebM audio format (OpenAI supports it)
     const formData = new FormData();
-    const blob = new Blob([bytes], { type: 'audio/wav' });
-    formData.append('file', blob, 'recording.wav');
+    const blob = new Blob([bytes], { type: 'audio/webm' });
+    formData.append('file', blob, 'recording.webm');
     formData.append('model', 'whisper-1');
     formData.append('language', language);
     formData.append('response_format', 'json');
-    formData.append('temperature', '0'); // Lower temperature for more accurate medical transcription
+    formData.append('temperature', '0');
     
     console.log('🎤 Sending to Whisper API:', {
       size: bytes.length,
-      type: 'audio/wav',
+      type: 'audio/webm',
       language: language
     });
 
