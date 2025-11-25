@@ -175,15 +175,14 @@ export class WhisperTranscription {
           return;
         }
 
-        // Convert to base64 - send the valid WebM blob directly
-        const base64Audio = await this.blobToBase64(audioBlob);
+        // Send audio blob directly to edge function (not base64)
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording.webm');
+        formData.append('language', this.config.language || 'en');
 
         // Send to Whisper API via edge function
         const { data, error } = await supabase.functions.invoke('whisper-transcribe', {
-          body: {
-            audio: base64Audio,
-            language: this.config.language
-          }
+          body: formData
         });
 
         if (error) {

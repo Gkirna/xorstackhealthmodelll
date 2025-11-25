@@ -12,10 +12,13 @@ serve(async (req) => {
   }
 
   try {
-    const { audio, language = 'en' } = await req.json();
+    // Get the audio file from FormData
+    const formData = await req.formData();
+    const audioFile = formData.get('audio') as File;
+    const language = formData.get('language') as string || 'en';
     
-    if (!audio) {
-      throw new Error('No audio data provided');
+    if (!audioFile) {
+      throw new Error('No audio file provided');
     }
 
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
@@ -23,33 +26,18 @@ serve(async (req) => {
       throw new Error('OPENAI_API_KEY not configured');
     }
 
-    console.log('🎙️ Processing audio chunk with Whisper API');
-    console.log('📊 Audio data length:', audio.length);
+    console.log('🎙️ Processing audio file with Whisper API');
+    console.log('📊 Audio file size:', audioFile.size, 'bytes');
+    console.log('📊 Audio file type:', audioFile.type);
     console.log('🌐 Language:', language);
 
-    // Decode base64 audio
-    const binaryString = atob(audio);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-
-    console.log('📦 Audio binary size:', bytes.length, 'bytes');
-
-    // Create form data with WebM audio format (OpenAI supports it)
-    const formData = new FormData();
-    const blob = new Blob([bytes], { type: 'audio/webm' });
-    formData.append('file', blob, 'recording.webm');
-    formData.append('model', 'whisper-1');
-    formData.append('language', language);
-    formData.append('response_format', 'json');
-    formData.append('temperature', '0');
-    
-    console.log('🎤 Sending to Whisper API:', {
-      size: bytes.length,
-      type: 'audio/webm',
-      language: language
-    });
+    // Create form data for OpenAI with the file directly
+    const openaiFormData = new FormData();
+    openaiFormData.append('file', audioFile, 'recording.webm');
+    openaiFormData.append('model', 'whisper-1');
+    openaiFormData.append('language', language);
+    openaiFormData.append('response_format', 'json');
+    openaiFormData.append('temperature', '0');
 
     // Send to OpenAI Whisper API
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -57,7 +45,7 @@ serve(async (req) => {
       headers: {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
       },
-      body: formData,
+      body: openaiFormData,
     });
 
     if (!response.ok) {
