@@ -64,7 +64,20 @@ export class RealTimeTranscription {
     this.recognition.continuous = this.config.continuous;
     this.recognition.interimResults = this.config.interimResults;
     this.recognition.lang = this.config.lang;
-    this.recognition.maxAlternatives = 5; // Increased for better accuracy in medical context
+    this.recognition.maxAlternatives = 10; // Maximum alternatives for highest accuracy
+    
+    // Enhanced accuracy settings
+    if (this.recognition.grammars) {
+      // Add medical terminology to grammar list if supported
+      const SpeechGrammarList = (window as any).SpeechGrammarList || (window as any).webkitSpeechGrammarList;
+      if (SpeechGrammarList) {
+        const grammarList = new SpeechGrammarList();
+        // Medical terms grammar (helps recognition prioritize these words)
+        const medicalGrammar = '#JSGF V1.0; grammar medical; public <term> = diabetes | hypertension | medication | prescription | diagnosis | symptoms | treatment | blood pressure | heart rate | temperature | fever | pain | allergy | tablet | capsule | injection | test | scan | ultrasound | patient | doctor ;';
+        grammarList.addFromString(medicalGrammar, 1);
+        this.recognition.grammars = grammarList;
+      }
+    }
 
     this.recognition.onstart = () => {
       console.log('Speech recognition started');

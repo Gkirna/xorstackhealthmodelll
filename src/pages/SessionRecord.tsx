@@ -69,90 +69,141 @@ const SessionRecord = () => {
   const speakerRef = useRef<'provider' | 'patient'>('provider');
   const transcriptCountRef = useRef(0);
   const lastTranscriptTimeRef = useRef<number>(0);
-  const stableSessionIdRef = useRef(id || 'default');
+  
+  // CRITICAL: Create stable session ID once and never change it
+  const sessionIdRef = useRef(id);
+  useEffect(() => {
+    if (id && sessionIdRef.current !== id) {
+      sessionIdRef.current = id;
+    }
+  }, [id]);
 
   // Language code mapping: simple code -> locale code for transcription
   const getTranscriptionLanguage = (lang: string): string => {
     const languageMap: Record<string, string> = {
-      'en': 'en-US', // Changed to en-US for better multi-accent support (US, UK, AU, etc.)
-      'hi': 'hi-IN',
-      'kn': 'kn-IN',
-      'es': 'es-ES',
-      'fr': 'fr-FR',
-      'de': 'de-DE',
+      'kn': 'kn-IN', // Kannada
+      'hi': 'hi-IN', // Hindi
+      'ta': 'ta-IN', // Tamil
+      'te': 'te-IN', // Telugu
+      'en': 'en-US', // English (US) - supports all English accents
     };
-    return languageMap[lang] || 'en-US'; // Default to US English for broader accent support
+    return languageMap[lang] || 'en-US';
   };
 
-  // CUSTOM HOOKS NEXT
-  // Create stable transcription hook first with stable key
-  console.log('🔗 Connecting useTranscription');
-  const { transcriptChunks, addTranscriptChunk, loadTranscripts, getFullTranscript, saveAllPendingChunks, stats, updateVoiceCharacteristics } = useTranscription(stableSessionIdRef.current, 'unknown');
+  // CUSTOM HOOKS - Initialize transcription hook FIRST with stable session ID
+  const transcriptionSessionId = sessionIdRef.current || 'default';
+  console.log('🔗 Initializing useTranscription with session:', transcriptionSessionId);
   
-  // Define stable callbacks using useCallback
-  const handleTranscriptUpdate = useCallback((text: string, isFinal: boolean) => {
+  const { 
+    transcriptChunks, 
+    addTranscriptChunk, 
+    loadTranscripts, 
+    getFullTranscript, 
+    saveAllPendingChunks, 
+    stats, 
+    updateVoiceCharacteristics 
+  } = useTranscription(transcriptionSessionId, 'unknown');
+  
+  // Create stable callback refs that don't cause re-renders
+  const handleTranscriptUpdateRef = useRef<(text: string, isFinal: boolean) => void>();
+  const handleRecordingErrorRef = useRef<(error: string) => void>();
+  
+  // Define the actual callback implementations
+  handleTranscriptUpdateRef.current = (text: string, isFinal: boolean) => {
     if (isFinal && text.trim()) {
       const currentTime = Date.now();
       const timeSinceLastTranscript = currentTime - lastTranscriptTimeRef.current;
       
-      // Detect speaker change based on time gap (playback mode)
-      if (recordingInputMode === 'playback' && timeSinceLastTranscript > 2000) {
+      // Enhanced speaker detection for playback mode (3 second threshold for better accuracy)
+      if (recordingInputMode === 'playback' && timeSinceLastTranscript > 3000) {
         speakerRef.current = speakerRef.current === 'provider' ? 'patient' : 'provider';
+        console.log(`🔄 Speaker change detected: ${speakerRef.current} (gap: ${timeSinceLastTranscript}ms)`);
       }
       
       const currentSpeaker = speakerRef.current;
       transcriptCountRef.current++;
       lastTranscriptTimeRef.current = currentTime;
       
-      console.log(`💬 Transcript chunk #${transcriptCountRef.current} from ${currentSpeaker}:`, text.substring(0, 50));
+      console.log(`💬 Final transcript #${transcriptCountRef.current} [${currentSpeaker}]: "${text.substring(0, 80)}..."`);
       
-      // Add to transcription system
+      // Add to transcription system with speaker info
       addTranscriptChunk(text);
       
-      // Update UI
+      // Update UI with formatted transcript
       const speakerLabel = currentSpeaker === 'provider' ? 'Doctor' : 'Patient';
-      setTranscript(prev => prev ? `${prev}\n\n${speakerLabel}: ${text}` : `${speakerLabel}: ${text}`);
+      setTranscript(prev => {
+        const newText = `${speakerLabel}: ${text}`;
+        return prev ? `${prev}\n\n${newText}` : newText;
+      });
       
-      // Alternate speaker for next transcript (direct mode)
+      // Alternate speaker for direct mode (conversation flow)
       if (recordingInputMode === 'direct') {
         speakerRef.current = currentSpeaker === 'provider' ? 'patient' : 'provider';
       }
+    } else if (!isFinal && text.trim()) {
+      // Show interim results in console for debugging
+      console.log(`⏳ Interim: "${text.substring(0, 50)}..."`);
     }
-  }, [recordingInputMode, addTranscriptChunk]);
+  };
   
-  const handleRecordingError = useCallback((error: string) => {
-    console.error('Recording error:', error);
-    toast.error(error);
-  }, []);
+  handleRecordingErrorRef.current = (error: string) => {
+    console.error('❌ Recording error:', error);
+    toast.error(error, { duration: 5000 });
+  };
   
-  // Now declare useAudioRecording with stable callbacks
+  // Now initialize audio recording with stable callback refs
+  const audioRecordingOptions = useRef({
+    continuous: true,
+    language: getTranscriptionLanguage(language),
+    mode: recordingInputMode,
+    onTranscriptUpdate: (text: string, isFinal: boolean) => {
+      handleTranscriptUpdateRef.current?.(text, isFinal);
+    },
+    onError: (error: string) => {
+      handleRecordingErrorRef.current?.(error);
+    },
+  }).current;
+  
   const {
     startRecording,
     stopRecording,
     pauseRecording,
     resumeRecording,
+    clearRecording,
     isRecording,
     isPaused,
     duration,
     isTranscribing,
+    interimTranscript,
+    transcriptSupported,
+    error: recordingError,
+    audioLevel,
+    recordedBlob,
+    recordedUrl,
     currentVoiceGender,
     currentVoiceCharacteristics,
     voiceAnalyzer,
     autoCorrector,
-    audioLevel,
+    formatDuration,
     voiceQuality,
-  } = useAudioRecording({
-    continuous: true,
-    language: getTranscriptionLanguage(language),
-    mode: recordingInputMode,
-    onTranscriptUpdate: handleTranscriptUpdate,
-    onError: handleRecordingError,
-  });
+  } = useAudioRecording(audioRecordingOptions);
   
-  // Sync voice characteristics (runs only when characteristics actually change)
+  // Sync voice characteristics to transcription system
+  const lastSyncedCharacteristicsRef = useRef<string>('');
   useEffect(() => {
     if (currentVoiceCharacteristics) {
-      updateVoiceCharacteristics(currentVoiceCharacteristics);
+      const characteristicsKey = `${currentVoiceCharacteristics.gender}-${currentVoiceCharacteristics.pitch}-${currentVoiceCharacteristics.confidence}`;
+      
+      // Only update if characteristics actually changed (prevent unnecessary updates)
+      if (characteristicsKey !== lastSyncedCharacteristicsRef.current) {
+        console.log('🔄 Syncing voice characteristics:', {
+          gender: currentVoiceCharacteristics.gender,
+          pitch: currentVoiceCharacteristics.pitch.toFixed(0),
+          confidence: (currentVoiceCharacteristics.confidence * 100).toFixed(0) + '%'
+        });
+        updateVoiceCharacteristics(currentVoiceCharacteristics);
+        lastSyncedCharacteristicsRef.current = characteristicsKey;
+      }
     }
   }, [currentVoiceCharacteristics, updateVoiceCharacteristics]);
   
