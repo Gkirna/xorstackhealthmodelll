@@ -32,16 +32,15 @@ serve(async (req) => {
     console.log('📊 Audio file name:', audioFile.name);
     console.log('🌐 Language:', language);
 
-    // Create form data for OpenAI - use the correct filename extension
+    // Create form data for OpenAI
     const openaiFormData = new FormData();
-    const fileName = audioFile.name.endsWith('.wav') ? 'recording.wav' : 'recording.webm';
-    openaiFormData.append('file', audioFile, fileName);
+    openaiFormData.append('file', audioFile, 'recording.webm');
     openaiFormData.append('model', 'whisper-1');
     openaiFormData.append('language', language);
     openaiFormData.append('response_format', 'json');
     openaiFormData.append('temperature', '0');
     
-    console.log('📤 Sending to OpenAI:', fileName);
+    console.log('📤 Sending to OpenAI: recording.webm');
 
     // Send to OpenAI Whisper API
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
