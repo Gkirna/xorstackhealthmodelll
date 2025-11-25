@@ -124,11 +124,41 @@ serve(async (req) => {
 
     // Create form data for OpenAI Whisper API
     const openaiFormData = new FormData();
-    // Use appropriate filename extension based on actual type
-    const extension = audioFile.type.includes('webm') ? 'webm' : 
-                     audioFile.type.includes('mp3') ? 'mp3' :
-                     audioFile.type.includes('wav') ? 'wav' : 'audio';
-    openaiFormData.append('file', audioFile, `recording.${extension}`);
+    
+    // CRITICAL FIX: Create clean Blob without codec specification
+    // OpenAI rejects "audio/webm;codecs=opus" but accepts "audio/webm"
+    const audioBuffer = await audioFile.arrayBuffer();
+    let cleanMimeType = audioFile.type.split(';')[0]; // Remove codec specification
+    
+    // Determine extension and MIME type
+    let extension = 'webm';
+    if (audioFile.type.includes('mp3') || audioFile.type.includes('mpeg')) {
+      extension = 'mp3';
+      cleanMimeType = 'audio/mpeg';
+    } else if (audioFile.type.includes('wav')) {
+      extension = 'wav';
+      cleanMimeType = 'audio/wav';
+    } else if (audioFile.type.includes('ogg')) {
+      extension = 'ogg';
+      cleanMimeType = 'audio/ogg';
+    } else if (audioFile.type.includes('m4a') || audioFile.type.includes('mp4')) {
+      extension = 'm4a';
+      cleanMimeType = 'audio/mp4';
+    } else if (audioFile.type.includes('webm')) {
+      extension = 'webm';
+      cleanMimeType = 'audio/webm';
+    }
+    
+    // Create clean blob without codec info
+    const cleanAudioBlob = new Blob([audioBuffer], { type: cleanMimeType });
+    
+    console.log(`[${requestId}] 🔧 Audio format fix:`, {
+      original: audioFile.type,
+      clean: cleanMimeType,
+      extension: extension
+    });
+    
+    openaiFormData.append('file', cleanAudioBlob, `recording.${extension}`);
     openaiFormData.append('model', 'whisper-1');
     openaiFormData.append('language', language);
     openaiFormData.append('response_format', 'verbose_json'); // Get detailed response
