@@ -75,14 +75,23 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const currentVoiceCharacteristicsRef = useRef<any>(null);
   const autoCorrectorRef = useRef<MedicalAutoCorrector>(new MedicalAutoCorrector());
 
-  // Initialize transcription engine
+  // Initialize transcription engine ONCE with stable config
+  const transcriptionInitialized = useRef(false);
+  
   useEffect(() => {
-    console.log(`🎙️ Initializing real-time transcription engine for language: ${language}`);
+    // Prevent multiple initializations
+    if (transcriptionInitialized.current) {
+      console.log('⚠️ Transcription already initialized, skipping');
+      return;
+    }
+    
+    console.log(`🎙️ Initializing real-time transcription engine for language: ${language}, mode: ${mode}`);
+    transcriptionInitialized.current = true;
     
     transcriptionRef.current = new RealTimeTranscription({
       continuous,
       interimResults: true,
-      lang: language, // Use language from options
+      lang: language,
       onResult: async (transcript, isFinal) => {
         console.log('📝 Transcription result:', { 
           text: transcript.substring(0, 50) + '...', 
@@ -143,10 +152,14 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     }
 
     return () => {
-      console.log('🧹 Cleaning up audio recorder on unmount...');
+      console.log('🧹 Cleaning up audio recorder...');
+      transcriptionInitialized.current = false;
       
       // Stop timers
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
       
       // Stop voice analyzer
       if (voiceAnalyzerRef.current) {
@@ -160,15 +173,17 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       // Stop MediaRecorder
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
+        try {
+          mediaRecorderRef.current.stop();
+        } catch (e) {
+          console.warn('MediaRecorder already stopped');
+        }
       }
       
       // CRITICAL: Stop all media stream tracks
       if (streamRef.current) {
-        console.log('🔇 Stopping all media tracks on unmount...');
-        streamRef.current.getTracks().forEach(track => {
-          track.stop();
-        });
+        console.log('🔇 Stopping all media tracks...');
+        streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
       }
       
@@ -179,7 +194,6 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       // Close AudioContext
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        console.log('🧹 Closing AudioContext on unmount...');
         audioContextRef.current.close();
         audioContextRef.current = null;
       }
@@ -191,16 +205,18 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       // Stop audio monitoring
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
       
       // Stop transcription
       if (transcriptionRef.current) {
         transcriptionRef.current.destroy();
+        transcriptionRef.current = null;
       }
       
       console.log('✅ Audio recorder cleanup complete');
     };
-  }, [continuous, onFinalTranscriptChunk, onTranscriptUpdate, language]);
+  }, []); // Empty deps - initialize once, cleanup on unmount
 
   const startRecording = useCallback(async () => {
     try {
