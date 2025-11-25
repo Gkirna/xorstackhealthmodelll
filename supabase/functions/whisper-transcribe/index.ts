@@ -42,6 +42,8 @@ serve(async (req) => {
     formData.append('language', language);
     formData.append('response_format', 'json');
     formData.append('temperature', '0'); // Lower temperature for more accurate medical transcription
+    // Add prompt to reduce hallucinations
+    formData.append('prompt', 'This is a medical consultation between a doctor and patient. Transcribe only what is actually spoken.');
 
     // Send to OpenAI Whisper API
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {

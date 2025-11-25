@@ -140,9 +140,16 @@ export class WhisperTranscription {
         const audioBlob = new Blob(chunksToProcess, { type: 'audio/webm;codecs=opus' });
         console.log(`📊 Audio blob size: ${audioBlob.size} bytes (${chunksToProcess.length} chunks)`);
 
-        // Skip if too small (less than 5KB - likely silence or incomplete)
-        if (audioBlob.size < 5000) {
+        // Skip if too small (less than 20KB - likely silence or incomplete)
+        if (audioBlob.size < 20000) {
           console.log('⏭️ Skipping small audio chunk (likely silence)');
+          return;
+        }
+        
+        // Analyze audio to detect if it contains speech
+        const hasVoiceActivity = await this.detectVoiceActivity(audioBlob);
+        if (!hasVoiceActivity) {
+          console.log('⏭️ Skipping silent audio chunk (no voice detected)');
           return;
         }
         
@@ -202,6 +209,47 @@ export class WhisperTranscription {
         }
       }
     });
+  }
+
+  private async detectVoiceActivity(audioBlob: Blob): Promise<boolean> {
+    try {
+      // Create audio context for analysis
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      
+      // Get audio samples from first channel
+      const channelData = audioBuffer.getChannelData(0);
+      
+      // Calculate RMS (Root Mean Square) energy
+      let sumSquares = 0;
+      for (let i = 0; i < channelData.length; i++) {
+        sumSquares += channelData[i] * channelData[i];
+      }
+      const rms = Math.sqrt(sumSquares / channelData.length);
+      
+      // Calculate peak amplitude
+      let peak = 0;
+      for (let i = 0; i < channelData.length; i++) {
+        const abs = Math.abs(channelData[i]);
+        if (abs > peak) peak = abs;
+      }
+      
+      // Close audio context to free resources
+      await audioContext.close();
+      
+      // Voice activity threshold (empirically determined)
+      // RMS > 0.01 AND peak > 0.05 typically indicates voice
+      const hasVoice = rms > 0.01 && peak > 0.05;
+      
+      console.log(`🔊 Audio analysis: RMS=${rms.toFixed(4)}, Peak=${peak.toFixed(4)}, Voice=${hasVoice}`);
+      
+      return hasVoice;
+    } catch (error) {
+      console.error('❌ Voice activity detection failed:', error);
+      // If analysis fails, assume there might be voice to avoid false negatives
+      return true;
+    }
   }
 
   private blobToBase64(blob: Blob): Promise<string> {
