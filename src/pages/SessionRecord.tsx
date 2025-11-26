@@ -109,6 +109,11 @@ const SessionRecord = () => {
     resetDiarization,
   } = useTranscription(transcriptionSessionId, 'unknown');
   
+  // Update transcription model dynamically
+  useEffect(() => {
+    console.log('🎯 Model changed to:', selectedTranscriptionModel);
+  }, [selectedTranscriptionModel]);
+  
   // Create stable callback refs that don't cause re-renders
   const handleTranscriptUpdateRef = useRef<(text: string, isFinal: boolean) => void>();
   const handleRecordingErrorRef = useRef<(error: string) => void>();
@@ -178,13 +183,14 @@ const SessionRecord = () => {
     get deviceId() {
       return microphone !== 'default' ? microphone : undefined;
     },
+    model: selectedTranscriptionModel,
     onTranscriptUpdate: (text: string, isFinal: boolean) => {
       handleTranscriptUpdateRef.current?.(text, isFinal);
     },
     onError: (error: string) => {
       handleRecordingErrorRef.current?.(error);
     },
-  }), [microphone]); // Add microphone as dependency
+  }), [microphone, selectedTranscriptionModel]); // Add selectedTranscriptionModel as dependency
   
   const {
     startRecording,

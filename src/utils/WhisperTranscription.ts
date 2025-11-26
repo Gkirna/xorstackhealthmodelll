@@ -19,6 +19,7 @@ import { RetryStrategy, CircuitBreaker } from './RetryStrategy';
 
 export interface WhisperTranscriptionConfig {
   language?: string;
+  model?: string; // whisper-1 or gpt-4o-mini-transcribe
   onResult?: (transcript: string, isFinal: boolean) => void;
   onError?: (error: string) => void;
   onStart?: () => void;
@@ -49,6 +50,7 @@ export class WhisperTranscription {
     this.config = {
       language: 'en',
       mode: 'direct',
+      model: 'whisper-1',
       ...config
     };
 

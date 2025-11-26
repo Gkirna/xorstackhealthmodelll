@@ -31,6 +31,9 @@ verify_jwt = true
 [functions.assemblyai-realtime]
 verify_jwt = true
 
+[functions.deepgram-realtime]
+verify_jwt = true
+
 [functions.whisper-transcribe]
 verify_jwt = true
 
