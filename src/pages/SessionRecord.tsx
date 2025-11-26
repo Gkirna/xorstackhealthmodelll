@@ -28,7 +28,6 @@ import { useAdvancedTranscription } from '@/hooks/useAdvancedTranscription';
 import type { EnhancedTranscriptionData } from '@/types/advancedTranscription';
 import { TemplateSelectionDialog } from "@/components/session/TemplateSelectionDialog";
 import { AudioQualityIndicator } from "@/components/AudioQualityIndicator";
-import { SpeakerDiarizationDashboard } from "@/components/SpeakerDiarizationDashboard";
 
 const SessionRecord = () => {
   const { id } = useParams();
@@ -938,10 +937,8 @@ const SessionRecord = () => {
 
             {/* Tab Content */}
             <TabsContent value="transcript" className="flex-1 mt-0 overflow-auto space-y-4">
-              {/* Speaker Diarization Dashboard - Real-time speaker stats */}
-              {isRecording && stats && stats.totalChunks > 0 && (
-                <SpeakerDiarizationDashboard statistics={getSpeakerStatistics()} />
-              )}
+              {/* Speaker Diarization working in background - UI hidden for cleaner interface */}
+              {/* All speaker detection, voice analysis, and diarization continue via hooks */}
               
               {recordingMode === 'dictating' && (
                 <DictatingPanel
