@@ -209,7 +209,7 @@ export class WhisperTranscription {
         const transcriptText = result.text.trim();
         const processingTime = Date.now() - startTime;
 
-        // Filter out Whisper's default responses for silence/unclear audio
+        // AGGRESSIVE silence filtering for medical-grade transcription
         const silentPhrases = [
           'Thank you for watching!',
           'Thank you for watching',
@@ -225,15 +225,24 @@ export class WhisperTranscription {
           ''
         ];
 
-        // Also check if the transcript is just repetition of "Thank you for watching"
+        // Check for repetitive patterns (same word/phrase repeated multiple times)
+        const words = transcriptText.toLowerCase().split(/\s+/);
+        const uniqueWords = new Set(words);
+        const repetitionRatio = words.length > 0 ? uniqueWords.size / words.length : 1;
+        const isHighlyRepetitive = repetitionRatio < 0.3 && words.length > 5; // Less than 30% unique words
+
+        // Check if transcript contains suspicious repetitive phrases
+        const hasRepetitivePattern = /(.{10,})\1{2,}/.test(transcriptText); // Same 10+ chars repeated 3+ times
+
+        // Check for common silence artifacts
         const isRepetitiveResponse = transcriptText.split(/[.!?,\s]+/).every(word => 
-          ['thank', 'you', 'thanks', 'for', 'watching', ''].includes(word.toLowerCase())
+          ['thank', 'you', 'thanks', 'for', 'watching', 'want', 'to', 'die', 'i', 'dont', ''].includes(word.toLowerCase())
         );
 
         const isSilentResponse = silentPhrases.some(phrase => 
           transcriptText.toLowerCase() === phrase.toLowerCase() ||
           transcriptText.toLowerCase().trim() === phrase.toLowerCase().trim()
-        ) || isRepetitiveResponse;
+        ) || isRepetitiveResponse || isHighlyRepetitive || hasRepetitivePattern;
 
         if (transcriptText.length > 0 && !isSilentResponse) {
           console.log(`[Whisper] Segment #${segmentId} success:`, {
