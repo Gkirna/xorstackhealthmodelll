@@ -143,7 +143,9 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
   // Start transcription
   const start = useCallback(async (stream: MediaStream): Promise<boolean> => {
     try {
-      console.log('🚀 Starting hybrid transcription:', { mode, model: currentModel });
+      console.log('═══════════════════════════════════════════════════');
+      console.log('🎯 TRANSCRIPTION MODEL SELECTED:', currentModel);
+      console.log('═══════════════════════════════════════════════════');
 
       // Determine which provider based on model
       let activeMode: 'whisper' | 'assemblyai' | 'deepgram' | 'openai-realtime' = 'whisper';
@@ -151,23 +153,41 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
       // Route to correct provider based on model with comprehensive detection
       if (currentModel.startsWith('whisper-') || currentModel.startsWith('gpt-')) {
         activeMode = 'whisper';
-        console.log('🎯 Routing to OpenAI Whisper');
+        console.log('🚀 ACTIVATING: OpenAI Whisper API');
+        console.log('📋 Provider: OpenAI');
+        console.log('📋 Model:', currentModel);
+        console.log('⏱️  Expected latency: ~2-5 seconds per 10s segment');
       } else if (currentModel.startsWith('assemblyai-')) {
         activeMode = 'assemblyai';
-        console.log('🎯 Routing to AssemblyAI Real-Time');
+        console.log('🚀 ACTIVATING: AssemblyAI Streaming API');
+        console.log('📋 Provider: AssemblyAI');
+        console.log('📋 Model:', currentModel);
+        console.log('⏱️  Expected latency: <500ms (real-time streaming)');
       } else if (currentModel.includes('nova') || currentModel === 'enhanced' || currentModel === 'whisper-large') {
         activeMode = 'deepgram';
-        console.log('🎯 Routing to Deepgram');
+        console.log('🚀 ACTIVATING: Deepgram Streaming API');
+        console.log('📋 Provider: Deepgram');
+        console.log('📋 Model:', currentModel);
+        console.log('⏱️  Expected latency: <300ms (real-time streaming)');
       } else if (currentModel.includes('silero') || currentModel.includes('turn_detector')) {
         activeMode = 'openai-realtime';
-        console.log('🎯 Routing to OpenAI Realtime VAD');
+        console.log('🚀 ACTIVATING: OpenAI Realtime API with VAD');
+        console.log('📋 Provider: OpenAI Realtime');
+        console.log('📋 Model:', currentModel);
+        console.log('⏱️  Expected latency: <100ms (real-time streaming)');
       } else if (mode === 'assemblyai') {
         activeMode = 'assemblyai';
-        console.log('🎯 Routing to AssemblyAI (mode override)');
+        console.log('🚀 ACTIVATING: AssemblyAI (mode override)');
+        console.log('📋 Provider: AssemblyAI');
+        console.log('⏱️  Expected latency: <500ms (real-time streaming)');
       } else if (mode === 'auto') {
         activeMode = 'deepgram';
-        console.log('🎯 Auto mode: defaulting to Deepgram');
+        console.log('🚀 ACTIVATING: Deepgram (auto mode default)');
+        console.log('📋 Provider: Deepgram');
+        console.log('⏱️  Expected latency: <300ms (real-time streaming)');
       }
+
+      console.log('═══════════════════════════════════════════════════');
 
       setCurrentMode(activeMode);
       setCurrentModel(currentModel);
@@ -175,34 +195,37 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
 
       if (activeMode === 'openai-realtime') {
         // OpenAI Realtime with VAD (Silero/Turn Detector)
-        console.log('🚀 Connecting to OpenAI Realtime...');
+        console.log('▶️ Starting OpenAI Realtime connection...');
         if (!openaiRealtime.isConnected) {
           await openaiRealtime.connect();
         }
         await openaiRealtime.startStreaming();
+        console.log('✅ OpenAI Realtime streaming active with', currentModel);
         toast.success(`🎯 ${currentModel} active - Ultra-low latency VAD (<100ms)`, { duration: 3000 });
       } else if (activeMode === 'assemblyai') {
         // AssemblyAI Real-Time Streaming
-        console.log('🚀 Connecting to AssemblyAI...');
+        console.log('▶️ Starting AssemblyAI connection...');
         if (!assemblyAI.isConnected) {
           await assemblyAI.connect();
         }
         await assemblyAI.startStreaming();
         const modelName = currentModel === 'assemblyai-best' ? 'Best (Highest Accuracy)' : 
                          currentModel === 'assemblyai-nano' ? 'Nano (Fastest)' : 'Real-Time';
+        console.log('✅ AssemblyAI streaming active with', modelName);
         toast.success(`🎯 AssemblyAI ${modelName} active (<500ms latency)`, { duration: 3000 });
       } else if (activeMode === 'deepgram') {
         // Deepgram Medical & Nova Models
-        console.log('🚀 Connecting to Deepgram...');
+        console.log('▶️ Starting Deepgram connection...');
         if (!deepgram.isConnected) {
           await deepgram.connect();
         }
         await deepgram.startStreaming();
         const isMedical = currentModel.includes('medical');
+        console.log('✅ Deepgram streaming active with', currentModel, isMedical ? '(Medical Grade)' : '');
         toast.success(`🎯 Deepgram ${currentModel} active${isMedical ? ' - Medical Grade' : ''} (<300ms latency)`, { duration: 3000 });
       } else {
         // OpenAI Whisper Batch Processing
-        console.log('🚀 Starting OpenAI Whisper transcription...');
+        console.log('▶️ Starting OpenAI Whisper batch transcription...');
         whisperRef.current = new WhisperTranscription({
           language: 'en',
           mode: 'direct',
@@ -236,11 +259,16 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
         await whisperRef.current.start(stream);
         const modelDisplay = currentModel === 'whisper-1' ? 'Whisper-1 (Standard)' : 
                             currentModel === 'gpt-4o-mini-transcribe' ? 'GPT-4o Mini (Advanced)' : currentModel;
+        console.log('✅ OpenAI Whisper batch processing active with', modelDisplay);
         toast.success(`🎯 OpenAI ${modelDisplay} active (10s batch processing)`, { duration: 3000 });
       }
 
-      console.log(`✅ Transcription started successfully with ${activeMode} provider`);
-      console.log(`📊 Model: ${currentModel}, Mode: ${mode}, Active Mode: ${activeMode}`);
+      console.log('═══════════════════════════════════════════════════');
+      console.log('✅ TRANSCRIPTION STARTED SUCCESSFULLY');
+      console.log('📊 Active Provider:', activeMode.toUpperCase());
+      console.log('📊 Active Model:', currentModel);
+      console.log('📊 Configuration Mode:', mode);
+      console.log('═══════════════════════════════════════════════════');
 
       return true;
     } catch (error) {
@@ -252,24 +280,32 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
 
   // Stop transcription
   const stop = useCallback(() => {
-    console.log('🛑 Stopping hybrid transcription');
+    console.log('═══════════════════════════════════════════════════');
+    console.log('🛑 STOPPING TRANSCRIPTION');
+    console.log('📋 Active Provider:', currentMode.toUpperCase());
+    console.log('═══════════════════════════════════════════════════');
 
     if (currentMode === 'openai-realtime') {
       openaiRealtime.stopStreaming();
       openaiRealtime.disconnect();
+      console.log('✅ OpenAI Realtime stopped and disconnected');
     } else if (currentMode === 'deepgram') {
       deepgram.stopStreaming();
       deepgram.disconnect();
+      console.log('✅ Deepgram stopped and disconnected');
     } else if (currentMode === 'assemblyai') {
       assemblyAI.stopStreaming();
       assemblyAI.disconnect();
+      console.log('✅ AssemblyAI stopped and disconnected');
     } else if (whisperRef.current) {
       whisperRef.current.stop();
       whisperRef.current.destroy();
       whisperRef.current = null;
+      console.log('✅ OpenAI Whisper stopped');
     }
 
     setIsActive(false);
+    console.log('═══════════════════════════════════════════════════');
   }, [currentMode, assemblyAI, deepgram, openaiRealtime]);
 
   // Pause transcription
