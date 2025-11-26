@@ -148,17 +148,25 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
       // Determine which provider based on model
       let activeMode: 'whisper' | 'assemblyai' | 'deepgram' | 'openai-realtime' = 'whisper';
       
-      // Route to correct provider based on model
+      // Route to correct provider based on model with comprehensive detection
       if (currentModel.startsWith('whisper-') || currentModel.startsWith('gpt-')) {
         activeMode = 'whisper';
+        console.log('🎯 Routing to OpenAI Whisper');
+      } else if (currentModel.startsWith('assemblyai-')) {
+        activeMode = 'assemblyai';
+        console.log('🎯 Routing to AssemblyAI Real-Time');
       } else if (currentModel.includes('nova') || currentModel === 'enhanced' || currentModel === 'whisper-large') {
         activeMode = 'deepgram';
+        console.log('🎯 Routing to Deepgram');
       } else if (currentModel.includes('silero') || currentModel.includes('turn_detector')) {
-        activeMode = 'openai-realtime'; // OpenAI Realtime API for VAD models
+        activeMode = 'openai-realtime';
+        console.log('🎯 Routing to OpenAI Realtime VAD');
       } else if (mode === 'assemblyai') {
         activeMode = 'assemblyai';
+        console.log('🎯 Routing to AssemblyAI (mode override)');
       } else if (mode === 'auto') {
-        activeMode = 'deepgram'; // Default to Deepgram for best medical accuracy
+        activeMode = 'deepgram';
+        console.log('🎯 Auto mode: defaulting to Deepgram');
       }
 
       setCurrentMode(activeMode);
@@ -166,28 +174,35 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
       setIsActive(true);
 
       if (activeMode === 'openai-realtime') {
-        // Connect and start OpenAI Realtime with VAD
+        // OpenAI Realtime with VAD (Silero/Turn Detector)
+        console.log('🚀 Connecting to OpenAI Realtime...');
         if (!openaiRealtime.isConnected) {
           await openaiRealtime.connect();
         }
         await openaiRealtime.startStreaming();
-        toast.success(`🎯 ${currentModel} VAD active (<100ms latency)`);
-      } else if (activeMode === 'deepgram') {
-        // Connect and start Deepgram streaming
-        if (!deepgram.isConnected) {
-          await deepgram.connect();
-        }
-        await deepgram.startStreaming();
-        toast.success(`🎯 ${currentModel} model active (<300ms latency)`);
+        toast.success(`🎯 ${currentModel} active - Ultra-low latency VAD (<100ms)`, { duration: 3000 });
       } else if (activeMode === 'assemblyai') {
-        // Connect and start AssemblyAI streaming
+        // AssemblyAI Real-Time Streaming
+        console.log('🚀 Connecting to AssemblyAI...');
         if (!assemblyAI.isConnected) {
           await assemblyAI.connect();
         }
         await assemblyAI.startStreaming();
-        toast.success('🎯 AssemblyAI real-time active (<500ms latency)');
+        const modelName = currentModel === 'assemblyai-best' ? 'Best (Highest Accuracy)' : 
+                         currentModel === 'assemblyai-nano' ? 'Nano (Fastest)' : 'Real-Time';
+        toast.success(`🎯 AssemblyAI ${modelName} active (<500ms latency)`, { duration: 3000 });
+      } else if (activeMode === 'deepgram') {
+        // Deepgram Medical & Nova Models
+        console.log('🚀 Connecting to Deepgram...');
+        if (!deepgram.isConnected) {
+          await deepgram.connect();
+        }
+        await deepgram.startStreaming();
+        const isMedical = currentModel.includes('medical');
+        toast.success(`🎯 Deepgram ${currentModel} active${isMedical ? ' - Medical Grade' : ''} (<300ms latency)`, { duration: 3000 });
       } else {
-        // Use Whisper with selected model
+        // OpenAI Whisper Batch Processing
+        console.log('🚀 Starting OpenAI Whisper transcription...');
         whisperRef.current = new WhisperTranscription({
           language: 'en',
           mode: 'direct',
@@ -219,8 +234,13 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
         });
 
         await whisperRef.current.start(stream);
-        toast.success(`🎯 ${currentModel} active (10s latency)`);
+        const modelDisplay = currentModel === 'whisper-1' ? 'Whisper-1 (Standard)' : 
+                            currentModel === 'gpt-4o-mini-transcribe' ? 'GPT-4o Mini (Advanced)' : currentModel;
+        toast.success(`🎯 OpenAI ${modelDisplay} active (10s batch processing)`, { duration: 3000 });
       }
+
+      console.log(`✅ Transcription started successfully with ${activeMode} provider`);
+      console.log(`📊 Model: ${currentModel}, Mode: ${mode}, Active Mode: ${activeMode}`);
 
       return true;
     } catch (error) {

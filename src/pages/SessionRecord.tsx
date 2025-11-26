@@ -61,7 +61,7 @@ const SessionRecord = () => {
   const [enhancedTranscriptionData, setEnhancedTranscriptionData] = useState<EnhancedTranscriptionData | null>(null);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [recordingInputMode, setRecordingInputMode] = useState<'direct' | 'playback'>('direct');
-  const [selectedTranscriptionModel, setSelectedTranscriptionModel] = useState<string>('whisper-1');
+  const [selectedTranscriptionModel, setSelectedTranscriptionModel] = useState<string>('nova-2-medical');
   
   // ALL REFS NEXT
   const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
