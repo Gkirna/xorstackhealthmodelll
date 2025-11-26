@@ -99,7 +99,8 @@ const SessionRecord = () => {
     transcriptChunks, 
     addTranscriptChunk, 
     loadTranscripts, 
-    getFullTranscript, 
+    getFullTranscript,
+    getDiarizedTranscript,
     saveAllPendingChunks, 
     stats, 
     updateVoiceCharacteristics,
@@ -295,21 +296,28 @@ const SessionRecord = () => {
   const autoGenerateNote = useCallback(async (selectedTemplateId?: string) => {
     if (!id || !orchestratorRef.current) return;
     
-    if (!transcript.trim()) {
+    // Get the DIARIZED transcript with proper speaker labels
+    const diarizedTranscript = getDiarizedTranscript();
+    
+    if (!diarizedTranscript || !diarizedTranscript.trim()) {
       toast.error("No transcript available to generate note");
       return;
     }
 
     const templateToUse = selectedTemplateId || template;
 
+    console.log('🎯 Auto-generating clinical note with DIARIZED transcript');
+    console.log('📄 Diarized transcript preview:', diarizedTranscript.substring(0, 200));
+
     try {
       setIsAutoPipelineRunning(true);
       setActiveTab('note');
       
-      toast.info('Generating clinical documentation...');
+      toast.info('Generating clinical documentation with speaker diarization...');
       setSaveStatus('saving');
       
-      const result = await orchestratorRef.current.runCompletePipeline(id, transcript, {
+      // Use the diarized transcript for maximum speaker accuracy
+      const result = await orchestratorRef.current.runCompletePipeline(id, diarizedTranscript, {
         context,
         detailLevel: 'high',
         templateId: templateToUse,
@@ -537,7 +545,10 @@ const SessionRecord = () => {
   }, [navigate]);
 
   const handleGenerateNote = useCallback(async () => {
-    if (!transcript.trim()) {
+    // Get the DIARIZED transcript with proper speaker labels
+    const diarizedTranscript = getDiarizedTranscript();
+    
+    if (!diarizedTranscript || !diarizedTranscript.trim()) {
       toast.error("Please add transcript content first");
       return;
     }
@@ -552,11 +563,15 @@ const SessionRecord = () => {
       return;
     }
 
+    console.log('🎯 Generating clinical note with DIARIZED transcript');
+    console.log('📄 Diarized transcript preview:', diarizedTranscript.substring(0, 200));
+
     try {
       setIsAutoPipelineRunning(true);
       setSaveStatus('saving');
       
-      const result = await orchestratorRef.current.runCompletePipeline(id, transcript, {
+      // Use the diarized transcript for maximum speaker accuracy
+      const result = await orchestratorRef.current.runCompletePipeline(id, diarizedTranscript, {
         context,
         detailLevel: 'high',
         templateId: template,
@@ -603,7 +618,7 @@ const SessionRecord = () => {
         });
 
         setSaveStatus('saved');
-        toast.success('Clinical documentation complete!');
+        toast.success('Clinical documentation complete with speaker diarization!');
         
         setTimeout(() => setSaveStatus(null), 3000);
         
@@ -621,7 +636,7 @@ const SessionRecord = () => {
     } finally {
       setIsAutoPipelineRunning(false);
     }
-  }, [transcript, id, session, context, template]);
+  }, [getDiarizedTranscript, id, session, context, template]);
 
   const handleSessionDateChange = useCallback(async (newDate: Date) => {
     setSessionDate(newDate);
@@ -914,6 +929,11 @@ const SessionRecord = () => {
 
             {/* Tab Content */}
             <TabsContent value="transcript" className="flex-1 mt-0 overflow-auto space-y-4">
+              {/* Speaker Diarization Dashboard - Real-time speaker stats */}
+              {isRecording && stats && stats.totalChunks > 0 && (
+                <SpeakerDiarizationDashboard statistics={getSpeakerStatistics()} />
+              )}
+              
               {recordingMode === 'dictating' && (
                 <DictatingPanel
                   sessionId={id}
