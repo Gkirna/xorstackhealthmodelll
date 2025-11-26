@@ -2,12 +2,13 @@ import { useState, useRef, useCallback } from 'react';
 import { WhisperTranscription } from '@/utils/WhisperTranscription';
 import { useAssemblyAIStreaming } from './useAssemblyAIStreaming';
 import { useDeepgramStreaming } from './useDeepgramStreaming';
+import { useOpenAIRealtime } from './useOpenAIRealtime';
 import { MedicalAutoCorrector } from '@/utils/MedicalAutoCorrector';
 import { toast } from 'sonner';
 
 interface HybridTranscriptionConfig {
   sessionId?: string;
-  mode?: 'whisper' | 'assemblyai' | 'deepgram' | 'auto';
+  mode?: 'whisper' | 'assemblyai' | 'deepgram' | 'openai-realtime' | 'auto';
   model?: string; // Specific model to use
   enableAutoCorrection?: boolean;
   onTranscriptUpdate?: (text: string, isFinal: boolean) => void;
@@ -24,7 +25,7 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
   } = config;
 
   const [isActive, setIsActive] = useState(false);
-  const [currentMode, setCurrentMode] = useState<'whisper' | 'assemblyai' | 'deepgram'>('whisper');
+  const [currentMode, setCurrentMode] = useState<'whisper' | 'assemblyai' | 'deepgram' | 'openai-realtime'>('whisper');
   const [currentModel, setCurrentModel] = useState(model);
   const [stats, setStats] = useState({
     totalChunks: 0,
@@ -100,13 +101,52 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
     },
   });
 
+  // OpenAI Realtime (Silero VAD & Turn Detector)
+  const openaiRealtime = useOpenAIRealtime({
+    enabled: currentMode === 'openai-realtime' && isActive,
+    model: currentModel,
+    onPartialTranscript: (text) => {
+      if (onTranscriptUpdate) {
+        onTranscriptUpdate(text, false);
+      }
+    },
+    onFinalTranscript: async (text) => {
+      const finalText = enableAutoCorrection 
+        ? autoCorrectorRef.current.correctTranscript(text, 'patient')
+        : text;
+
+      if (onFinalTranscriptChunk) {
+        onFinalTranscriptChunk(finalText);
+      }
+      if (onTranscriptUpdate) {
+        onTranscriptUpdate(finalText, true);
+      }
+
+      setStats(prev => ({
+        ...prev,
+        totalChunks: prev.totalChunks + 1,
+        correctedChunks: enableAutoCorrection ? prev.correctedChunks + 1 : prev.correctedChunks,
+      }));
+    },
+    onError: (error) => {
+      console.error('❌ OpenAI Realtime error:', error);
+      toast.error('Streaming error: ' + error);
+    },
+    onSpeechStart: () => {
+      console.log('🎤 Speech detected by VAD');
+    },
+    onSpeechStop: () => {
+      console.log('🛑 Speech ended (VAD)');
+    },
+  });
+
   // Start transcription
   const start = useCallback(async (stream: MediaStream): Promise<boolean> => {
     try {
       console.log('🚀 Starting hybrid transcription:', { mode, model: currentModel });
 
       // Determine which provider based on model
-      let activeMode: 'whisper' | 'assemblyai' | 'deepgram' = 'whisper';
+      let activeMode: 'whisper' | 'assemblyai' | 'deepgram' | 'openai-realtime' = 'whisper';
       
       // Route to correct provider based on model
       if (currentModel.startsWith('whisper-') || currentModel.startsWith('gpt-')) {
@@ -114,7 +154,7 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
       } else if (currentModel.includes('nova') || currentModel === 'enhanced' || currentModel === 'whisper-large') {
         activeMode = 'deepgram';
       } else if (currentModel.includes('silero') || currentModel.includes('turn_detector')) {
-        activeMode = 'deepgram'; // Deepgram supports VAD models
+        activeMode = 'openai-realtime'; // OpenAI Realtime API for VAD models
       } else if (mode === 'assemblyai') {
         activeMode = 'assemblyai';
       } else if (mode === 'auto') {
@@ -125,7 +165,14 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
       setCurrentModel(currentModel);
       setIsActive(true);
 
-      if (activeMode === 'deepgram') {
+      if (activeMode === 'openai-realtime') {
+        // Connect and start OpenAI Realtime with VAD
+        if (!openaiRealtime.isConnected) {
+          await openaiRealtime.connect();
+        }
+        await openaiRealtime.startStreaming();
+        toast.success(`🎯 ${currentModel} VAD active (<100ms latency)`);
+      } else if (activeMode === 'deepgram') {
         // Connect and start Deepgram streaming
         if (!deepgram.isConnected) {
           await deepgram.connect();
@@ -181,13 +228,16 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
       setIsActive(false);
       return false;
     }
-  }, [mode, currentModel, enableAutoCorrection, assemblyAI, deepgram, onTranscriptUpdate, onFinalTranscriptChunk]);
+  }, [mode, currentModel, enableAutoCorrection, assemblyAI, deepgram, openaiRealtime, onTranscriptUpdate, onFinalTranscriptChunk]);
 
   // Stop transcription
   const stop = useCallback(() => {
     console.log('🛑 Stopping hybrid transcription');
 
-    if (currentMode === 'deepgram') {
+    if (currentMode === 'openai-realtime') {
+      openaiRealtime.stopStreaming();
+      openaiRealtime.disconnect();
+    } else if (currentMode === 'deepgram') {
       deepgram.stopStreaming();
       deepgram.disconnect();
     } else if (currentMode === 'assemblyai') {
@@ -200,29 +250,33 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
     }
 
     setIsActive(false);
-  }, [currentMode, assemblyAI, deepgram]);
+  }, [currentMode, assemblyAI, deepgram, openaiRealtime]);
 
   // Pause transcription
   const pause = useCallback(() => {
-    if (currentMode === 'deepgram') {
+    if (currentMode === 'openai-realtime') {
+      openaiRealtime.pauseStreaming();
+    } else if (currentMode === 'deepgram') {
       deepgram.pauseStreaming();
     } else if (currentMode === 'assemblyai') {
       assemblyAI.pauseStreaming();
     } else if (whisperRef.current) {
       whisperRef.current.pause();
     }
-  }, [currentMode, assemblyAI, deepgram]);
+  }, [currentMode, assemblyAI, deepgram, openaiRealtime]);
 
   // Resume transcription
   const resume = useCallback(() => {
-    if (currentMode === 'deepgram') {
+    if (currentMode === 'openai-realtime') {
+      openaiRealtime.resumeStreaming();
+    } else if (currentMode === 'deepgram') {
       deepgram.resumeStreaming();
     } else if (currentMode === 'assemblyai') {
       assemblyAI.resumeStreaming();
     } else if (whisperRef.current) {
       whisperRef.current.resume();
     }
-  }, [currentMode, assemblyAI, deepgram]);
+  }, [currentMode, assemblyAI, deepgram, openaiRealtime]);
 
   // Switch transcription model
   const switchModel = useCallback((newModel: string) => {
@@ -245,8 +299,11 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
     resume,
     switchModel,
     isStreaming: (currentMode === 'assemblyai' && assemblyAI.isStreaming) || 
-                 (currentMode === 'deepgram' && deepgram.isStreaming),
+                 (currentMode === 'deepgram' && deepgram.isStreaming) ||
+                 (currentMode === 'openai-realtime' && openaiRealtime.isStreaming),
     isConnected: (currentMode === 'assemblyai' && assemblyAI.isConnected) ||
-                 (currentMode === 'deepgram' && deepgram.isConnected),
+                 (currentMode === 'deepgram' && deepgram.isConnected) ||
+                 (currentMode === 'openai-realtime' && openaiRealtime.isConnected),
+    isSpeaking: currentMode === 'openai-realtime' ? openaiRealtime.isSpeaking : false,
   };
 }
