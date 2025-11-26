@@ -675,7 +675,7 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
     }
   }, [processQueue]);
 
-  // Main function to add transcript chunk
+  // Main function to add transcript chunk with ADVANCED DIARIZATION
   const addTranscriptChunk = useCallback(async (text: string, speaker?: string) => {
     if (!sessionId || !text.trim()) return;
 
@@ -683,16 +683,26 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
     const timestamp = sessionStartTimeRef.current > 0 ? Date.now() - sessionStartTimeRef.current : 0;
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-    // Smart speaker detection if not provided
-    const detectedSpeaker = speaker || determineSpeaker(text);
+    // CRITICAL: Process through advanced diarization system with voice characteristics
+    const voiceChars = currentVoiceCharacteristicsRef.current;
+    const diarizedSegment = diarizationSystemRef.current.processSpeechSegment(
+      text,
+      voiceChars,
+      timestamp
+    );
+    
+    // Use diarization result (more accurate than simple detection)
+    const finalSpeaker = diarizedSegment.speaker;
+    
+    console.log(`🎯 DIARIZED: ${finalSpeaker} | Text: "${text.substring(0, 50)}..." | Confidence: ${(diarizedSegment.confidence * 100).toFixed(0)}%`);
     
     // Optimistic UI update - show immediately
-    addChunkToUI(text, detectedSpeaker, tempId, timestamp);
+    addChunkToUI(text, finalSpeaker, tempId, timestamp);
     
     // Add to queue
     pendingChunksRef.current.push({
         text: text.trim(),
-      speaker: detectedSpeaker,
+      speaker: finalSpeaker,
       timestamp,
       tempId,
     });
@@ -707,8 +717,8 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
     // STRATEGY 3: Apply progressive save strategy
     await applyProgressiveSaveStrategy();
     
-    return { id: tempId, session_id: sessionId, text: text.trim(), speaker: detectedSpeaker };
-  }, [sessionId, addChunkToUI, determineSpeaker, applyProgressiveSaveStrategy]);
+    return { id: tempId, session_id: sessionId, text: text.trim(), speaker: finalSpeaker };
+  }, [sessionId, addChunkToUI, applyProgressiveSaveStrategy]);
 
   // Force save all pending chunks (call when stopping recording)
   const saveAllPendingChunks = useCallback(async () => {
@@ -744,8 +754,18 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
     }
   }, [sessionId]);
 
-  // Get full transcript text (including temp chunks for real-time display)
+  // Get DIARIZED transcript with proper speaker labels for clinical note generation
   const getFullTranscript = useCallback(() => {
+    // Use the advanced diarization system's formatted output
+    const diarizedTranscript = diarizationSystemRef.current.getFormattedTranscript();
+    
+    if (diarizedTranscript && diarizedTranscript.length > 0) {
+      console.log('📄 Using DIARIZED transcript for clinical note generation');
+      return diarizedTranscript;
+    }
+    
+    // Fallback to basic formatting if diarization not available
+    console.warn('⚠️ Diarization system has no data, using fallback transcript');
     return transcriptChunks
       .map(chunk => {
         const speakerLabel = chunk.speaker === 'provider' ? 'Doctor' : 'Patient';
@@ -842,6 +862,7 @@ export function useTranscription(sessionId: string, currentVoiceGender?: 'male' 
     addTranscriptChunk,
     loadTranscripts: useCallback(async () => await loadTranscripts(), [loadTranscripts]),
     getFullTranscript: useCallback(() => getFullTranscript(), [getFullTranscript]),
+    getDiarizedTranscript: useCallback(() => diarizationSystemRef.current.getFormattedTranscript(), []),
     saveAllPendingChunks: useCallback(async () => await saveAllPendingChunks(), [saveAllPendingChunks]),
     updateVoiceCharacteristics,
     getSpeakerStatistics,
