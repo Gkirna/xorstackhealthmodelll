@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ModelSelector } from "./ModelSelector";
 import {
   Popover,
   PopoverContent,
@@ -47,6 +48,8 @@ interface SessionTopBarProps {
   isStartingRecording?: boolean;
   recordingInputMode?: 'direct' | 'playback';
   onRecordingInputModeChange?: (mode: 'direct' | 'playback') => void;
+  selectedTranscriptionModel: string;
+  onModelChange: (model: string) => void;
 }
 
 export function SessionTopBar({
@@ -70,6 +73,8 @@ export function SessionTopBar({
   isStartingRecording = false,
   recordingInputMode = 'direct',
   onRecordingInputModeChange,
+  selectedTranscriptionModel,
+  onModelChange,
 }: SessionTopBarProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(patientName);
@@ -144,58 +149,66 @@ export function SessionTopBar({
 
         <div className="flex items-center gap-2">
           {!isRecording && !isPaused && (
-            <div className="flex">
+            <div className="flex items-center gap-2">
+              {/* Model Selector - Blue dropdown to the LEFT */}
+              <ModelSelector 
+                value={selectedTranscriptionModel}
+                onValueChange={onModelChange}
+              />
+              
               {/* Start Button */}
-              <Button 
-                onClick={onStartRecording} 
-                disabled={isStartingRecording}
-                variant="success"
-                className="px-4 py-2 h-9 rounded-r-none border-r-0 flex items-center gap-2"
-              >
-                <Mic className="h-4 w-4" />
-                {isStartingRecording 
-                  ? 'Starting...'
-                  : (recordingMode === 'transcribing' ? 'Start transcribing' : 
-                     recordingMode === 'dictating' ? 'Start dictating' : 
-                     recordingMode === 'upload' ? 'Upload session audio' : 'Start transcribing')
-                }
-              </Button>
+              <div className="flex">
+                <Button 
+                  onClick={onStartRecording} 
+                  disabled={isStartingRecording}
+                  variant="success"
+                  className="px-4 py-2 h-9 rounded-r-none border-r-0 flex items-center gap-2"
+                >
+                  <Mic className="h-4 w-4" />
+                  {isStartingRecording 
+                    ? 'Starting...'
+                    : (recordingMode === 'transcribing' ? 'Start transcribing' : 
+                       recordingMode === 'dictating' ? 'Start dictating' : 
+                       recordingMode === 'upload' ? 'Upload session audio' : 'Start transcribing')
+                  }
+                </Button>
 
-              {/* Dropdown Chevron */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button 
-                    disabled={isStartingRecording}
-                    variant="success"
-                    className="px-2 h-9 rounded-l-none"
-                  >
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem
-                    onClick={() => onRecordingModeChange('transcribing')}
-                    className="flex items-center justify-between"
-                  >
-                    <span>Transcribing</span>
-                    {recordingMode === 'transcribing' && <Check className="h-4 w-4" />}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => onRecordingModeChange('dictating')}
-                    className="flex items-center justify-between"
-                  >
-                    <span>Dictating</span>
-                    {recordingMode === 'dictating' && <Check className="h-4 w-4" />}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => onRecordingModeChange('upload')}
-                    className="flex items-center justify-between"
-                  >
-                    <span>Upload session audio</span>
-                    {recordingMode === 'upload' && <Check className="h-4 w-4" />}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                {/* Dropdown Chevron */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      disabled={isStartingRecording}
+                      variant="success"
+                      className="px-2 h-9 rounded-l-none"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem
+                      onClick={() => onRecordingModeChange('transcribing')}
+                      className="flex items-center justify-between"
+                    >
+                      <span>Transcribing</span>
+                      {recordingMode === 'transcribing' && <Check className="h-4 w-4" />}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => onRecordingModeChange('dictating')}
+                      className="flex items-center justify-between"
+                    >
+                      <span>Dictating</span>
+                      {recordingMode === 'dictating' && <Check className="h-4 w-4" />}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => onRecordingModeChange('upload')}
+                      className="flex items-center justify-between"
+                    >
+                      <span>Upload session audio</span>
+                      {recordingMode === 'upload' && <Check className="h-4 w-4" />}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           )}
 
