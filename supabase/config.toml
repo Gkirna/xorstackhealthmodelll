@@ -34,6 +34,9 @@ verify_jwt = true
 [functions.deepgram-realtime]
 verify_jwt = true
 
+[functions.openai-realtime]
+verify_jwt = true
+
 [functions.whisper-transcribe]
 verify_jwt = true
 
