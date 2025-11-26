@@ -209,7 +209,33 @@ export class WhisperTranscription {
         const transcriptText = result.text.trim();
         const processingTime = Date.now() - startTime;
 
-        if (transcriptText.length > 0) {
+        // Filter out Whisper's default responses for silence/unclear audio
+        const silentPhrases = [
+          'Thank you for watching!',
+          'Thank you for watching',
+          'Thanks for watching!',
+          'Thanks for watching',
+          'Thank you.',
+          'Thanks.',
+          'Thank you',
+          'Thanks',
+          'you',
+          '.',
+          '...',
+          ''
+        ];
+
+        // Also check if the transcript is just repetition of "Thank you for watching"
+        const isRepetitiveResponse = transcriptText.split(/[.!?,\s]+/).every(word => 
+          ['thank', 'you', 'thanks', 'for', 'watching', ''].includes(word.toLowerCase())
+        );
+
+        const isSilentResponse = silentPhrases.some(phrase => 
+          transcriptText.toLowerCase() === phrase.toLowerCase() ||
+          transcriptText.toLowerCase().trim() === phrase.toLowerCase().trim()
+        ) || isRepetitiveResponse;
+
+        if (transcriptText.length > 0 && !isSilentResponse) {
           console.log(`[Whisper] Segment #${segmentId} success:`, {
             length: transcriptText.length,
             processingTime: `${processingTime}ms`,
@@ -226,6 +252,8 @@ export class WhisperTranscription {
           if (this.config.onResult) {
             this.config.onResult(transcriptText, true);
           }
+        } else if (isSilentResponse) {
+          console.log(`[Whisper] Segment #${segmentId} filtered - detected silence response:`, transcriptText);
         }
 
       } catch (error: any) {
