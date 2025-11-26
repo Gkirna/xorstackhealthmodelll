@@ -16,7 +16,7 @@ interface ModelSelectorProps {
 export const ModelSelector = ({ value, onValueChange }: ModelSelectorProps) => {
   return (
     <Select value={value} onValueChange={onValueChange}>
-      <SelectTrigger className="w-[280px] bg-blue-600 text-white border-blue-700 hover:bg-blue-700">
+      <SelectTrigger className="w-[280px] bg-amber-700 text-white border-amber-800 hover:bg-amber-800">
         <SelectValue placeholder="Select transcription model" />
       </SelectTrigger>
       <SelectContent className="max-h-[400px]">
