@@ -1,12 +1,14 @@
 import { useState, useRef, useCallback } from 'react';
 import { WhisperTranscription } from '@/utils/WhisperTranscription';
 import { useAssemblyAIStreaming } from './useAssemblyAIStreaming';
+import { useDeepgramStreaming } from './useDeepgramStreaming';
 import { MedicalAutoCorrector } from '@/utils/MedicalAutoCorrector';
 import { toast } from 'sonner';
 
 interface HybridTranscriptionConfig {
   sessionId?: string;
-  mode?: 'whisper' | 'assemblyai' | 'auto';
+  mode?: 'whisper' | 'assemblyai' | 'deepgram' | 'auto';
+  model?: string; // Specific model to use
   enableAutoCorrection?: boolean;
   onTranscriptUpdate?: (text: string, isFinal: boolean) => void;
   onFinalTranscriptChunk?: (text: string) => void;
@@ -15,13 +17,15 @@ interface HybridTranscriptionConfig {
 export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
   const {
     mode = 'auto',
+    model = 'whisper-1',
     enableAutoCorrection = true,
     onTranscriptUpdate,
     onFinalTranscriptChunk,
   } = config;
 
   const [isActive, setIsActive] = useState(false);
-  const [currentMode, setCurrentMode] = useState<'whisper' | 'assemblyai'>('whisper');
+  const [currentMode, setCurrentMode] = useState<'whisper' | 'assemblyai' | 'deepgram'>('whisper');
+  const [currentModel, setCurrentModel] = useState(model);
   const [stats, setStats] = useState({
     totalChunks: 0,
     correctedChunks: 0,
@@ -40,7 +44,6 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
       }
     },
     onFinalTranscript: async (text) => {
-      // Auto-correct medical terms
       const finalText = enableAutoCorrection 
         ? autoCorrectorRef.current.correctTranscript(text, 'patient')
         : text;
@@ -64,38 +67,85 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
     },
   });
 
+  // Deepgram streaming (medical-grade, multiple models)
+  const deepgram = useDeepgramStreaming({
+    enabled: currentMode === 'deepgram' && isActive,
+    model: currentModel,
+    onPartialTranscript: (text) => {
+      if (onTranscriptUpdate) {
+        onTranscriptUpdate(text, false);
+      }
+    },
+    onFinalTranscript: async (text) => {
+      const finalText = enableAutoCorrection 
+        ? autoCorrectorRef.current.correctTranscript(text, 'patient')
+        : text;
+
+      if (onFinalTranscriptChunk) {
+        onFinalTranscriptChunk(finalText);
+      }
+      if (onTranscriptUpdate) {
+        onTranscriptUpdate(finalText, true);
+      }
+
+      setStats(prev => ({
+        ...prev,
+        totalChunks: prev.totalChunks + 1,
+        correctedChunks: enableAutoCorrection ? prev.correctedChunks + 1 : prev.correctedChunks,
+      }));
+    },
+    onError: (error) => {
+      console.error('❌ Deepgram error:', error);
+      toast.error('Streaming error: ' + error);
+    },
+  });
+
   // Start transcription
   const start = useCallback(async (stream: MediaStream): Promise<boolean> => {
     try {
-      console.log('🚀 Starting hybrid transcription:', { mode, currentMode });
+      console.log('🚀 Starting hybrid transcription:', { mode, model: currentModel });
 
-      // Determine which mode to use
-      let activeMode = currentMode;
-      if (mode === 'auto') {
-        // Auto-select best mode based on available features
-        // AssemblyAI for real-time, Whisper for high accuracy
-        activeMode = 'assemblyai'; // Default to streaming for best UX
-      } else if (mode === 'whisper' || mode === 'assemblyai') {
-        activeMode = mode;
+      // Determine which provider based on model
+      let activeMode: 'whisper' | 'assemblyai' | 'deepgram' = 'whisper';
+      
+      // Route to correct provider based on model
+      if (currentModel.startsWith('whisper-') || currentModel.startsWith('gpt-')) {
+        activeMode = 'whisper';
+      } else if (currentModel.includes('nova') || currentModel === 'enhanced' || currentModel === 'whisper-large') {
+        activeMode = 'deepgram';
+      } else if (currentModel.includes('silero') || currentModel.includes('turn_detector')) {
+        activeMode = 'deepgram'; // Deepgram supports VAD models
+      } else if (mode === 'assemblyai') {
+        activeMode = 'assemblyai';
+      } else if (mode === 'auto') {
+        activeMode = 'deepgram'; // Default to Deepgram for best medical accuracy
       }
 
       setCurrentMode(activeMode);
+      setCurrentModel(currentModel);
       setIsActive(true);
 
-      if (activeMode === 'assemblyai') {
-        // Connect and start streaming
+      if (activeMode === 'deepgram') {
+        // Connect and start Deepgram streaming
+        if (!deepgram.isConnected) {
+          await deepgram.connect();
+        }
+        await deepgram.startStreaming();
+        toast.success(`🎯 ${currentModel} model active (<300ms latency)`);
+      } else if (activeMode === 'assemblyai') {
+        // Connect and start AssemblyAI streaming
         if (!assemblyAI.isConnected) {
           await assemblyAI.connect();
         }
         await assemblyAI.startStreaming();
-        toast.success('🎯 Real-time transcription active (<500ms latency)');
+        toast.success('🎯 AssemblyAI real-time active (<500ms latency)');
       } else {
-        // Use Whisper batch processing
+        // Use Whisper with selected model
         whisperRef.current = new WhisperTranscription({
           language: 'en',
           mode: 'direct',
+          model: currentModel,
           onResult: async (text, isFinal) => {
-            // Auto-correct if enabled
             const finalText = enableAutoCorrection && isFinal
               ? autoCorrectorRef.current.correctTranscript(text, 'patient')
               : text;
@@ -122,7 +172,7 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
         });
 
         await whisperRef.current.start(stream);
-        toast.success('🎯 High-accuracy mode active (10s latency)');
+        toast.success(`🎯 ${currentModel} active (10s latency)`);
       }
 
       return true;
@@ -131,13 +181,16 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
       setIsActive(false);
       return false;
     }
-  }, [mode, currentMode, enableAutoCorrection, assemblyAI, onTranscriptUpdate, onFinalTranscriptChunk]);
+  }, [mode, currentModel, enableAutoCorrection, assemblyAI, deepgram, onTranscriptUpdate, onFinalTranscriptChunk]);
 
   // Stop transcription
   const stop = useCallback(() => {
     console.log('🛑 Stopping hybrid transcription');
 
-    if (currentMode === 'assemblyai') {
+    if (currentMode === 'deepgram') {
+      deepgram.stopStreaming();
+      deepgram.disconnect();
+    } else if (currentMode === 'assemblyai') {
       assemblyAI.stopStreaming();
       assemblyAI.disconnect();
     } else if (whisperRef.current) {
@@ -147,46 +200,53 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
     }
 
     setIsActive(false);
-  }, [currentMode, assemblyAI]);
+  }, [currentMode, assemblyAI, deepgram]);
 
   // Pause transcription
   const pause = useCallback(() => {
-    if (currentMode === 'assemblyai') {
+    if (currentMode === 'deepgram') {
+      deepgram.pauseStreaming();
+    } else if (currentMode === 'assemblyai') {
       assemblyAI.pauseStreaming();
     } else if (whisperRef.current) {
       whisperRef.current.pause();
     }
-  }, [currentMode, assemblyAI]);
+  }, [currentMode, assemblyAI, deepgram]);
 
   // Resume transcription
   const resume = useCallback(() => {
-    if (currentMode === 'assemblyai') {
+    if (currentMode === 'deepgram') {
+      deepgram.resumeStreaming();
+    } else if (currentMode === 'assemblyai') {
       assemblyAI.resumeStreaming();
     } else if (whisperRef.current) {
       whisperRef.current.resume();
     }
-  }, [currentMode, assemblyAI]);
+  }, [currentMode, assemblyAI, deepgram]);
 
-  // Switch transcription mode
-  const switchMode = useCallback((newMode: 'whisper' | 'assemblyai') => {
+  // Switch transcription model
+  const switchModel = useCallback((newModel: string) => {
     if (!isActive) {
-      setCurrentMode(newMode);
-      toast.info(`Switched to ${newMode === 'assemblyai' ? 'Real-time Streaming' : 'High Accuracy'} mode`);
+      setCurrentModel(newModel);
+      toast.info(`Switched to ${newModel}`);
     } else {
-      toast.error('Cannot switch mode while transcription is active');
+      toast.error('Cannot switch model while transcription is active');
     }
   }, [isActive]);
 
   return {
     isActive,
     currentMode,
+    currentModel,
     stats,
     start,
     stop,
     pause,
     resume,
-    switchMode,
-    isStreaming: currentMode === 'assemblyai' && assemblyAI.isStreaming,
-    isConnected: currentMode === 'assemblyai' && assemblyAI.isConnected,
+    switchModel,
+    isStreaming: (currentMode === 'assemblyai' && assemblyAI.isStreaming) || 
+                 (currentMode === 'deepgram' && deepgram.isStreaming),
+    isConnected: (currentMode === 'assemblyai' && assemblyAI.isConnected) ||
+                 (currentMode === 'deepgram' && deepgram.isConnected),
   };
 }

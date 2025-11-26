@@ -18,6 +18,7 @@ interface AudioRecordingOptions {
   deviceId?: string;
   language?: string; // Language code for transcription (e.g., 'kn-IN', 'en-IN')
   mode?: 'direct' | 'playback'; // Recording mode: direct conversation or playback transcription
+  model?: string; // Transcription model (whisper-1, gpt-4o-mini-transcribe, nova-2, etc.)
 }
 
 interface RecordingState {
@@ -45,6 +46,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     deviceId,
     language = 'en-US', // Default to English (US) for multi-accent support
     mode = 'direct', // Default to direct recording
+    model = 'whisper-1', // Default to whisper-1
   } = options;
 
   const [state, setState] = useState<RecordingState>({
@@ -85,11 +87,12 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       return;
     }
     
-    console.log(`🎙️ Initializing Realtime transcription engine for language: ${language}`);
+    console.log(`🎙️ Initializing Realtime transcription engine for language: ${language}, model: ${model}`);
     transcriptionInitialized.current = true;
     
       transcriptionRef.current = new WhisperTranscription({
         mode,
+        model,
         language: language.split('-')[0], // Extract base language code (e.g., 'en' from 'en-US')
         onResult: async (transcript, isFinal) => {
         console.log('📝 Whisper transcription result:', { 
