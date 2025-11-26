@@ -61,6 +61,7 @@ const SessionRecord = () => {
   const [enhancedTranscriptionData, setEnhancedTranscriptionData] = useState<EnhancedTranscriptionData | null>(null);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [recordingInputMode, setRecordingInputMode] = useState<'direct' | 'playback'>('direct');
+  const [selectedTranscriptionModel, setSelectedTranscriptionModel] = useState<string>('whisper-1');
   
   // ALL REFS NEXT
   const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
@@ -890,6 +891,8 @@ const SessionRecord = () => {
           isStartingRecording={isStartingRecording}
           recordingInputMode={recordingInputMode}
           onRecordingInputModeChange={setRecordingInputMode}
+          selectedTranscriptionModel={selectedTranscriptionModel}
+          onModelChange={setSelectedTranscriptionModel}
         />
 
         {/* Voice Analysis Running in Background - UI Hidden */}
