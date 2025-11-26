@@ -143,51 +143,84 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
   // Start transcription
   const start = useCallback(async (stream: MediaStream): Promise<boolean> => {
     try {
-      console.log('═══════════════════════════════════════════════════');
-      console.log('🎯 TRANSCRIPTION MODEL SELECTED:', currentModel);
-      console.log('═══════════════════════════════════════════════════');
+      console.clear(); // Clear console for clarity
+      console.log('');
+      console.log('╔═══════════════════════════════════════════════════╗');
+      console.log('║                                                   ║');
+      console.log('║        🎯 TRANSCRIPTION ENGINE STARTING           ║');
+      console.log('║                                                   ║');
+      console.log('╚═══════════════════════════════════════════════════╝');
+      console.log('');
+      console.log('📋 SELECTED MODEL:', currentModel);
+      console.log('');
 
       // Determine which provider based on model
       let activeMode: 'whisper' | 'assemblyai' | 'deepgram' | 'openai-realtime' = 'whisper';
+      let providerName = '';
+      let apiEndpoint = '';
       
       // Route to correct provider based on model with comprehensive detection
       if (currentModel.startsWith('whisper-') || currentModel.startsWith('gpt-')) {
         activeMode = 'whisper';
-        console.log('🚀 ACTIVATING: OpenAI Whisper API');
-        console.log('📋 Provider: OpenAI');
-        console.log('📋 Model:', currentModel);
-        console.log('⏱️  Expected latency: ~2-5 seconds per 10s segment');
+        providerName = '🟦 OPENAI WHISPER';
+        apiEndpoint = '/functions/v1/whisper-transcribe';
+        console.log('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
+        console.log('┃  PROVIDER: OpenAI Whisper API (Batch)         ┃');
+        console.log('┃  MODEL:', currentModel.padEnd(36), '┃');
+        console.log('┃  ENDPOINT:', apiEndpoint.padEnd(32), '┃');
+        console.log('┃  LATENCY: ~2-5 seconds per 10s segment        ┃');
+        console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
       } else if (currentModel.startsWith('assemblyai-')) {
         activeMode = 'assemblyai';
-        console.log('🚀 ACTIVATING: AssemblyAI Streaming API');
-        console.log('📋 Provider: AssemblyAI');
-        console.log('📋 Model:', currentModel);
-        console.log('⏱️  Expected latency: <500ms (real-time streaming)');
+        providerName = '🟩 ASSEMBLYAI';
+        apiEndpoint = 'wss://api.assemblyai.com/v2/realtime/ws';
+        console.log('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
+        console.log('┃  PROVIDER: AssemblyAI Streaming (Real-Time)   ┃');
+        console.log('┃  MODEL:', currentModel.padEnd(36), '┃');
+        console.log('┃  ENDPOINT: WebSocket Streaming                ┃');
+        console.log('┃  LATENCY: <500ms (real-time)                  ┃');
+        console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
       } else if (currentModel.includes('nova') || currentModel === 'enhanced' || currentModel === 'whisper-large') {
         activeMode = 'deepgram';
-        console.log('🚀 ACTIVATING: Deepgram Streaming API');
-        console.log('📋 Provider: Deepgram');
-        console.log('📋 Model:', currentModel);
-        console.log('⏱️  Expected latency: <300ms (real-time streaming)');
+        providerName = '🟪 DEEPGRAM';
+        apiEndpoint = 'wss://api.deepgram.com/v1/listen';
+        console.log('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
+        console.log('┃  PROVIDER: Deepgram Streaming (Medical-Grade) ┃');
+        console.log('┃  MODEL:', currentModel.padEnd(36), '┃');
+        console.log('┃  ENDPOINT: WebSocket Streaming                ┃');
+        console.log('┃  LATENCY: <300ms (real-time)                  ┃');
+        console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
       } else if (currentModel.includes('silero') || currentModel.includes('turn_detector')) {
         activeMode = 'openai-realtime';
-        console.log('🚀 ACTIVATING: OpenAI Realtime API with VAD');
-        console.log('📋 Provider: OpenAI Realtime');
-        console.log('📋 Model:', currentModel);
-        console.log('⏱️  Expected latency: <100ms (real-time streaming)');
+        providerName = '🟨 OPENAI REALTIME';
+        apiEndpoint = 'wss://api.openai.com/v1/realtime';
+        console.log('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
+        console.log('┃  PROVIDER: OpenAI Realtime API with VAD       ┃');
+        console.log('┃  MODEL:', currentModel.padEnd(36), '┃');
+        console.log('┃  ENDPOINT: WebSocket Streaming                ┃');
+        console.log('┃  LATENCY: <100ms (ultra real-time)            ┃');
+        console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
       } else if (mode === 'assemblyai') {
         activeMode = 'assemblyai';
-        console.log('🚀 ACTIVATING: AssemblyAI (mode override)');
-        console.log('📋 Provider: AssemblyAI');
-        console.log('⏱️  Expected latency: <500ms (real-time streaming)');
+        providerName = '🟩 ASSEMBLYAI';
+        apiEndpoint = 'wss://api.assemblyai.com/v2/realtime/ws';
+        console.log('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
+        console.log('┃  PROVIDER: AssemblyAI (Mode Override)         ┃');
+        console.log('┃  ENDPOINT: WebSocket Streaming                ┃');
+        console.log('┃  LATENCY: <500ms (real-time)                  ┃');
+        console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
       } else if (mode === 'auto') {
         activeMode = 'deepgram';
-        console.log('🚀 ACTIVATING: Deepgram (auto mode default)');
-        console.log('📋 Provider: Deepgram');
-        console.log('⏱️  Expected latency: <300ms (real-time streaming)');
+        providerName = '🟪 DEEPGRAM';
+        apiEndpoint = 'wss://api.deepgram.com/v1/listen';
+        console.log('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
+        console.log('┃  PROVIDER: Deepgram (Auto Mode Default)       ┃');
+        console.log('┃  ENDPOINT: WebSocket Streaming                ┃');
+        console.log('┃  LATENCY: <300ms (real-time)                  ┃');
+        console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
       }
 
-      console.log('═══════════════════════════════════════════════════');
+      console.log('');
 
       setCurrentMode(activeMode);
       setCurrentModel(currentModel);
@@ -263,12 +296,20 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
         toast.success(`🎯 OpenAI ${modelDisplay} active (10s batch processing)`, { duration: 3000 });
       }
 
-      console.log('═══════════════════════════════════════════════════');
-      console.log('✅ TRANSCRIPTION STARTED SUCCESSFULLY');
-      console.log('📊 Active Provider:', activeMode.toUpperCase());
-      console.log('📊 Active Model:', currentModel);
-      console.log('📊 Configuration Mode:', mode);
-      console.log('═══════════════════════════════════════════════════');
+      console.log('');
+      console.log('╔═══════════════════════════════════════════════════╗');
+      console.log('║                                                   ║');
+      console.log('║        ✅ TRANSCRIPTION ACTIVE & RUNNING          ║');
+      console.log('║                                                   ║');
+      console.log('╚═══════════════════════════════════════════════════╝');
+      console.log('');
+      console.log('📊 ACTIVE PROVIDER:', providerName);
+      console.log('📊 ACTIVE MODEL:', currentModel);
+      console.log('📊 API ENDPOINT:', apiEndpoint);
+      console.log('📊 MODE:', mode);
+      console.log('');
+      console.log('🎤 Listening for audio input...');
+      console.log('');
 
       return true;
     } catch (error) {
@@ -280,32 +321,39 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
 
   // Stop transcription
   const stop = useCallback(() => {
-    console.log('═══════════════════════════════════════════════════');
-    console.log('🛑 STOPPING TRANSCRIPTION');
-    console.log('📋 Active Provider:', currentMode.toUpperCase());
-    console.log('═══════════════════════════════════════════════════');
+    console.log('');
+    console.log('╔═══════════════════════════════════════════════════╗');
+    console.log('║                                                   ║');
+    console.log('║        🛑 STOPPING TRANSCRIPTION ENGINE           ║');
+    console.log('║                                                   ║');
+    console.log('╚═══════════════════════════════════════════════════╝');
+    console.log('');
+    console.log('📋 STOPPING PROVIDER:', currentMode.toUpperCase());
+    console.log('');
 
     if (currentMode === 'openai-realtime') {
       openaiRealtime.stopStreaming();
       openaiRealtime.disconnect();
-      console.log('✅ OpenAI Realtime stopped and disconnected');
+      console.log('✅ 🟨 OpenAI Realtime stopped and disconnected');
     } else if (currentMode === 'deepgram') {
       deepgram.stopStreaming();
       deepgram.disconnect();
-      console.log('✅ Deepgram stopped and disconnected');
+      console.log('✅ 🟪 Deepgram stopped and disconnected');
     } else if (currentMode === 'assemblyai') {
       assemblyAI.stopStreaming();
       assemblyAI.disconnect();
-      console.log('✅ AssemblyAI stopped and disconnected');
+      console.log('✅ 🟩 AssemblyAI stopped and disconnected');
     } else if (whisperRef.current) {
       whisperRef.current.stop();
       whisperRef.current.destroy();
       whisperRef.current = null;
-      console.log('✅ OpenAI Whisper stopped');
+      console.log('✅ 🟦 OpenAI Whisper stopped');
     }
 
     setIsActive(false);
-    console.log('═══════════════════════════════════════════════════');
+    console.log('');
+    console.log('🏁 Transcription session ended');
+    console.log('');
   }, [currentMode, assemblyAI, deepgram, openaiRealtime]);
 
   // Pause transcription
