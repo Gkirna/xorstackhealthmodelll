@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { WhisperTranscription } from '@/utils/WhisperTranscription';
 import { useAssemblyAIStreaming } from './useAssemblyAIStreaming';
 import { useDeepgramStreaming } from './useDeepgramStreaming';
@@ -34,14 +34,6 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
 
   const whisperRef = useRef<WhisperTranscription | null>(null);
   const autoCorrectorRef = useRef<MedicalAutoCorrector>(new MedicalAutoCorrector());
-
-  // Sync currentModel with model prop when it changes
-  useEffect(() => {
-    if (!isActive) {
-      setCurrentModel(model);
-      console.log('🔄 Model synced to:', model);
-    }
-  }, [model, isActive]);
 
   // Determine provider based on current model
   const getProviderFromModel = useCallback((modelName: string): 'whisper' | 'assemblyai' | 'deepgram' | 'openai-realtime' => {
