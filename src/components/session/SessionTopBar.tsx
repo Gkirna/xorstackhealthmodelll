@@ -329,38 +329,34 @@ export function SessionTopBar({
           </div>
 
           {/* Microphone with real-time level bars */}
-          <Select value={selectedMicId} onValueChange={setSelectedMicId}>
-            <SelectTrigger className="h-8 w-auto gap-2 border-0 bg-transparent hover:bg-accent">
-              <div className="flex items-center gap-2">
-                <Mic className="h-4 w-4 text-muted-foreground" />
-                <div className="flex items-center gap-0.5">
-                  {audioLevels.map((level, i) => (
-                    <div
-                      key={i}
-                      className="w-1 rounded-full bg-green-500 transition-all duration-100"
-                      style={{ height: `${Math.max(4, (level / 100) * 16)}px` }}
-                    />
-                  ))}
+          {microphones.length > 0 && (
+            <Select value={selectedMicId} onValueChange={setSelectedMicId}>
+              <SelectTrigger className="h-8 w-auto gap-2 border-0 bg-transparent hover:bg-accent">
+                <div className="flex items-center gap-2">
+                  <Mic className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex items-center gap-0.5">
+                    {audioLevels.map((level, i) => (
+                      <div
+                        key={i}
+                        className="w-1 rounded-full bg-green-500 transition-all duration-100"
+                        style={{ height: `${Math.max(4, (level / 100) * 16)}px` }}
+                      />
+                    ))}
+                  </div>
+                  <ChevronDown className="h-3 w-3 opacity-50" />
                 </div>
-                <ChevronDown className="h-3 w-3 opacity-50" />
-              </div>
-            </SelectTrigger>
-            <SelectContent className="bg-popover z-50">
-              {microphones.length > 0 ? (
-                microphones
+              </SelectTrigger>
+              <SelectContent className="bg-popover z-50">
+                {microphones
                   .filter((mic) => mic.deviceId && mic.deviceId.trim() !== '')
                   .map((mic) => (
                     <SelectItem key={mic.deviceId} value={mic.deviceId}>
                       {mic.label}
                     </SelectItem>
-                  ))
-              ) : (
-                <SelectItem value="loading-placeholder" disabled>
-                  Loading microphones...
-                </SelectItem>
-              )}
-            </SelectContent>
-          </Select>
+                  ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </div>
     </div>

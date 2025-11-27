@@ -18,7 +18,7 @@ export function useMicrophoneSelection() {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audioInputs = devices
-          .filter(device => device.kind === 'audioinput')
+          .filter(device => device.kind === 'audioinput' && device.deviceId)
           .map(device => ({
             deviceId: device.deviceId,
             label: device.label || `Microphone ${device.deviceId.substring(0, 5)}`,
@@ -27,9 +27,12 @@ export function useMicrophoneSelection() {
         
         setMicrophones(audioInputs);
         
-        // Set default microphone if available
-        if (audioInputs.length > 0 && !selectedMicId) {
-          setSelectedMicId(audioInputs[0].deviceId);
+        // Always set to first available microphone if current selection is invalid
+        if (audioInputs.length > 0) {
+          const currentIdExists = audioInputs.some(mic => mic.deviceId === selectedMicId);
+          if (!currentIdExists || selectedMicId === 'default') {
+            setSelectedMicId(audioInputs[0].deviceId);
+          }
         }
       } catch (error) {
         console.error('Error getting microphones:', error);
@@ -43,7 +46,7 @@ export function useMicrophoneSelection() {
     return () => {
       navigator.mediaDevices.removeEventListener('devicechange', getMicrophones);
     };
-  }, []);
+  }, [selectedMicId]);
 
   // Monitor audio levels
   useEffect(() => {
