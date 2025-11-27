@@ -9,6 +9,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useSession, useUpdateSession } from "@/hooks/useSessions";
 import { useTranscription } from "@/hooks/useTranscription";
+import { useHybridTranscription } from "@/hooks/useHybridTranscription";
 import { useAudioRecording } from "@/hooks/useAudioRecording";
 import { useTranscriptUpdates, useSessionUpdates } from "@/hooks/useRealtime";
 import { WorkflowOrchestrator } from "@/utils/WorkflowOrchestrator";
@@ -60,7 +61,7 @@ const SessionRecord = () => {
   const [enhancedTranscriptionData, setEnhancedTranscriptionData] = useState<EnhancedTranscriptionData | null>(null);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [recordingInputMode, setRecordingInputMode] = useState<'direct' | 'playback'>('direct');
-  const [selectedTranscriptionModel, setSelectedTranscriptionModel] = useState<string>('nova-2-medical');
+  const [selectedTranscriptionModel, setSelectedTranscriptionModel] = useState<string>('whisper-1');
   
   // ALL REFS NEXT
   const orchestratorRef = useRef<WorkflowOrchestrator | null>(null);
@@ -236,6 +237,21 @@ const SessionRecord = () => {
   
   // Advanced transcription
   const { processAudioWithFullAnalysis, isProcessing } = useAdvancedTranscription();
+  
+  // Hybrid transcription with multiple provider support
+  const hybridTranscription = useHybridTranscription({
+    sessionId: transcriptionSessionId,
+    mode: 'auto',
+    model: selectedTranscriptionModel,
+    enableAutoCorrection: true,
+    onTranscriptUpdate: (text: string, isFinal: boolean) => {
+      handleTranscriptUpdateRef.current?.(text, isFinal);
+    },
+    onFinalTranscriptChunk: (text: string) => {
+      // This is called when a final chunk is available from the provider
+      handleTranscriptUpdateRef.current?.(text, true);
+    },
+  });
 
   // CALLBACKS AFTER HOOKS
   const handleStartTranscribing = useCallback(async () => {
@@ -251,8 +267,12 @@ const SessionRecord = () => {
     }
 
     if (isRecording) {
-      console.log('🛑 Stopping recording...');
+      console.log('🛑 Stopping recording and hybrid transcription...');
       toast.success('Stopping transcription...');
+      
+      // Stop hybrid transcription first
+      hybridTranscription.stop();
+      
       await saveAllPendingChunks();
       stopRecording();
       
@@ -282,7 +302,12 @@ const SessionRecord = () => {
         
         console.log('📞 Calling startRecording()...');
         await startRecording();
-        console.log('✅ startRecording() completed');
+        
+        // Start hybrid transcription with the audio stream
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        await hybridTranscription.start(stream);
+        
+        console.log('✅ startRecording() and hybrid transcription started');
       } catch (error) {
         console.error('❌ Failed to start recording:', error);
         toast.error('Failed to start recording. Please try again.');
@@ -297,7 +322,7 @@ const SessionRecord = () => {
     if (hasManualInput) {
       await autoGenerateNote();
     }
-  }, [isStartingRecording, isRecording, recordingMode, transcript, context, saveAllPendingChunks, stopRecording, startRecording]);
+  }, [isStartingRecording, isRecording, recordingMode, transcript, context, saveAllPendingChunks, stopRecording, startRecording, hybridTranscription]);
 
   const autoGenerateNote = useCallback(async (selectedTemplateId?: string) => {
     if (!id || !orchestratorRef.current) return;
@@ -386,18 +411,23 @@ const SessionRecord = () => {
   }, [id, transcript, context, template]);
 
   const handlePauseRecording = useCallback(() => {
-    console.log('🎯 PAUSE BUTTON CLICKED - Calling pauseRecording()');
+    console.log('🎯 PAUSE BUTTON CLICKED - Calling pauseRecording() and pausing hybrid transcription');
     pauseRecording();
-  }, [pauseRecording]);
+    hybridTranscription.pause();
+  }, [pauseRecording, hybridTranscription]);
 
   const handleResumeRecording = useCallback(() => {
-    console.log('🎯 RESUME BUTTON CLICKED - Calling resumeRecording()');
+    console.log('🎯 RESUME BUTTON CLICKED - Calling resumeRecording() and resuming hybrid transcription');
     resumeRecording();
-  }, [resumeRecording]);
+    hybridTranscription.resume();
+  }, [resumeRecording, hybridTranscription]);
 
   const handleStopRecording = useCallback(async () => {
     console.log('🎯 STOP BUTTON CLICKED - Stopping recording and opening template selection');
     toast.info('Stopping transcription...');
+    
+    // Stop hybrid transcription first
+    hybridTranscription.stop();
     
     // Save any pending chunks first
     await saveAllPendingChunks();
@@ -409,7 +439,7 @@ const SessionRecord = () => {
     setTimeout(() => {
       setTemplateDialogOpen(true);
     }, 300);
-  }, [saveAllPendingChunks, stopRecording]);
+  }, [saveAllPendingChunks, stopRecording, hybridTranscription]);
 
   const handleRecordingModeChange = useCallback((mode: string) => {
     setRecordingMode(mode);
