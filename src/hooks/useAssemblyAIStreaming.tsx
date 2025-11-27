@@ -55,8 +55,8 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
 
       console.log('🌐 WebSocket URL:', wsUrl);
 
-      // Create WebSocket with auth header via subprotocol
-      wsRef.current = new WebSocket(wsUrl, ['apikey', anonKey]);
+      // Create WebSocket connection (no auth needed - JWT verification disabled)
+      wsRef.current = new WebSocket(wsUrl);
 
       wsRef.current.onopen = () => {
         console.log('✅ WebSocket connection established');
