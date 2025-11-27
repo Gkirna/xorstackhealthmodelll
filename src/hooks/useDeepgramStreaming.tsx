@@ -37,13 +37,16 @@ export function useDeepgramStreaming(options: StreamingOptions = {}) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const retryCountRef = useRef(0);
+  const maxRetries = 3;
 
   const connect = useCallback(async () => {
     try {
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'atlszopzpkouueqefbbz';
       const wsUrl = `wss://${projectId}.supabase.co/functions/v1/deepgram-realtime?model=${model}`;
       
-      console.log(`🔌 Connecting to Deepgram (${model})...`);
+      console.log(`🔌 Connecting to Deepgram (${model})... Attempt ${retryCountRef.current + 1}/${maxRetries}`);
       
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -51,6 +54,7 @@ export function useDeepgramStreaming(options: StreamingOptions = {}) {
       ws.onopen = () => {
         console.log(`✅ Connected to Deepgram (${model})`);
         setState(prev => ({ ...prev, isConnected: true, error: null }));
+        retryCountRef.current = 0; // Reset retry count on successful connection
       };
 
       ws.onmessage = (event) => {
@@ -75,18 +79,29 @@ export function useDeepgramStreaming(options: StreamingOptions = {}) {
 
       ws.onerror = (error) => {
         console.error('❌ Deepgram WebSocket error:', error);
-        const errorMsg = 'Connection error';
+        const errorMsg = 'Deepgram connection error';
         setState(prev => ({ ...prev, error: errorMsg }));
         if (onError) onError(errorMsg);
       };
 
-      ws.onclose = () => {
-        console.log('🛑 Deepgram disconnected');
+      ws.onclose = (event) => {
+        console.log('🛑 Deepgram disconnected', event.code, event.reason);
         setState(prev => ({ 
           ...prev, 
           isConnected: false, 
           isStreaming: false 
         }));
+
+        // Retry connection if not manually closed and retries available
+        if (event.code !== 1000 && retryCountRef.current < maxRetries && enabled) {
+          retryCountRef.current++;
+          const delay = Math.min(1000 * Math.pow(2, retryCountRef.current - 1), 5000);
+          console.log(`🔄 Retrying Deepgram connection in ${delay}ms...`);
+          
+          reconnectTimeoutRef.current = setTimeout(() => {
+            connect();
+          }, delay);
+        }
       };
     } catch (error) {
       console.error('Failed to connect:', error);
@@ -94,15 +109,24 @@ export function useDeepgramStreaming(options: StreamingOptions = {}) {
       setState(prev => ({ ...prev, error: errorMsg }));
       if (onError) onError(errorMsg);
     }
-  }, [model, onPartialTranscript, onFinalTranscript, onError]);
+  }, [model, onPartialTranscript, onFinalTranscript, onError, enabled]);
 
   const disconnect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'terminate' }));
-      wsRef.current.close();
+    // Clear any pending reconnection attempts
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
     }
-    wsRef.current = null;
+
+    if (wsRef.current) {
+      if (wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'terminate' }));
+        wsRef.current.close(1000, 'Normal closure');
+      }
+      wsRef.current = null;
+    }
     
+    retryCountRef.current = 0;
     setState(prev => ({ 
       ...prev, 
       isConnected: false, 

@@ -43,6 +43,9 @@ export function useOpenAIRealtime(options: RealtimeOptions = {}) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const retryCountRef = useRef(0);
+  const maxRetries = 3;
 
   // Map model name to VAD type
   const getVADType = (modelName: string): string => {
@@ -60,7 +63,7 @@ export function useOpenAIRealtime(options: RealtimeOptions = {}) {
       const vadType = getVADType(model);
       const wsUrl = `wss://${projectId}.supabase.co/functions/v1/openai-realtime?model=gpt-4o-realtime-preview-2024-12-17&vad=${vadType}`;
       
-      console.log(`🔌 Connecting to OpenAI Realtime (${model})...`);
+      console.log(`🔌 Connecting to OpenAI Realtime (${model})... Attempt ${retryCountRef.current + 1}/${maxRetries}`);
       
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -68,6 +71,7 @@ export function useOpenAIRealtime(options: RealtimeOptions = {}) {
       ws.onopen = () => {
         console.log(`✅ Connected to OpenAI Realtime (${model})`);
         setState(prev => ({ ...prev, isConnected: true, error: null }));
+        retryCountRef.current = 0; // Reset retry count on successful connection
       };
 
       ws.onmessage = (event) => {
@@ -99,18 +103,29 @@ export function useOpenAIRealtime(options: RealtimeOptions = {}) {
 
       ws.onerror = (error) => {
         console.error('❌ OpenAI Realtime WebSocket error:', error);
-        const errorMsg = 'Connection error';
+        const errorMsg = 'OpenAI Realtime connection error';
         setState(prev => ({ ...prev, error: errorMsg }));
         if (onError) onError(errorMsg);
       };
 
-      ws.onclose = () => {
-        console.log('🛑 OpenAI Realtime disconnected');
+      ws.onclose = (event) => {
+        console.log('🛑 OpenAI Realtime disconnected', event.code, event.reason);
         setState(prev => ({ 
           ...prev, 
           isConnected: false, 
           isStreaming: false 
         }));
+
+        // Retry connection if not manually closed and retries available
+        if (event.code !== 1000 && retryCountRef.current < maxRetries && enabled) {
+          retryCountRef.current++;
+          const delay = Math.min(1000 * Math.pow(2, retryCountRef.current - 1), 5000);
+          console.log(`🔄 Retrying OpenAI Realtime connection in ${delay}ms...`);
+          
+          reconnectTimeoutRef.current = setTimeout(() => {
+            connect();
+          }, delay);
+        }
       };
     } catch (error) {
       console.error('Failed to connect:', error);
@@ -118,15 +133,24 @@ export function useOpenAIRealtime(options: RealtimeOptions = {}) {
       setState(prev => ({ ...prev, error: errorMsg }));
       if (onError) onError(errorMsg);
     }
-  }, [model, onPartialTranscript, onFinalTranscript, onError, onSpeechStart, onSpeechStop]);
+  }, [model, onPartialTranscript, onFinalTranscript, onError, onSpeechStart, onSpeechStop, enabled]);
 
   const disconnect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'terminate' }));
-      wsRef.current.close();
+    // Clear any pending reconnection attempts
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
     }
-    wsRef.current = null;
+
+    if (wsRef.current) {
+      if (wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'terminate' }));
+        wsRef.current.close(1000, 'Normal closure');
+      }
+      wsRef.current = null;
+    }
     
+    retryCountRef.current = 0;
     setState(prev => ({ 
       ...prev, 
       isConnected: false, 

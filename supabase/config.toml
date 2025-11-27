@@ -29,13 +29,13 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.assemblyai-realtime]
-verify_jwt = true
+verify_jwt = false
 
 [functions.deepgram-realtime]
-verify_jwt = true
+verify_jwt = false
 
 [functions.openai-realtime]
-verify_jwt = true
+verify_jwt = false
 
 [functions.whisper-transcribe]
 verify_jwt = true
