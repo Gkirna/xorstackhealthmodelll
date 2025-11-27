@@ -234,6 +234,14 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
         console.log('▶️ Starting OpenAI Realtime connection...');
         if (!openaiRealtime.isConnected) {
           await openaiRealtime.connect();
+          // Wait for connection with timeout
+          const startTime = Date.now();
+          while (!openaiRealtime.isConnected && Date.now() - startTime < 10000) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+          if (!openaiRealtime.isConnected) {
+            throw new Error('OpenAI Realtime connection timeout');
+          }
         }
         await openaiRealtime.startStreaming();
         console.log('✅ OpenAI Realtime streaming active with', currentModel);
@@ -243,6 +251,14 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
         console.log('▶️ Starting AssemblyAI connection...');
         if (!assemblyAI.isConnected) {
           await assemblyAI.connect();
+          // Wait for connection with timeout
+          const startTime = Date.now();
+          while (!assemblyAI.isConnected && Date.now() - startTime < 10000) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+          if (!assemblyAI.isConnected) {
+            throw new Error('AssemblyAI connection timeout');
+          }
         }
         await assemblyAI.startStreaming();
         const modelName = currentModel === 'assemblyai-best' ? 'Best (Highest Accuracy)' : 
@@ -254,6 +270,14 @@ export function useHybridTranscription(config: HybridTranscriptionConfig = {}) {
         console.log('▶️ Starting Deepgram connection...');
         if (!deepgram.isConnected) {
           await deepgram.connect();
+          // Wait for connection with timeout
+          const startTime = Date.now();
+          while (!deepgram.isConnected && Date.now() - startTime < 10000) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+          if (!deepgram.isConnected) {
+            throw new Error('Deepgram connection timeout');
+          }
         }
         await deepgram.startStreaming();
         const isMedical = currentModel.includes('medical');
