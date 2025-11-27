@@ -49,13 +49,19 @@ serve(async (req) => {
     console.log('✅ Client WebSocket connected');
 
     // Connect to Deepgram streaming API
-    const deepgramUrl = `wss://api.deepgram.com/v1/listen?model=${model}&punctuate=true&smart_format=true&interim_results=true&endpointing=300&encoding=linear16&sample_rate=16000&channels=1`;
+    // Deepgram accepts the API key as a URL query parameter
+    const deepgramUrl = `wss://api.deepgram.com/v1/listen?token=${DEEPGRAM_API_KEY}&model=${model}&punctuate=true&smart_format=true&interim_results=true&endpointing=300&encoding=linear16&sample_rate=16000&channels=1`;
     
-    deepgramSocket = new WebSocket(deepgramUrl, {
-      headers: {
-        'Authorization': `Token ${DEEPGRAM_API_KEY}`,
-      },
-    });
+    try {
+      deepgramSocket = new WebSocket(deepgramUrl);
+    } catch (error) {
+      console.error('❌ Failed to create Deepgram WebSocket:', error);
+      clientSocket.send(JSON.stringify({
+        type: 'error',
+        message: 'Failed to connect to Deepgram',
+      }));
+      return;
+    }
 
     deepgramSocket.onopen = () => {
       console.log(`✅ Connected to Deepgram streaming (${model})`);

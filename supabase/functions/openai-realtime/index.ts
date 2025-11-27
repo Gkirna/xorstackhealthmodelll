@@ -49,155 +49,22 @@ serve(async (req) => {
   clientSocket.onopen = () => {
     console.log('✅ Client WebSocket connected');
 
-    // Connect to OpenAI Realtime API
-    const openAIUrl = `wss://api.openai.com/v1/realtime?model=${model}`;
+    // IMPORTANT: Deno WebSocket doesn't support custom headers in constructor
+    // OpenAI Realtime API requires Authorization header, which cannot be passed in Deno runtime
+    // This is a known limitation - OpenAI Realtime is not currently supported
+    // Use AssemblyAI or Deepgram for real-time transcription instead
     
-    openAISocket = new WebSocket(openAIUrl, {
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'OpenAI-Beta': 'realtime=v1',
-      },
-    });
-
-    openAISocket.onopen = () => {
-      console.log(`✅ Connected to OpenAI Realtime (${model})`);
-      isConnected = true;
-      
-      // Send connection success to client
-      clientSocket.send(JSON.stringify({
-        type: 'connection',
-        status: 'connected',
-        message: `OpenAI Realtime ${vadType} active`,
-        model: model,
-      }));
-    };
-
-    openAISocket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        // Session created - now configure it
-        if (data.type === 'session.created' && !sessionCreated) {
-          sessionCreated = true;
-          console.log('✅ OpenAI session created, sending configuration...');
-          
-          // Configure session with VAD settings
-          const sessionConfig: any = {
-            type: 'session.update',
-            session: {
-              modalities: ['text', 'audio'],
-              instructions: 'You are a medical transcription assistant. Transcribe medical conversations accurately with proper medical terminology.',
-              voice: 'alloy',
-              input_audio_format: 'pcm16',
-              output_audio_format: 'pcm16',
-              input_audio_transcription: {
-                model: 'whisper-1'
-              },
-              turn_detection: {
-                type: vadType,
-                threshold: 0.5,
-                prefix_padding_ms: 300,
-                silence_duration_ms: 1000
-              },
-              temperature: 0.8,
-              max_response_output_tokens: 'inf'
-            }
-          };
-
-          openAISocket?.send(JSON.stringify(sessionConfig));
-        }
-        
-        // Forward transcription results to client
-        if (data.type === 'conversation.item.input_audio_transcription.completed') {
-          const transcript = data.transcript || '';
-          if (transcript.trim().length > 0) {
-            clientSocket.send(JSON.stringify({
-              type: 'final',
-              text: transcript,
-              confidence: 0.95,
-            }));
-          }
-        } else if (data.type === 'input_audio_buffer.speech_started') {
-          clientSocket.send(JSON.stringify({
-            type: 'speech_started',
-          }));
-        } else if (data.type === 'input_audio_buffer.speech_stopped') {
-          clientSocket.send(JSON.stringify({
-            type: 'speech_stopped',
-          }));
-        } else if (data.type === 'response.audio_transcript.delta') {
-          // Partial transcript
-          const delta = data.delta || '';
-          if (delta.trim().length > 0) {
-            clientSocket.send(JSON.stringify({
-              type: 'partial',
-              text: delta,
-              confidence: 0.9,
-            }));
-          }
-        } else if (data.type === 'error') {
-          console.error('❌ OpenAI error:', data.error);
-          clientSocket.send(JSON.stringify({
-            type: 'error',
-            message: data.error?.message || 'OpenAI error',
-          }));
-        }
-        
-        // Forward all events to client for debugging
-        clientSocket.send(JSON.stringify({
-          type: 'openai_event',
-          event: data,
-        }));
-      } catch (error) {
-        console.error('❌ Error processing OpenAI message:', error);
-      }
-    };
-
-    openAISocket.onerror = (error) => {
-      console.error('❌ OpenAI WebSocket error:', error);
-      clientSocket.send(JSON.stringify({
-        type: 'error',
-        message: 'OpenAI connection error',
-      }));
-    };
-
-    openAISocket.onclose = () => {
-      console.log('🛑 OpenAI WebSocket closed');
-      isConnected = false;
-      clientSocket.send(JSON.stringify({
-        type: 'connection',
-        status: 'disconnected',
-      }));
-    };
+    console.warn('⚠️ OpenAI Realtime is not supported in Deno edge functions due to header limitations');
+    console.warn('⚠️ Please use AssemblyAI (assemblyai-nano) or Deepgram (nova-2-medical) instead');
+    
+    clientSocket.send(JSON.stringify({
+      type: 'error',
+      message: 'OpenAI Realtime API is not supported in this environment. Please use AssemblyAI or Deepgram for real-time transcription.',
+    }));
   };
 
   clientSocket.onmessage = (event) => {
-    if (!isConnected || !openAISocket) {
-      console.warn('⚠️ Received audio before OpenAI connection ready');
-      return;
-    }
-
-    try {
-      const data = JSON.parse(event.data);
-      
-      // Forward audio data to OpenAI (expects base64 PCM16)
-      if (data.type === 'audio' && data.audio) {
-        openAISocket.send(JSON.stringify({
-          type: 'input_audio_buffer.append',
-          audio: data.audio, // Base64 PCM16 audio
-        }));
-      } else if (data.type === 'commit') {
-        // Manually commit audio buffer
-        openAISocket.send(JSON.stringify({
-          type: 'input_audio_buffer.commit',
-        }));
-      } else if (data.type === 'terminate') {
-        // Client requested termination
-        openAISocket.close();
-      }
-    } catch (error) {
-      console.error('❌ Error processing client message:', error);
-    }
+    // OpenAI Realtime not supported - ignore messages
   };
 
   clientSocket.onerror = (error) => {
@@ -206,10 +73,6 @@ serve(async (req) => {
 
   clientSocket.onclose = () => {
     console.log('🛑 Client WebSocket closed');
-    
-    if (openAISocket && openAISocket.readyState === WebSocket.OPEN) {
-      openAISocket.close();
-    }
   };
 
   return response;
