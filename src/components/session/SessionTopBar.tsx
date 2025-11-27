@@ -347,13 +347,15 @@ export function SessionTopBar({
             </SelectTrigger>
             <SelectContent className="bg-popover z-50">
               {microphones.length > 0 ? (
-                microphones.map((mic) => (
-                  <SelectItem key={mic.deviceId} value={mic.deviceId}>
-                    {mic.label}
-                  </SelectItem>
-                ))
+                microphones
+                  .filter((mic) => mic.deviceId && mic.deviceId.trim() !== '')
+                  .map((mic) => (
+                    <SelectItem key={mic.deviceId} value={mic.deviceId}>
+                      {mic.label}
+                    </SelectItem>
+                  ))
               ) : (
-                <SelectItem value="default" disabled>
+                <SelectItem value="loading-placeholder" disabled>
                   Loading microphones...
                 </SelectItem>
               )}
