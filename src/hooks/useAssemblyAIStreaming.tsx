@@ -67,6 +67,7 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
         wsRef.current.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
+            console.log('📨 Received message from edge function:', data.type, data);
 
             // Wait for confirmation from edge function that it connected to AssemblyAI
             if (data.type === 'connection' && data.status === 'connected' && !isResolved) {
@@ -80,6 +81,8 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
               setState(prev => ({ ...prev, isConnected: true, sessionId: data.session_id }));
               isResolved = true;
               resolve();
+            } else if (data.type === 'client_ready') {
+              console.log('✅ Edge function ready');
             }
             
             // Handle transcription and other messages
@@ -104,6 +107,8 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
             } else if (data.type === 'session_ended') {
               console.log('🛑 Streaming session ended');
               setState(prev => ({ ...prev, isStreaming: false }));
+            } else if (data.type === 'heartbeat') {
+              // Ignore heartbeat messages
             }
           } catch (error) {
             console.error('❌ Error parsing message:', error);

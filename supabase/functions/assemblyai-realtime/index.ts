@@ -44,8 +44,20 @@ serve(async (req) => {
   clientSocket.onopen = () => {
     console.log('✅ Client WebSocket connected');
 
+    // Send immediate ready signal
+    try {
+      clientSocket.send(JSON.stringify({
+        type: 'client_ready',
+        timestamp: new Date().toISOString(),
+      }));
+      console.log('📤 Sent client_ready signal');
+    } catch (error) {
+      console.error('❌ Failed to send client_ready:', error);
+    }
+
     // Connect to AssemblyAI streaming API
-    const assemblyAIUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&formatted_finals=true&token=${ASSEMBLYAI_API_KEY}`;
+    const assemblyAIUrl = `wss://api.assemblyai.com/v2/realtime/ws?sample_rate=16000&token=${ASSEMBLYAI_API_KEY}`;
+    console.log('🔌 Connecting to AssemblyAI:', assemblyAIUrl.replace(ASSEMBLYAI_API_KEY, '***'));
     
     assemblyAISocket = new WebSocket(assemblyAIUrl);
 
@@ -53,12 +65,29 @@ serve(async (req) => {
       console.log('✅ Connected to AssemblyAI streaming');
       isConnected = true;
       
-      // Send connection success to client
-      clientSocket.send(JSON.stringify({
-        type: 'connection',
-        status: 'connected',
-        message: 'High Accuracy Mode active',
-      }));
+      // Send connection success to client with retry
+      const sendConfirmation = () => {
+        if (clientSocket.readyState === WebSocket.OPEN) {
+          try {
+            const message = JSON.stringify({
+              type: 'connection',
+              status: 'connected',
+              message: 'High Accuracy Mode active',
+              timestamp: new Date().toISOString(),
+            });
+            clientSocket.send(message);
+            console.log('📤 Sent connection confirmation to client');
+          } catch (error) {
+            console.error('❌ Failed to send confirmation:', error);
+          }
+        } else {
+          console.warn('⚠️ Client socket not ready, state:', clientSocket.readyState);
+        }
+      };
+      
+      // Send immediately and after small delay to ensure delivery
+      sendConfirmation();
+      setTimeout(sendConfirmation, 100);
 
       // Start heartbeat to keep connection alive
       heartbeatInterval = setInterval(() => {
@@ -71,32 +100,43 @@ serve(async (req) => {
     assemblyAISocket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        console.log('📨 AssemblyAI message:', data.message_type || 'unknown');
         
         // Forward AssemblyAI events to client
         if (data.message_type === 'PartialTranscript') {
-          clientSocket.send(JSON.stringify({
-            type: 'partial',
-            text: data.text,
-            confidence: data.confidence,
-          }));
+          if (clientSocket.readyState === WebSocket.OPEN) {
+            clientSocket.send(JSON.stringify({
+              type: 'partial',
+              text: data.text,
+              confidence: data.confidence,
+            }));
+          }
         } else if (data.message_type === 'FinalTranscript') {
-          clientSocket.send(JSON.stringify({
-            type: 'final',
-            text: data.text,
-            confidence: data.confidence,
-            words: data.words || [],
-          }));
+          if (clientSocket.readyState === WebSocket.OPEN) {
+            clientSocket.send(JSON.stringify({
+              type: 'final',
+              text: data.text,
+              confidence: data.confidence,
+              words: data.words || [],
+            }));
+          }
         } else if (data.message_type === 'SessionBegins') {
           console.log('✅ AssemblyAI session started:', data.session_id);
-          clientSocket.send(JSON.stringify({
-            type: 'session_started',
-            session_id: data.session_id,
-          }));
+          if (clientSocket.readyState === WebSocket.OPEN) {
+            clientSocket.send(JSON.stringify({
+              type: 'session_started',
+              session_id: data.session_id,
+              timestamp: new Date().toISOString(),
+            }));
+            console.log('📤 Sent session_started to client');
+          }
         } else if (data.message_type === 'SessionTerminated') {
           console.log('🛑 AssemblyAI session terminated');
-          clientSocket.send(JSON.stringify({
-            type: 'session_ended',
-          }));
+          if (clientSocket.readyState === WebSocket.OPEN) {
+            clientSocket.send(JSON.stringify({
+              type: 'session_ended',
+            }));
+          }
         }
       } catch (error) {
         console.error('❌ Error processing AssemblyAI message:', error);
@@ -105,19 +145,25 @@ serve(async (req) => {
 
     assemblyAISocket.onerror = (error) => {
       console.error('❌ AssemblyAI WebSocket error:', error);
-      clientSocket.send(JSON.stringify({
-        type: 'error',
-        message: 'AssemblyAI connection error',
-      }));
+      if (clientSocket.readyState === WebSocket.OPEN) {
+        clientSocket.send(JSON.stringify({
+          type: 'error',
+          message: 'AssemblyAI connection error',
+        }));
+      }
     };
 
-    assemblyAISocket.onclose = () => {
-      console.log('🛑 AssemblyAI WebSocket closed');
+    assemblyAISocket.onclose = (event) => {
+      console.log('🛑 AssemblyAI WebSocket closed. Code:', event.code, 'Reason:', event.reason);
       isConnected = false;
-      clientSocket.send(JSON.stringify({
-        type: 'connection',
-        status: 'disconnected',
-      }));
+      if (clientSocket.readyState === WebSocket.OPEN) {
+        clientSocket.send(JSON.stringify({
+          type: 'connection',
+          status: 'disconnected',
+          code: event.code,
+          reason: event.reason || 'Connection closed',
+        }));
+      }
     };
   };
 
