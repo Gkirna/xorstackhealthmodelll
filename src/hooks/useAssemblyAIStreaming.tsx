@@ -119,14 +119,6 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
           }));
         };
 
-        // Set connection timeout
-        setTimeout(() => {
-          if (wsRef.current?.readyState !== WebSocket.OPEN) {
-            reject(new Error('Connection timeout'));
-            wsRef.current?.close();
-          }
-        }, 5000); // 5-second timeout for connection
-
       } catch (error) {
         console.error('❌ Error connecting:', error);
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
