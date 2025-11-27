@@ -45,85 +45,98 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
       return;
     }
 
-    try {
-      console.log('🔌 Connecting to AssemblyAI real-time streaming...');
+    return new Promise<void>((resolve, reject) => {
+      try {
+        console.log('🔌 Connecting to AssemblyAI real-time streaming...');
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const projectId = supabaseUrl.split('//')[1].split('.')[0];
-      const wsUrl = `wss://${projectId}.supabase.co/functions/v1/assemblyai-realtime`;
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const projectId = supabaseUrl.split('//')[1].split('.')[0];
+        const wsUrl = `wss://${projectId}.supabase.co/functions/v1/assemblyai-realtime`;
 
-      console.log('🌐 WebSocket URL:', wsUrl);
+        console.log('🌐 WebSocket URL:', wsUrl);
 
-      // Create WebSocket connection (no auth needed - JWT verification disabled)
-      wsRef.current = new WebSocket(wsUrl);
+        // Create WebSocket connection (no auth needed - JWT verification disabled)
+        wsRef.current = new WebSocket(wsUrl);
 
-      wsRef.current.onopen = () => {
-        console.log('✅ WebSocket connection established');
-        setState(prev => ({ ...prev, isConnected: true, error: null }));
-      };
+        wsRef.current.onopen = () => {
+          console.log('✅ WebSocket connection established');
+          setState(prev => ({ ...prev, isConnected: true, error: null }));
+          resolve(); // Resolve promise immediately on connection
+        };
 
-      wsRef.current.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
+        wsRef.current.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
 
-          if (data.type === 'connection') {
-            if (data.status === 'connected') {
-              toast.success('High Accuracy Mode active');
+            if (data.type === 'connection') {
+              if (data.status === 'connected') {
+                toast.success('High Accuracy Mode active');
+              }
+            } else if (data.type === 'session_started') {
+              setState(prev => ({ ...prev, sessionId: data.session_id }));
+            } else if (data.type === 'partial') {
+              if (onPartialTranscript) {
+                onPartialTranscript(data.text);
+              }
+            } else if (data.type === 'final') {
+              if (onFinalTranscript) {
+                onFinalTranscript(data.text);
+              }
+            } else if (data.type === 'error') {
+              console.error('❌ Streaming error:', data.message);
+              setState(prev => ({ ...prev, error: data.message }));
+              if (onError) {
+                onError(data.message);
+              }
+            } else if (data.type === 'session_ended') {
+              console.log('🛑 Streaming session ended');
+              setState(prev => ({ ...prev, isStreaming: false }));
             }
-          } else if (data.type === 'session_started') {
-            setState(prev => ({ ...prev, sessionId: data.session_id }));
-          } else if (data.type === 'partial') {
-            if (onPartialTranscript) {
-              onPartialTranscript(data.text);
-            }
-          } else if (data.type === 'final') {
-            if (onFinalTranscript) {
-              onFinalTranscript(data.text);
-            }
-          } else if (data.type === 'error') {
-            console.error('❌ Streaming error:', data.message);
-            setState(prev => ({ ...prev, error: data.message }));
-            if (onError) {
-              onError(data.message);
-            }
-          } else if (data.type === 'session_ended') {
-            console.log('🛑 Streaming session ended');
-            setState(prev => ({ ...prev, isStreaming: false }));
+          } catch (error) {
+            console.error('❌ Error parsing message:', error);
           }
-        } catch (error) {
-          console.error('❌ Error parsing message:', error);
-        }
-      };
+        };
 
-      wsRef.current.onerror = (error) => {
-        console.error('❌ WebSocket error:', error);
-        setState(prev => ({ 
-          ...prev, 
-          error: 'Connection error',
-          isConnected: false,
-        }));
+        wsRef.current.onerror = (error) => {
+          console.error('❌ WebSocket error:', error);
+          setState(prev => ({ 
+            ...prev, 
+            error: 'WebSocket connection error',
+            isConnected: false,
+          }));
+          if (onError) {
+            onError('WebSocket connection error');
+          }
+          reject(new Error('WebSocket connection error'));
+        };
+
+        wsRef.current.onclose = () => {
+          console.log('🛑 WebSocket connection closed');
+          setState(prev => ({ 
+            ...prev, 
+            isConnected: false,
+            isStreaming: false,
+          }));
+        };
+
+        // Set connection timeout
+        setTimeout(() => {
+          if (wsRef.current?.readyState !== WebSocket.OPEN) {
+            reject(new Error('Connection timeout'));
+            wsRef.current?.close();
+          }
+        }, 5000); // 5-second timeout for connection
+
+      } catch (error) {
+        console.error('❌ Error connecting:', error);
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        setState(prev => ({ ...prev, error: errorMsg }));
         if (onError) {
-          onError('WebSocket connection error');
+          onError(errorMsg);
         }
-      };
-
-      wsRef.current.onclose = () => {
-        console.log('🛑 WebSocket connection closed');
-        setState(prev => ({ 
-          ...prev, 
-          isConnected: false,
-          isStreaming: false,
-        }));
-      };
-    } catch (error) {
-      console.error('❌ Error connecting:', error);
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      setState(prev => ({ ...prev, error: errorMsg }));
-      if (onError) {
-        onError(errorMsg);
+        reject(error);
       }
-    }
+    });
   }, [enabled, onPartialTranscript, onFinalTranscript, onError]);
 
   // Start streaming audio
