@@ -55,26 +55,35 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
 
         console.log('🌐 WebSocket URL:', wsUrl);
 
+        let isResolved = false;
+
         // Create WebSocket connection (no auth needed - JWT verification disabled)
         wsRef.current = new WebSocket(wsUrl);
 
         wsRef.current.onopen = () => {
-          console.log('✅ WebSocket connection established');
-          setState(prev => ({ ...prev, isConnected: true, error: null }));
-          resolve(); // Resolve promise immediately on connection
+          console.log('📡 WebSocket to edge function opened, waiting for AssemblyAI connection...');
         };
 
         wsRef.current.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
 
-            if (data.type === 'connection') {
-              if (data.status === 'connected') {
-                toast.success('High Accuracy Mode active');
-              }
-            } else if (data.type === 'session_started') {
-              setState(prev => ({ ...prev, sessionId: data.session_id }));
-            } else if (data.type === 'partial') {
+            // Wait for confirmation from edge function that it connected to AssemblyAI
+            if (data.type === 'connection' && data.status === 'connected' && !isResolved) {
+              console.log('✅ Connected to AssemblyAI:', data.message);
+              setState(prev => ({ ...prev, isConnected: true, error: null }));
+              toast.success('High Accuracy Mode active');
+              isResolved = true;
+              resolve();
+            } else if (data.type === 'session_started' && !isResolved) {
+              console.log('✅ AssemblyAI session started:', data.session_id);
+              setState(prev => ({ ...prev, isConnected: true, sessionId: data.session_id }));
+              isResolved = true;
+              resolve();
+            }
+            
+            // Handle transcription and other messages
+            if (data.type === 'partial') {
               if (onPartialTranscript) {
                 onPartialTranscript(data.text);
               }
@@ -88,6 +97,10 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
               if (onError) {
                 onError(data.message);
               }
+              if (!isResolved) {
+                reject(new Error(data.message));
+                isResolved = true;
+              }
             } else if (data.type === 'session_ended') {
               console.log('🛑 Streaming session ended');
               setState(prev => ({ ...prev, isStreaming: false }));
@@ -99,15 +112,19 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
 
         wsRef.current.onerror = (error) => {
           console.error('❌ WebSocket error:', error);
+          const errorMsg = 'WebSocket connection error';
           setState(prev => ({ 
             ...prev, 
-            error: 'WebSocket connection error',
+            error: errorMsg,
             isConnected: false,
           }));
           if (onError) {
-            onError('WebSocket connection error');
+            onError(errorMsg);
           }
-          reject(new Error('WebSocket connection error'));
+          if (!isResolved) {
+            reject(new Error(errorMsg));
+            isResolved = true;
+          }
         };
 
         wsRef.current.onclose = () => {
@@ -117,6 +134,10 @@ export function useAssemblyAIStreaming(options: StreamingOptions = {}) {
             isConnected: false,
             isStreaming: false,
           }));
+          if (!isResolved) {
+            reject(new Error('Connection closed before ready'));
+            isResolved = true;
+          }
         };
 
       } catch (error) {
