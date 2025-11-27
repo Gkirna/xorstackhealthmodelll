@@ -19,6 +19,7 @@ interface AudioRecordingOptions {
   language?: string; // Language code for transcription (e.g., 'kn-IN', 'en-IN')
   mode?: 'direct' | 'playback'; // Recording mode: direct conversation or playback transcription
   model?: string; // Transcription model (whisper-1, gpt-4o-mini-transcribe, nova-2, etc.)
+  disableInternalTranscription?: boolean; // Disable internal Whisper transcription (for external transcription control)
 }
 
 interface RecordingState {
@@ -47,6 +48,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
     language = 'en-US', // Default to English (US) for multi-accent support
     mode = 'direct', // Default to direct recording
     model = 'whisper-1', // Default to whisper-1
+    disableInternalTranscription = false, // Allow external transcription control
   } = options;
 
   const [state, setState] = useState<RecordingState>({
@@ -81,6 +83,12 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
   const transcriptionInitialized = useRef(false);
   
   useEffect(() => {
+    // Skip transcription initialization if disabled (for external control)
+    if (disableInternalTranscription) {
+      console.log('🚫 Internal transcription DISABLED - using external transcription system');
+      return;
+    }
+    
     // Prevent multiple initializations
     if (transcriptionInitialized.current) {
       console.log('⚠️ Transcription already initialized, skipping');
@@ -217,7 +225,7 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
       
       console.log('✅ Audio recorder cleanup complete');
     };
-  }, []); // Empty deps - initialize once, cleanup on unmount
+  }, [disableInternalTranscription]); // Re-run if transcription enable/disable changes
 
   const startRecording = useCallback(async () => {
     try {
@@ -530,8 +538,8 @@ export function useAudioRecording(options: AudioRecordingOptions = {}) {
         // Continue without voice analysis
       }
       
-      // Start Whisper transcription with audio stream
-      if (transcriptionRef.current) {
+      // Start Whisper transcription with audio stream (only if not disabled)
+      if (!disableInternalTranscription && transcriptionRef.current) {
         console.log(`🎙️ Starting Whisper AI transcription for ${mode} mode...`);
         console.log(`🎙️ Language: ${language}`);
         console.log(`🎙️ Mode: ${mode}`);

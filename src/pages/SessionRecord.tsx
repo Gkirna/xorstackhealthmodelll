@@ -170,6 +170,7 @@ const SessionRecord = () => {
   // Create stable options object ONCE with deviceId support
   const audioRecordingOptions = useMemo(() => ({
     continuous: true,
+    disableInternalTranscription: true, // Use hybrid transcription instead
     get language() {
       return languageRef.current.split('-')[0] === 'en' ? 'en-US' : 
              languageRef.current.split('-')[0] === 'kn' ? 'kn-IN' :
