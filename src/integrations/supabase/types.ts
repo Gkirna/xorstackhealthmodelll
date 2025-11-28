@@ -656,8 +656,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_analytics: {
+        Row: {
+          avg_transcript_quality: number | null
+          completed_sessions: number | null
+          completed_tasks: number | null
+          last_session_date: string | null
+          total_sessions: number | null
+          total_tasks: number | null
+          total_transcription_time: number | null
+          total_words_transcribed: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      get_user_analytics: {
+        Args: { target_user_id?: string }
+        Returns: {
+          avg_transcript_quality: number
+          completed_sessions: number
+          completed_tasks: number
+          last_session_date: string
+          total_sessions: number
+          total_tasks: number
+          total_transcription_time: number
+          total_words_transcribed: number
+          user_id: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -670,6 +698,7 @@ export type Database = {
         Returns: boolean
       }
       refresh_session_analytics: { Args: never; Returns: undefined }
+      refresh_user_analytics: { Args: never; Returns: undefined }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
