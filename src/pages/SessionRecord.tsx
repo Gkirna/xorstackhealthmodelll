@@ -71,6 +71,7 @@ const SessionRecord = () => {
   const speakerRef = useRef<'provider' | 'patient'>('provider');
   const transcriptCountRef = useRef(0);
   const lastTranscriptTimeRef = useRef<number>(0);
+  const isRecordingRef = useRef(false);
   
   // CRITICAL: Create stable session ID once and never change it
   const sessionIdRef = useRef(id);
@@ -235,6 +236,41 @@ const SessionRecord = () => {
       }
     }
   }, [currentVoiceCharacteristics, updateVoiceCharacteristics]);
+  
+  // Session lifecycle tracking - handle app closure gracefully
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
+  
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isRecordingRef.current && sessionIdRef.current) {
+        saveAllPendingChunks();
+        supabase
+          .from('sessions')
+          .update({ status: 'interrupted' })
+          .eq('id', sessionIdRef.current);
+        
+        e.preventDefault();
+        e.returnValue = 'You have an active recording. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && isRecordingRef.current) {
+        saveAllPendingChunks();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [saveAllPendingChunks]);
   
   // Advanced transcription
   const { processAudioWithFullAnalysis, isProcessing } = useAdvancedTranscription();

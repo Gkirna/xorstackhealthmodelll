@@ -36,7 +36,13 @@ import { toast } from "sonner";
 import { useEffect, useState } from "react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useSessions, useDeleteSession } from "@/hooks/useSessions";
-import { useNotifications } from "@/hooks/useNotifications";
+import { 
+  useNotifications, 
+  useUnreadNotificationsCount,
+  useRealtimeNotifications,
+  useDeleteNotification,
+  useClearAllNotifications
+} from "@/hooks/useNotifications";
 import { format } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -88,6 +94,12 @@ export function AppSidebar() {
   const { data: sessions = [], isLoading } = useSessions();
   const deleteSession = useDeleteSession();
   const { data: notifications = [] } = useNotifications();
+  const { data: unreadCount = 0 } = useUnreadNotificationsCount();
+  const deleteNotification = useDeleteNotification();
+  const clearAll = useClearAllNotifications();
+  
+  // Enable realtime notifications
+  useRealtimeNotifications();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -264,9 +276,9 @@ export function AppSidebar() {
               <SheetTrigger asChild>
                 <Button variant="outline" size="icon" className="relative h-11 w-11">
                   <Bell className="h-5 w-5" />
-                  {notifications.length > 0 && (
-                    <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-[10px] font-bold text-white flex items-center justify-center">
-                      {notifications.length}
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground flex items-center justify-center">
+                      {unreadCount > 99 ? '99+' : unreadCount}
                     </span>
                   )}
                 </Button>
@@ -275,14 +287,23 @@ export function AppSidebar() {
                 <div className="flex flex-col h-full">
                   <div className="flex items-center justify-between p-6 border-b">
                     <h2 className="text-lg font-semibold">Notifications</h2>
+                    {notifications.length > 0 && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => clearAll.mutate()}
+                        className="text-xs text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Clear all
+                      </Button>
+                    )}
                   </div>
                   <ScrollArea className="flex-1">
                     {notifications.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center px-6">
                         <div className="mb-4 text-muted-foreground">
-                          <svg className="w-20 h-20 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
+                          <Bell className="w-16 h-16 mx-auto mb-3 opacity-20" />
                         </div>
                         <h3 className="text-lg font-medium mb-2">Nothing to see here</h3>
                         <p className="text-sm text-muted-foreground max-w-sm">
@@ -294,16 +315,43 @@ export function AppSidebar() {
                         {notifications.map((notification) => (
                           <div
                             key={notification.id}
-                            className="p-4 rounded-lg border bg-card hover:bg-accent/50 transition-all cursor-pointer"
+                            className={`p-4 rounded-lg border transition-all cursor-pointer group ${
+                              notification.is_read 
+                                ? 'bg-card hover:bg-accent/50' 
+                                : 'bg-primary/5 border-primary/20 hover:bg-primary/10'
+                            }`}
+                            onClick={() => {
+                              if (notification.action_url) {
+                                navigate(notification.action_url);
+                              }
+                            }}
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex-1">
-                                <p className="font-medium text-sm mb-1">{notification.title}</p>
+                                <div className="flex items-center gap-2">
+                                  <p className={`text-sm mb-1 ${notification.is_read ? 'font-normal' : 'font-semibold'}`}>
+                                    {notification.title}
+                                  </p>
+                                  {!notification.is_read && (
+                                    <span className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />
+                                  )}
+                                </div>
                                 <p className="text-xs text-muted-foreground mb-2">{notification.message}</p>
                                 <p className="text-xs text-muted-foreground">
                                   {new Date(notification.created_at).toLocaleString()}
                                 </p>
                               </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteNotification.mutate(notification.id);
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
                             </div>
                           </div>
                         ))}
